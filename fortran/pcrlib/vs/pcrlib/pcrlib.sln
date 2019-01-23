@@ -1,0 +1,31 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 15
+VisualStudioVersion = 15.0.27004.2009
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{6989167D-11E4-40FE-8C1A-2192A86A7E90}") = "pcrlib", "pcrlib.vfproj", "{AD590697-6694-40AA-A765-9A2362C34646}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{AD590697-6694-40AA-A765-9A2362C34646}.Debug|x64.ActiveCfg = Debug|x64
+		{AD590697-6694-40AA-A765-9A2362C34646}.Debug|x64.Build.0 = Debug|x64
+		{AD590697-6694-40AA-A765-9A2362C34646}.Debug|x86.ActiveCfg = Debug|x64
+		{AD590697-6694-40AA-A765-9A2362C34646}.Debug|x86.Build.0 = Debug|x64
+		{AD590697-6694-40AA-A765-9A2362C34646}.Release|x64.ActiveCfg = Release|Win32
+		{AD590697-6694-40AA-A765-9A2362C34646}.Release|x64.Build.0 = Release|Win32
+		{AD590697-6694-40AA-A765-9A2362C34646}.Release|x86.ActiveCfg = Release|Win32
+		{AD590697-6694-40AA-A765-9A2362C34646}.Release|x86.Build.0 = Release|Win32
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {FA87DC31-F350-4221-B59F-6A49C265A86A}
+	EndGlobalSection
+EndGlobal
