@@ -1,5 +1,8 @@
-module pcrlib
+module pcrModule
   ! modules
+  use, intrinsic :: iso_fortran_env , only: error_unit, output_unit, &
+    i1b => int8, i2b => int16, i4b => int32, r4b => real32, r8b => real64
+  use ieee_arithmetic 
   use utils
   
   implicit none
@@ -81,16 +84,32 @@ module pcrlib
     real(kind=8)     :: cellSizeX
     real(kind=8)     :: cellSizeY
     real(kind=8)     :: angle    
-    
+    !
     integer :: i4minVal, i4maxVal
     real :: r4minVal, r4maxVal
   end type tMapHdr
   
   type tMap
-    integer, pointer :: iu => null()
-    type(tMapHdr), pointer :: header => null()
+    integer, pointer                      :: iu => null()
+    type(tMapHdr), pointer                :: header => null()
+    integer(i1b),                 pointer :: i1mv  => null()
+    integer(i1b), dimension(:,:), pointer :: i1a   => null()
+    integer(i2b),                 pointer :: i2mv  => null()
+    integer(i2b), dimension(:,:), pointer :: i2a   => null()
+    integer(i4b),                 pointer :: i4mv  => null()
+    integer(i4b), dimension(:,:), pointer :: i4a   => null()
+    real(r4b),                    pointer :: r4mv  => null()
+    real(r4b),    dimension(:,:), pointer :: r4a   => null()
+    real(r8b),                    pointer :: r8mv  => null()
+    real(r8b),    dimension(:,:), pointer :: r8a   => null()
   contains
     procedure :: read_header => map_read_header
+    procedure :: read_data   => map_read_data
+    procedure :: set_nodata  => map_set_nodata
+    procedure :: close       => map_close
+    procedure :: clean       => map_clean
+    procedure :: idf_export  => map_idf_export
+    procedure :: get_r4ar    => map_get_r4ar
   end type tMap
   public :: tMap
   
@@ -145,20 +164,23 @@ contains
     real, parameter :: nodata = -9999. ! should be exactly the same as in rdrsmodule !
     type(tMapHdr), pointer :: hdr
 ! ------------------------------------------------------------------------------
+    call chkexist(f)
     
     ! open file in stream mode
     allocate(this%iu)
     this%iu=getlun()
+    write(*,*) 'Opening '//trim(f)//'...'
     open(unit=this%iu,file=f,form='unformatted',access='stream',status='old')
     
     ! READ HEADER
+    write(*,*) 'Reading header...'
     allocate(this%header)
     hdr => this%header
     
     ! main header
     read(this%iu,pos=  0+1) hdr%signature
     if (hdr%signature.ne.'RUU CROSS SYSTEM MAP FORMAT')then
-       call error('File not recognized as MAP-file: ')
+       call errmsg('File not recognized as MAP-file: ')
     end if   
     read(this%iu,pos= 32+1) hdr%version
     read(this%iu,pos= 34+1) hdr%gisFileId
@@ -209,8 +231,8 @@ contains
     
     ! checks
     select case(hdr%cellRepr)
-    case(cr_uint1,cr_uint2,cr_uint4,cr_undef)
-       call error('Unsupported cell representation for MAP-file: '//crstr(hdr%cellRepr))
+    case(cr_uint2,cr_uint4,cr_undef)
+       call errmsg('Unsupported cell representation for MAP-file: '//crstr(hdr%cellRepr))
     end select
     
     ! set return value
@@ -218,55 +240,353 @@ contains
     
   end function map_read_header
   
-  function getrval(this,irow,icol) result(rval)
+  subroutine map_read_data(this)
 ! ******************************************************************************
 ! ******************************************************************************
 !
 !    SPECIFICATIONS:
 ! ------------------------------------------------------------------------------
-  ! -- modules
-  use ieee_arithmetic 
-  ! -- dummy
-  class(tMap) :: this
-  integer,intent(in) :: irow,icol
-  ! locals
-  integer :: p, n
-  integer(kind=1) :: i1
-  integer(kind=2) :: i2
-  integer(kind=4) :: i4
-  real :: r4
-  double precision :: r8
+    ! -- dummy
+    class(tMap) :: this
+    ! -- local
+    integer(i4b) :: nc, nr, ic, ir, p
+    character(len=1), dimension(:,:), allocatable :: wrk
+! ------------------------------------------------------------------------------
+    nc = this%header%nrCols; nr = this%header%nrRows
+    p = 256+1
+    
+    write(*,*) 'Reading array...'
+    select case(this%header%cellrepr)
+      case(cr_uint1)
+        allocate(this%i1a(nc,nr), wrk(nc,nr))
+        read(unit=this%iu,pos=p)((wrk(ic,ir),ic=1,nc),ir=1,nr)
+        do ir = 1, nr
+          do ic = 1, nc
+            this%i1a(ic,ir) = ichar(wrk(ic,ir))
+          end do
+        end do
+        deallocate(wrk)
+      case(cr_int1)
+        allocate(this%i1a(nc,nr))
+        read(unit=this%iu,pos=p)((this%i1a(ic,ir),ic=1,nc),ir=1,nr)
+      case(cr_int2)
+        allocate(this%i2a(nc,nr))
+        read(unit=this%iu,pos=p)((this%i2a(ic,ir),ic=1,nc),ir=1,nr)
+      case(cr_int4)
+        allocate(this%i4a(nc,nr))
+        read(unit=this%iu,pos=p)((this%i4a(ic,ir),ic=1,nc),ir=1,nr)
+      case(cr_real4)
+        allocate(this%r4a(nc,nr))
+        read(unit=this%iu,pos=p)((this%r4a(ic,ir),ic=1,nc),ir=1,nr)
+      case(cr_real8)
+        allocate(this%r8a(nc,nr))
+        read(unit=this%iu,pos=p)((this%r8a(ic,ir),ic=1,nc),ir=1,nr)
+      case default
+          call errmsg('Kind of MAP-file not supported.')
+    end select 
+    call this%set_nodata()
+      
+  end subroutine map_read_data
+  
+  subroutine map_set_nodata(this)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+    ! -- dummy
+    class(tMap) :: this
+    ! -- local
+    integer(i4b) :: nc, nr, ic, ir
+! ------------------------------------------------------------------------------
+    nc = this%header%nrCols; nr = this%header%nrRows
+    
+    select case(this%header%cellrepr)
+    case(cr_uint1)
+        allocate(this%i1mv)
+        this%i1mv = 255
+      case(cr_int1)
+        allocate(this%i1mv)
+        this%i1mv = -128
+      case(cr_int2)
+        allocate(this%i2mv)
+        this%i2mv = 0
+        this%i2mv = -huge(this%i2mv)-1
+      case(cr_int4)
+        allocate(this%i4mv)
+        this%i4mv = 0
+        this%i4mv = -huge(this%i4mv)-1
+      case(cr_real4)
+        allocate(this%r4mv)
+        this%r4mv = 0
+        this%r4mv = huge(this%r4mv)
+        do ir = 1, nr
+          do ic = 1, nc
+            if (ieee_is_nan(this%r4a(ic,ir))) then
+              this%r4a(ic,ir) = this%r4mv
+            end if
+          end do
+        end do
+      case(cr_real8)
+        allocate(this%r8mv)
+        this%r8mv = 0
+        this%r8mv = huge(this%r8mv)
+        do ir = 1, nr
+          do ic = 1, nc
+            if (ieee_is_nan(this%r8a(ic,ir))) then
+              this%r8a(ic,ir) = this%r8mv
+            end if
+          end do
+        end do
+    end select 
+   
+  end subroutine map_set_nodata
+  
+  subroutine map_get_r4ar(this, r4a, r4mv, r4min, r4max)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+    ! -- dummy
+    class(tMap) :: this
+    real(r4b), dimension(:,:), allocatable, intent(out) :: r4a
+    real(r4b), intent(out) :: r4mv, r4min, r4max
+    ! -- local
+    integer(i4b) :: nc, nr, ic, ir
+    !
+    integer(i1b) :: vi1
+    integer(i2b) :: vi2
+    integer(i4b) :: vi4
+    real(r4b)   :: vr4
+    real(r8b)   :: vr8
 ! ------------------------------------------------------------------------------
   
-  p = 256+1; n = (irow-1)*idf%ncol+icol-1
+    ! set nodata value
+    r4min = 1e10
+    r4max = -1e10
+    
+    ! allocate
+    nc = this%header%nrCols; nr = this%header%nrRows
+    if (allocated(r4a)) deallocate(r4a)
+    allocate(r4a(nc,nr))
+    
+    ! set the array
+    select case(this%header%cellrepr)
+      case(cr_uint1,cr_int1)
+        r4mv = int(this%i1mv,i1b)
+        do ir = 1, nr
+          do ic = 1, nc
+            vi1 = this%i1a(ic,ir)
+            r4a(ic,ir) = real(vi1,r4b)
+            if (vi1 /= this%i1mv) then
+              r4min = min(r4min,real(vi1,r4b))
+              r4max = max(r4max,real(vi1,r4b))
+            end if
+          end do
+        end do
+      case(cr_int2)
+        r4mv = int(this%i2mv,i2b)
+        do ir = 1, nr
+          do ic = 1, nc
+            vi2 = this%i2a(ic,ir)
+            r4a(ic,ir) = real(vi2,r4b)
+            if (vi2 /= this%i2mv) then
+              r4min = min(r4min,real(vi2,r4b))
+              r4max = max(r4max,real(vi2,r4b))
+            end if
+          end do
+        end do
+      case(cr_int4)
+        r4mv = int(this%i4mv,i4b)
+        do ir = 1, nr
+          do ic = 1, nc
+            vi4 = this%i4a(ic,ir)
+            r4a(ic,ir) = real(vi4,r4b)
+            if (vi4 /= this%i4mv) then
+              r4min = min(r4min,real(vi4,r4b))
+              r4max = max(r4max,real(vi4,r4b))
+            end if
+          end do
+        end do
+      case(cr_real4)
+        r4mv = real(this%r4mv,r4b)
+        do ir = 1, nr
+          do ic = 1, nc
+            vr4 = this%r4a(ic,ir)
+            r4a(ic,ir) = real(vr4,r4b)
+            if (vr4 /= this%r4mv) then
+              r4min = min(r4min,real(vr4,r4b))
+              r4max = max(r4max,real(vr4,r4b))
+            end if
+          end do
+        end do
+      case(cr_real8)
+        r4mv = real(this%r8mv,r8b)
+        do ir = 1, nr
+          do ic = 1, nc
+            vr8 = this%r8a(ic,ir)
+            r4a(ic,ir) = real(vr8,r4b)
+            if (vr8 /= this%r8mv) then
+              r4min = min(r4min,real(vr8,r4b))
+              r4max = max(r4max,real(vr8,r4b))
+            end if
+          end do
+        end do
+      case default
+          call errmsg('Kind of MAP-file not supported.')
+    end select 
+    
+  end subroutine map_get_r4ar
   
-  ! stream mode reading byte by byte
-  select case(idf%maphdr%cellrepr)
-  case(cr_int1)
-     read(unit=idf%iu,pos=p+n) i1
-     mapgetval = real(i1)
-  case(cr_int2)
-     read(unit=idf%iu,pos=p+2*n) i2
-     mapgetval = real(i2)
-  case(cr_int4)
-     read(unit=idf%iu,pos=p+4*n) i4
-     mapgetval = real(i4)
-  case(cr_real4)
-     read(unit=idf%iu,pos=p+4*n) r4
-     if (ieee_is_nan(r4)) then
-        mapgetval = idf%nodata    
-     else
-        mapgetval = r4
-     end if   
-  case(cr_real8)
-     read(unit=idf%iu,pos=p+8*n) r8
-     if (ieee_is_nan(r8)) then
-        mapgetval = idf%nodata    
-     else
-        mapgetval = real(r8)
-     end if   
-  end select 
+  subroutine map_idf_export(this, f)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+    ! -- dummy
+    class(tMap) :: this
+    character(len=*), intent(in) :: f
+    ! -- local
+    type(tMapHdr), pointer :: hdr
+    integer(i4b) :: iu, ios, p, ic, ir
+    real(r4b) :: nodata, dmin, dmax
+    real(r4b), dimension(:,:), allocatable :: r4a
+! ------------------------------------------------------------------------------
+
+    ! check for equidistant grids
+    hdr => this%header; p = 1
+    if (hdr%cellSizeX /= hdr%cellSizeY) then
+       call errmsg('Exporting IDF for non-equidistant grids is not yet supported.')
+    end if
+    
+    ! get real data
+    call this%get_r4ar(r4a, nodata, dmin, dmax)
+    
+    iu = getlun()
+    write(*,*) 'Writing '//trim(f)//'...'
+    open(unit=iu,file=f,form='unformatted',access='stream', &
+      status='replace',iostat=ios)
+
+    p = 1
+    write(iu,pos=p) int(1271,i4b); p = p + 4 !1271
+    write(iu,pos=p) int(hdr%nrCols,i4b); p = p + 4 !ncol
+    write(iu,pos=p) int(hdr%nrRows,i4b); p = p + 4 !nrow
+    write(iu,pos=p) real(hdr%xUL,r4b); p = p + 4 !xmin
+    write(iu,pos=p) real(hdr%xUL+hdr%nrCols*hdr%cellSizeX,r4b); p = p + 4 !xmax
+    write(iu,pos=p) real(hdr%yUL-hdr%nrRows*hdr%cellSizeY,r4b); p = p + 4 !ymin
+    write(iu,pos=p) real(hdr%yUL,r4b); p = p + 4 !ymax
+    write(iu,pos=p) real(dmin,r4b); p = p + 4 !dmin
+    write(iu,pos=p) real(dmax,r4b); p = p + 4 !dmax
+    write(iu,pos=p) real(nodata,r4b); p = p + 4 !nodata
+    write(iu,pos=p) int(0,i1b); p = p + 1 !ieq
+    write(iu,pos=p) int(0,i1b); p = p + 1 !itp
+    write(iu,pos=p) int(0,i1b); p = p + 1 !i
+    write(iu,pos=p) int(0,i1b); p = p + 1 !not used
+    write(iu,pos=p) real(hdr%cellSizeX,r4b); p = p + 4 !dx
+    write(iu,pos=p) real(hdr%cellSizeY,r4b); p = p + 4 !dy
+    write(iu,pos=p)((r4a(ic,ir),ic=1,hdr%nrCols),ir=1,hdr%nrRows) !x
+    close(iu)
+    
+    deallocate(r4a)
+    
+    close(iu)
+  end subroutine map_idf_export
   
-  end function mapgetval
+  subroutine map_close(this)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+    ! -- dummy
+    class(tMap) :: this
+    ! -- local
+    logical :: lop
+! ------------------------------------------------------------------------------
+    if (associated(this%iu)) then
+      inquire(unit=this%iu,opened=lop)
+      if (lop) then
+        write(*,*) 'Closing map-file...'
+        close(this%iu)
+      end if
+    end if
+  end subroutine map_close
+
+ subroutine map_clean(this)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+    ! -- dummy
+    class(tMap) :: this
+    ! -- local
+! ------------------------------------------------------------------------------
+    ! close the file
+    write(*,*) 'Cleaning map-file data structures...'
+    call this%close()
+    if (associated(this%iu))     deallocate(this%iu)
+    if (associated(this%header)) deallocate(this%header)
+    if (associated(this%i1a))    deallocate(this%i1a)
+    if (associated(this%i1a))    deallocate(this%i1a)
+    if (associated(this%i2a))    deallocate(this%i2a)
+    if (associated(this%i4a))    deallocate(this%i4a)
+    if (associated(this%r4a))    deallocate(this%r4a)
+    if (associated(this%r8a))    deallocate(this%r8a)
+    
+  end subroutine map_clean
+  
+!  function getrval(this,irow,icol) result(rval)
+!! ******************************************************************************
+!! ******************************************************************************
+!!
+!!    SPECIFICATIONS:
+!! ------------------------------------------------------------------------------
+!  ! -- modules
+!  use ieee_arithmetic 
+!  ! -- dummy
+!  class(tMap) :: this
+!  integer,intent(in) :: irow,icol
+!  ! locals
+!  integer :: p, n
+!  integer(kind=1) :: i1
+!  integer(kind=2) :: i2
+!  integer(kind=4) :: i4
+!  real :: r4
+!  double precision :: r8
+!! ------------------------------------------------------------------------------
+!  
+!  p = 256+1; n = (irow-1)*idf%ncol+icol-1
+!  
+!  ! stream mode reading byte by byte
+!  select case(idf%maphdr%cellrepr)
+!  case(cr_int1)
+!     read(unit=idf%iu,pos=p+n) i1
+!     mapgetval = real(i1)
+!  case(cr_int2)
+!     read(unit=idf%iu,pos=p+2*n) i2
+!     mapgetval = real(i2)
+!  case(cr_int4)
+!     read(unit=idf%iu,pos=p+4*n) i4
+!     mapgetval = real(i4)
+!  case(cr_real4)
+!     read(unit=idf%iu,pos=p+4*n) r4
+!     if (ieee_is_nan(r4)) then
+!        mapgetval = idf%nodata    
+!     else
+!        mapgetval = r4
+!     end if   
+!  case(cr_real8)
+!     read(unit=idf%iu,pos=p+8*n) r8
+!     if (ieee_is_nan(r8)) then
+!        mapgetval = idf%nodata    
+!     else
+!        mapgetval = real(r8)
+!     end if   
+!  end select 
+!  
+!  end function mapgetval
  
-end module
+end module pcrModule

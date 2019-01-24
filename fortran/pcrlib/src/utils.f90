@@ -111,17 +111,6 @@ contains
     write(*,'(a,1x,a)') 'Error:', trim(s)
     stop 1
   end subroutine errmsg
-
-  !###====================================================================
-  subroutine error(s)
-  !###====================================================================
-    character(len=*), intent(in) :: s
-  
-    write(*,'(a,1x,a)') 'Error:',trim(s)
-    write(*,*) 'Stopping...'
-    stop 1
-  
-  end subroutine error
   
 end module utils
 
