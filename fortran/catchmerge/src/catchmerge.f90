@@ -419,7 +419,7 @@ program catmerge
           end if
         end do
       end do
-      write(f,'(a,i7.7,a)'), trim(f)//'_',mcatnew,'.idf'
+      write(f,'(a,i7.7,a)'), trim(fp)//'_',mcatnew,'.idf'
       call imod_utl_printtext('Writing '//trim(f),0)
       if (.not.idfwrite(catg,f,1)) then
         call imod_utl_printtext('Could not write '//trim(f),2)
