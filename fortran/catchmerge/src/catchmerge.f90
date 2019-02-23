@@ -9,13 +9,14 @@ program catmerge
   integer, parameter :: mxslen = 1024
   
   type(idfobj) :: catg, lddg, areag
-  character(len=mxslen) :: f, s
-  integer :: ngen, igen, iu, iact, ncat, mcat, m, ios, i, j, k, is, ip, inbr, ips, ipe, it, jt
-  integer :: ic0, ic1, ir0, ir1, ic, ir, jc, jr, iv, ivmin, ivmax, nmerge, lddp, lddn, nbr
+  character(len=mxslen) :: f, s, fp
+  integer :: ngen, igen, iu, iact, ncat, mcat, mcatnew, m, ios, i, j, k, is, ip, inbr, ips, ipe, it, jt
+  integer :: ic0, ic1, ir0, ir1, ic, ir, jc, jr, iv, ivmin, ivmax, nmerge, lddp, lddn, nbr, ncol, nrow
   integer, dimension(:), allocatable :: catmap, catmapinv, cid, cidinv, iwrk
-  integer, dimension(:,:), allocatable :: bb, bord
+  integer, dimension(:,:), allocatable :: bb, bord, catgx
   double precision :: areamin, xmin, ymin, xmax, ymax, nbrarea
   double precision, dimension(:), allocatable :: area, areas
+  logical :: ldat, lwrt
   !
   ! stencil parameters
   integer, parameter :: jsw = 1 
@@ -61,6 +62,7 @@ program catmerge
     call imod_utl_printtext('Could not read '//trim(f),2)
   end if
   call imod_utl_printtext('Done reading '//trim(f),0)
+  ncol = catg%ncol; nrow = catg%nrow
 
   ! read ldd
   call getarg(2, f)
@@ -207,6 +209,19 @@ program catmerge
     cidinv(j) = i
   end do
   !
+  allocate(catgx(catg%ncol,catg%nrow))
+  do ir = 1, catg%nrow
+    do ic = 1, catg%ncol
+      if (catg%x(ic,ir) /= catg%nodata) then
+        catgx(ic,ir) = int(catg%x(ic,ir))
+      else
+        catgx(ic,ir)  = 0
+      end if
+    end do
+  end do
+  
+  mcatnew = mcat
+  call getarg(5, fp) !output file prefix
   do while (.true.)
     ! init
     do i = 1, mcat
@@ -221,74 +236,80 @@ program catmerge
     ip = cid(1)
     nmerge = nmerge + 1
     !if (nmerge == 1000) exit !@@@@debug
-    nbr = 0
     if ((nmerge == 1) .or. (mod(nmerge,1000) == 0)) then
-      write(*,*) 'Merging ',nmerge, catmapinv(ip),areas(1)
+      write(*,'(a,1x,i7.7,a,i7.7,1x,f8.2)') 'Merging',nmerge,'/',mcat, 100.*areas(1)/areamin
     end if
-    !write(*,*) '  area = ',areas(ip)/(1000.*1000.),' sq. km'
-    !write(*,*) '  bb = ',bb(1,ip), bb(2,ip), bb(3,ip), bb(4,ip)
-    !write(*,*) '  (ncol,nrow)= ', bb(4,ip)-bb(3,ip)+1, bb(2,ip)-bb(1,ip)+1
-    do ir =  bb(1,ip), bb(2,ip)
+    !
+    ! first attempt: look for neightbors through ldd
+    nbr = 0; ldat = .false.
+    do ir = bb(1,ip), bb(2,ip)
       do ic = bb(3,ip), bb(4,ip)
-        if (bord(ic,ir) == 1.) then
-          if (catg%x(ic,ir) == real(ip)) then
+        if (bord(ic,ir) == 1) then
+          if (catgx(ic,ir) == ip) then
             lddp = int(lddg%x(ic,ir))
             !
             do is = 1, nst
-              jc = ic + st(1,is); jr = ir + st(2,is)
-              if (jc >= 1 .and. jc <= catg%ncol .and. jr >= 1 .and. jr <= catg%nrow) then
-                if (catg%x(jc,jr) /= catg%nodata) then
-                  lddn = int(lddg%x(jc,jr))
-                  if ((lddp == stldd(1,is)).or.(lddn == stldd(2,is))) then
-                    nbr = nbr + 1
-                    iv = int(catg%x(jc,jr))
-                    iwrk(iv) = iwrk(iv) + 1
-                    catg%x(jc,jr) = -catg%x(jc,jr)
+              jc = ic + st(1,is); jr = ir + st(2,is) ! neighbor
+              if ((jc >= 1) .and. (jc <= ncol) .and. (jr >= 1) .and. (jr <= nrow)) then ! valid col,row
+                if (bord(jc,jr) == 1) then ! neighbor cell in boundary 
+                  iv = catgx(jc,jr) !neighbor id
+                  if (iv /= ip) then !true neigbbor
+                    ldat = .true.
+                    lddn = int(lddg%x(jc,jr))
+                    if ((lddp == stldd(1,is)).or.(lddn == stldd(2,is))) then
+                      nbr = nbr + 1
+                      iwrk(iv) = iwrk(iv) + 1
+                      catgx(jc,jr) = -catgx(jc,jr)
+                    end if
                   end if
                 end if
               end if
             end do
-            !jc = ic + st(1,ldd); jr = ir + st(2,ldd)
-            !if (catg%x(jc,jr) /= catg%nodata) then
-            !  iv = int(catg%x(jc,jr))
-            !  if (iv /= ip) then
-            !    nbr = nbr + 1
-            !    iwrk(iv) = iwrk(iv) + 1
-            !    catg%x(jc,jr) = -catg%x(jc,jr)
-            !  end if  
-            !end if
-            !do is = 1, nst
-            !  jc = ic + st(1,is); jr = ir + st(2,is)
-            !  if (catg%x(jc,jr) /= catg%nodata) then
-            !    iv = int(catg%x(jc,jr))
-            !    if (iv > 0) then
-            !      lnbr = .true.
-            !      iwrk(iv) = iwrk(iv) + 1
-            !      catg%x(jc,jr) = -catg%x(jc,jr)
-            !    end if
-            !  end if
-            !end do
           end if
         end if
       end do
     end do
     !
-    ir0 = max(1,        bb(1,ip)-1)
-    ir1 = min(catg%nrow,bb(2,ip)+1)
-    ic0 = max(1,        bb(3,ip)-1)
-    ic1 = min(catg%ncol,bb(4,ip)+1)
+    ! attempt2: look for ldd 5 cells
+    if ((nbr == 0) .and. ldat) then
+      do ir = bb(1,ip), bb(2,ip)
+        do ic = bb(3,ip), bb(4,ip)
+          if (bord(ic,ir) == 1) then
+            if (catgx(ic,ir) == ip) then
+              do is = 1, nst
+                jc = ic + st(1,is); jr = ir + st(2,is)
+                if ((jc >= 1) .and. (jc <= ncol) .and. (jr >= 1) .and. (jr <= nrow)) then
+                  if (bord(jc,jr) == 1) then ! neighbor cell in boundary 
+                    iv = catgx(jc,jr) !neighbor id
+                    if (iv /= ip) then !true neigbbor
+                      nbr = nbr + 1
+                      iwrk(iv) = iwrk(iv) + 1
+                      catgx(jc,jr) = -catgx(jc,jr)
+                    end if
+                  end if
+                end if
+              end do
+            end if
+          end if
+        end do
+      end do
+    end if
+    !
+    ir0 = max(1,    bb(1,ip)-1)
+    ir1 = min(nrow, bb(2,ip)+1)
+    ic0 = max(1,    bb(3,ip)-1)
+    ic1 = min(ncol, bb(4,ip)+1)
     if (nbr > 0) then ! neighbor found
-      write(*,*) '@@@nbr=',nbr
       inbr = maxloc(iwrk,1)
       area(inbr) = area(inbr) + area(ip)
       nbrarea = area(inbr)
       !
       do ir = ir0, ir1
         do ic = ic0, ic1
-          if (catg%x(ic,ir) /= catg%nodata) then
-            catg%x(ic,ir) = abs(catg%x(ic,ir))
-            if (catg%x(ic,ir) == real(ip)) then
-              catg%x(ic,ir) = real(inbr)
+          if (catgx(ic,ir) /= 0) then
+            catgx(ic,ir) = abs(catgx(ic,ir))
+            if (catgx(ic,ir) == ip) then
+              catgx(ic,ir) = inbr
             end if
           end if
         end do
@@ -303,7 +324,7 @@ program catmerge
       ! correct the sorting list
       it = cidinv(inbr)
       do i = it, mcat-1
-        if (areas(i+1) >= nbrarea) then
+        if (areas(i+1) > nbrarea) then
           jt = i
           exit
         end if
@@ -328,11 +349,18 @@ program catmerge
         j = cid(i)
         cidinv(j) = i
       end do
+      ! check sorted
+      do i = 1, mcat-1
+        if (areas(i) > areas(i+1)) then
+          write(*,*) 'Program error, sorting.'
+          stop
+        end if
+      end do
     else ! no neighbor found
       do ir = ir0, ir1
         do ic = ic0, ic1
-          if (catg%x(ic,ir) /= catg%nodata) then
-            catg%x(ic,ir) = abs(catg%x(ic,ir))
+          if (catgx(ic,ir) /= 0) then
+            catgx(ic,ir) = abs(catgx(ic,ir))
           end if
         end do
       end do
@@ -349,22 +377,53 @@ program catmerge
         cidinv(j) = i
       end do
     end if
-  end do
-  
-  ! write the IDF
-  do ir = 1, catg%nrow
-    do ic = 1, catg%ncol
-      if (catg%x(ic,ir) /= catg%nodata) then
-        iv = int(catg%x(ic,ir))
-        iv = catmapinv(iv)
-        catg%x(ic,ir) = real(iv)
+    
+    mcatnew = mcatnew - 1
+    lwrt = .false.
+    if (nmerge == 1) lwrt = .true.
+    if (nmerge == 1000) lwrt = .true.
+    if (mcatnew == 1000000) lwrt = .true.
+    if (mcatnew ==  500000) lwrt = .true.
+    if (mcatnew ==  100000) lwrt = .true.
+    if (mcatnew ==   50000) lwrt = .true.
+    if (mcatnew ==   40000) lwrt = .true.
+    if (mcatnew ==   30000) lwrt = .true.
+    if (mcatnew ==   20000) lwrt = .true.
+    if (mcatnew ==   10000) lwrt = .true.
+    if (mcatnew ==    9000) lwrt = .true.
+    if (mcatnew ==    8000) lwrt = .true.
+    if (mcatnew ==    7000) lwrt = .true.
+    if (mcatnew ==    6000) lwrt = .true.
+    if (mcatnew ==    5000) lwrt = .true.
+    if (mcatnew ==    4000) lwrt = .true.
+    if (mcatnew ==    3000) lwrt = .true.
+    if (mcatnew ==    2000) lwrt = .true.
+    if (mcatnew ==    1000) lwrt = .true.
+    if (mcatnew ==    1024) lwrt = .true.
+    if (mcatnew ==     500) lwrt = .true.
+    if (mcatnew ==     512) lwrt = .true.
+    if (mcatnew ==     100) lwrt = .true.
+    if (mcatnew ==      10) lwrt = .true.
+    !
+      ! write the IDF
+    if (lwrt) then
+      do ir = 1, nrow
+        do ic = 1, ncol
+          iv = catgx(ic,ir)
+          if (iv /= 0) then
+            iv = catmapinv(iv)
+            catg%x(ic,ir) = real(iv)
+          else
+            catg%x(ic,ir) = catg%nodata
+          end if
+        end do
+      end do
+      write(f,'(a,i7.7,a)'), trim(f)//'_',mcatnew,'.idf'
+      call imod_utl_printtext('Writing '//trim(f),0)
+      if (.not.idfwrite(catg,f,1)) then
+        call imod_utl_printtext('Could not write '//trim(f),2)
       end if
-    end do
+    end if
   end do
-  call getarg(5, f)
-  call imod_utl_printtext('Writing '//trim(f),0)
-  if (.not.idfwrite(catg,f,1)) then
-    call imod_utl_printtext('Could not write '//trim(f),2)
-  end if
 
 end program
