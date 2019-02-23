@@ -5,7 +5,7 @@ program catmerge
   implicit none
   
   ! parameters
-  integer, parameter :: DZERO = 0.D0
+  double precision, parameter :: DZERO = 0.D0
   integer, parameter :: mxslen = 1024
   
   type(idfobj) :: catg, lddg, areag
@@ -229,6 +229,7 @@ program catmerge
     end do
     ! sort
     if (areas(1) > areamin) then
+      write(*,*) 'Done!'
       exit
     end if
     !
@@ -380,8 +381,8 @@ program catmerge
     
     mcatnew = mcatnew - 1
     lwrt = .false.
-    if (nmerge == 1) lwrt = .true.
-    if (nmerge == 1000) lwrt = .true.
+    if (nmerge  ==       1) lwrt = .true.
+    if (nmerge  ==    1000) lwrt = .true.
     if (mcatnew == 1000000) lwrt = .true.
     if (mcatnew ==  500000) lwrt = .true.
     if (mcatnew ==  100000) lwrt = .true.
