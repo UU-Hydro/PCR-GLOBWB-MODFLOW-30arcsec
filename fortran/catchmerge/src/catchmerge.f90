@@ -254,13 +254,13 @@ program catmerge
               if ((jc >= 1) .and. (jc <= ncol) .and. (jr >= 1) .and. (jr <= nrow)) then ! valid col,row
                 if (bord(jc,jr) == 1) then ! neighbor cell in boundary 
                   iv = catgx(jc,jr) !neighbor id
-                  if (iv /= ip) then !true neigbbor
+                  if ((iv /= ip) .and. (iv > 0)) then !true neigbbor
                     ldat = .true.
                     lddn = int(lddg%x(jc,jr))
                     if ((lddp == stldd(1,is)).or.(lddn == stldd(2,is))) then
                       nbr = nbr + 1
                       iwrk(iv) = iwrk(iv) + 1
-                      catgx(jc,jr) = -catgx(jc,jr)
+                      catgx(jc,jr) = -iv
                     end if
                   end if
                 end if
@@ -282,10 +282,10 @@ program catmerge
                 if ((jc >= 1) .and. (jc <= ncol) .and. (jr >= 1) .and. (jr <= nrow)) then
                   if (bord(jc,jr) == 1) then ! neighbor cell in boundary 
                     iv = catgx(jc,jr) !neighbor id
-                    if (iv /= ip) then !true neigbbor
+                    if ((iv /= ip) .and. (iv > 0)) then !true neigbbor
                       nbr = nbr + 1
                       iwrk(iv) = iwrk(iv) + 1
-                      catgx(jc,jr) = -catgx(jc,jr)
+                      catgx(jc,jr) = -iv
                     end if
                   end if
                 end if
