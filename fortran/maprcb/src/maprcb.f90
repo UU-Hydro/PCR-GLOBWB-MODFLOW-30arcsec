@@ -74,7 +74,6 @@ program maprcb
       jr0 = (yul-ceiling(ymax))/cs + 1; jr1 = (yul-floor(ymin))/cs
       jc0 = min(jc0, ic0); jc1 = max(jc1, ic1)
       jr0 = min(jr0, ir0); jr1 = max(jr1, ir1)
-      write(*,'(8i6)') ic0, ic1, ir0, ir1, jc0, jc1, jr0, jr1
       proc_icolmin(iproc) = jc0; proc_icolmax(iproc) = jc1;
       proc_irowmin(iproc) = jr0; proc_irowmax(iproc) = jr1;
     end do
