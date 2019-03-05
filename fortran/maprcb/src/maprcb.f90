@@ -8,12 +8,14 @@ program maprcb
   type(tMap), pointer :: map
   logical :: ok
   character(len=1024) :: f, s, fmt
-  integer :: np, maxlev, ilev, iproc, ncol, nrow, icol, irow, n, nr, nc, ic0 ,ic1, ir0, ir1
+  integer :: np, maxlev, ilev, iproc, ncol, nrow, icol, irow, n, nr, nc
+  integer :: ic0 ,ic1, ir0, ir1, jc0 , jc1, jr0, jr1
   integer(kind=8) :: m
   integer, dimension(:), allocatable :: ncut, proc_icolmin, proc_icolmax, proc_irowmin, proc_irowmax
   real :: nodata, dmin, dmax
   real, dimension(:,:), allocatable :: loadptr, wrk
-  double precision :: xul, yul, xll, yll, cs
+  double precision :: xul, yul, xmin, xmax, ymin, ymax, cs, dx, dy
+  logical, parameter :: lround = .true.
   
   
   call getarg(1,f)
@@ -60,6 +62,25 @@ program maprcb
            ncut)
   write(*,*) 'Done RCB...'
   
+  ! round coordinates to whole numbers
+  if (lround) then
+    do iproc = 1, np
+      ic0 = proc_icolmin(iproc); ic1 = proc_icolmax(iproc)
+      ir0 = proc_irowmin(iproc); ir1 = proc_irowmax(iproc)
+      nc = ic1-ic0+1; nr = ir1-ir0+1
+      xmin = xul+(ic0-1)*cs
+      ymin = yul-ir1*cs
+      xmax = xmin + nc*cs
+      ymax = ymin + nr*cs
+      jc0 = (floor(xmin)-xul)/cs + 1;   jc1 = (ceiling(xmax)-xul)/cs + 1
+      jr0 = (yul-ceiling(ymax))/cs; jr1 = (yul-floor(ymin))/cs
+      jc0 = min(jc0, ic0); jc1 = max(jc1, ic1)
+      jr0 = min(jr0, ir0); jr1 = max(jr1, ir1)
+      proc_icolmin(iproc) = jc0; proc_icolmax(iproc) = jc1;
+      proc_irowmin(iproc) = jr0; proc_irowmax(iproc) = jr1;
+    end do
+  end if
+  
   m = np; n = getdigits(m)
   
   write(fmt,'(4(a,i),a)') '(i',n,'.',n,',a,i',n,'.',n,')'
@@ -75,10 +96,14 @@ program maprcb
         wrk(icol-ic0+1,irow-ir0+1) = loadptr(icol,irow)
       end do
     end do
+    xmin = xul+(ic0-1)*cs; ymin = yul-ir1*cs
+    dx = abs(real(int(xmin))-xmin)
+    dy = abs(real(int(ymin))-ymin)
+    write(*,*) 'lower-left (dx,dy) =', dx, dy
     call writeasc('rcb_'//trim(f)//'.asc', wrk, nc, nr, &
-      xul+(ic0-1)*cs, yul-ir1*cs, cs, 0.D0)
+      xmin, ymin, cs, 0.D0)
     call writeidf('rcb_'//trim(f)//'.idf', wrk, nc, nr, &
-      xul+(ic0-1)*cs, yul-ir1*cs, cs, 0.D0)
+      xmin, ymin, cs, 0.D0)
     deallocate(wrk)
   end do
   
