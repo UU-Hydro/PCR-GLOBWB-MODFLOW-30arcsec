@@ -14,7 +14,7 @@ program maprcb
   integer, dimension(:), allocatable :: ncut, proc_icolmin, proc_icolmax, proc_irowmin, proc_irowmax
   real :: nodata, dmin, dmax
   real, dimension(:,:), allocatable :: loadptr, wrk
-  double precision :: xul, yul, xmin, xmax, ymin, ymax, cs, dx, dy
+  double precision :: xul, yul, xmin, xmax, ymin, ymax, cs, dxmin, dxmax, dymin, dymax
   logical, parameter :: lround = .true.
   
   
@@ -68,14 +68,13 @@ program maprcb
       ic0 = proc_icolmin(iproc); ic1 = proc_icolmax(iproc)
       ir0 = proc_irowmin(iproc); ir1 = proc_irowmax(iproc)
       nc = ic1-ic0+1; nr = ir1-ir0+1
-      xmin = xul+(ic0-1)*cs
-      ymin = yul-ir1*cs
-      xmax = xmin + nc*cs
-      ymax = ymin + nr*cs
-      jc0 = (floor(xmin)-xul)/cs + 1;   jc1 = (ceiling(xmax)-xul)/cs + 1
-      jr0 = (yul-ceiling(ymax))/cs; jr1 = (yul-floor(ymin))/cs
+      xmin = xul+(ic0-1)*cs; ymin = yul-ir1*cs
+      xmax = xmin + nc*cs; ymax = ymin + nr*cs
+      jc0 = (floor(xmin)-xul)/cs   + 1; jc1 = (ceiling(xmax)-xul)/cs
+      jr0 = (yul-ceiling(ymax))/cs + 1; jr1 = (yul-floor(ymin))/cs
       jc0 = min(jc0, ic0); jc1 = max(jc1, ic1)
       jr0 = min(jr0, ir0); jr1 = max(jr1, ir1)
+      write(*,'(8i6)') ic0, ic1, ir0, ir1, jc0, jc1, jr0, jr1
       proc_icolmin(iproc) = jc0; proc_icolmax(iproc) = jc1;
       proc_irowmin(iproc) = jr0; proc_irowmax(iproc) = jr1;
     end do
@@ -97,9 +96,12 @@ program maprcb
       end do
     end do
     xmin = xul+(ic0-1)*cs; ymin = yul-ir1*cs
-    dx = abs(real(int(xmin))-xmin)
-    dy = abs(real(int(ymin))-ymin)
-    write(*,*) 'lower-left (dx,dy) =', dx, dy
+    xmax = xmin+nc*cs;     ymax = ymin+nr*cs
+    dxmin = abs(real(nint(xmin))-xmin)
+    dymin = abs(real(nint(ymin))-ymin)
+    dxmax = abs(real(nint(xmax))-xmax)
+    dymax = abs(real(nint(ymax))-ymax)
+    write(*,*) 'Abs. rounding error =', dxmin + dymin + dxmax + dymax
     call writeasc('rcb_'//trim(f)//'.asc', wrk, nc, nr, &
       xmin, ymin, cs, 0.D0)
     call writeidf('rcb_'//trim(f)//'.idf', wrk, nc, nr, &
