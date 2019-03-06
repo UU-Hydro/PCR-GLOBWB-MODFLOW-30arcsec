@@ -273,17 +273,23 @@ class GroundwaterModflow(object):
         self.riverBedThickness         = groundwater_pcrglobwb.riverBedThickness   
         self.bed_resistance            = groundwater_pcrglobwb.bed_resistance
 
-        # Perform extrapolation for the following variables:
-        for var in ['kSatAquifer',\
-                    'specificYield',\
-                    'recessionCoeff',\
-                    'totalGroundwaterThickness',\
-                    ]:
-            vars(self)[var] = pcr.ifthen(self.landmask, vars(self)[var])
-            vars(self)[var] = pcr.cover(pcr.cover(vars(self)[var], pcr.windowaverage(vars(self)[var], 0.5)), vars(groundwater_pcrglobwb)[var])
-            #~ pcr.aguila(vars(self)[var])
-            #~ raw_input("Press Enter to continue...")
+        extrapolateParameters = True
+        if "doNotExtrapolateParameters" in iniItems.modflowParameterOptions.keys() and \
+                                           iniItems.modflowParameterOptions["doNotExtrapolateParameters"] == "True":  
+            extrapolateGroundwaterThickness = False
+        
+        if extrapolateParameters:
 
+            # Perform extrapolation for the following variables:
+            for var in ['kSatAquifer',\
+                        'specificYield',\
+                        'recessionCoeff',\
+                        'totalGroundwaterThickness',\
+                        ]:
+                vars(self)[var] = pcr.ifthen(self.landmask, vars(self)[var])
+                vars(self)[var] = pcr.cover(pcr.cover(vars(self)[var], pcr.windowaverage(vars(self)[var], 0.5)), vars(groundwater_pcrglobwb)[var])
+                #~ pcr.aguila(vars(self)[var])
+                #~ raw_input("Press Enter to continue...")
         
         #~ # remove isolated cells - a productive aquifer cell must be surrounded by at least a minimum number of cells - OPTIONAL (NOT RECOMMENDED) # TODO: Find a better method that this one. 
         #~ if "minimizeIsolatedAquiferCellsUnderGroundwaterAbstraction" in iniItems.modflowParameterOptions.keys() and iniItems.modflowParameterOptions['minimizeIsolatedAquiferCellsUnderGroundwaterAbstraction'] == "True": 
