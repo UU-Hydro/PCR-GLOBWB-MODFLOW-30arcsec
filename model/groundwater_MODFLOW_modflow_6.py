@@ -584,10 +584,10 @@ class GroundwaterModflow(object):
             bottom_layer_1       = bottom_layer_2 - thickness_of_layer_1
 
         # set grid in modflow
-        pcr.report(bottom_layer_1, self.iniItems.mapsDir + "/" + "bottom_lowermost_layer.map") #JV
-        pcr.report(bottom_layer_2, self.iniItems.mapsDir + "/" + "bottom_uppermost_layer.map") #JV
+        pcr.report(bottom_layer_1, self.iniItems.mapsDir + "/" + "bottom_lowermost_layer.map")
+        pcr.report(bottom_layer_2, self.iniItems.mapsDir + "/" + "bottom_uppermost_layer.map")
         self.pcr_modflow.createBottomLayer(bottom_layer_1, bottom_layer_2)
-        pcr.report(top_layer_2, self.iniItems.mapsDir + "/" + "top_uppermost_layer.map") #JV
+        pcr.report(top_layer_2, self.iniItems.mapsDir + "/" + "top_uppermost_layer.map")
         self.pcr_modflow.addLayer(top_layer_2)
 
         # make the following value(s) available for the other modules/methods:
@@ -758,11 +758,11 @@ class GroundwaterModflow(object):
         msg = "Assign storage coefficient values to the MODFLOW (BCF package)."
         if self.log_to_info: logger.info(msg)
         # put the storage coefficient values to the modflow model
-        pcr.report(primary_1,   self.iniItems.mapsDir + "/" + "primary_storage_coefficient_lowermost_layer.map") #JV
-        pcr.report(secondary_1, self.iniItems.mapsDir + "/" + "secondary_storage_coefficient_lowermost_layer.map") #JV
+        pcr.report(primary_1,   self.iniItems.mapsDir + "/" + "primary_storage_coefficient_lowermost_layer.map")
+        pcr.report(secondary_1, self.iniItems.mapsDir + "/" + "secondary_storage_coefficient_lowermost_layer.map")
         self.pcr_modflow.setStorage(primary_1, secondary_1, 1)
-        pcr.report(primary_2,   self.iniItems.mapsDir + "/" + "primary_storage_coefficient_uppermost_layer.map") #JV
-        pcr.report(secondary_2, self.iniItems.mapsDir + "/" + "secondary_storage_coefficient_uppermost_layer.map") #JV
+        pcr.report(primary_2,   self.iniItems.mapsDir + "/" + "primary_storage_coefficient_uppermost_layer.map")
+        pcr.report(secondary_2, self.iniItems.mapsDir + "/" + "secondary_storage_coefficient_uppermost_layer.map")
         self.pcr_modflow.setStorage(primary_2, secondary_2, 2)
 
 
@@ -944,23 +944,23 @@ class GroundwaterModflow(object):
         #~ pcr.aguila(horizontal_conductivity_layer_2)
         #~ pcr.aguila(vertical_conductivity_layer_2)
         #~ raw_input("Press Enter to continue...")
-        pcr.report(horizontal_conductivity_layer_2, self.iniItems.mapsDir + "/" + "horizontal_conductivity_uppermost_layer.map") #JV
-        pcr.report(vertical_conductivity_layer_2, self.iniItems.mapsDir + "/" + "vertical_conductivity_uppermost_layer.map") #JV
+        pcr.report(horizontal_conductivity_layer_2, self.iniItems.mapsDir + "/" + "horizontal_conductivity_uppermost_layer.map")
+        pcr.report(vertical_conductivity_layer_2, self.iniItems.mapsDir + "/" + "vertical_conductivity_uppermost_layer.map")
         self.pcr_modflow.setConductivity(00, horizontal_conductivity_layer_2, \
                                              vertical_conductivity_layer_2, 2)
         if "aquiferLayerSecondaryStorageCoefficient" in self.iniItems.modflowParameterOptions.keys() and\
             self.iniItems.modflowParameterOptions['aquiferLayerSecondaryStorageCoefficient'] not in ["None", "False"]:
             msg = "Using the layer type (LAYCON) 2 for the aquifer layer."
             logger.debug(msg)
-            pcr.report(horizontal_conductivity_layer_1, self.iniItems.mapsDir + "/" + "horizontal_conductivity_lowermost_layer.map") #JV
-            pcr.report(vertical_conductivity_layer_1, self.iniItems.mapsDir + "/" + "vertical_conductivity_lowermost_layer.map") #JV
+            pcr.report(horizontal_conductivity_layer_1, self.iniItems.mapsDir + "/" + "horizontal_conductivity_lowermost_layer.map")
+            pcr.report(vertical_conductivity_layer_1, self.iniItems.mapsDir + "/" + "vertical_conductivity_lowermost_layer.map")
             self.pcr_modflow.setConductivity(02, horizontal_conductivity_layer_1, \
                                                  vertical_conductivity_layer_1, 1)
             #~ self.pcr_modflow.setConductivity(22, horizontal_conductivity_layer_1, \
                                                  #~ vertical_conductivity_layer_1, 1)
         else:
-            pcr.report(horizontal_conductivity_layer_1, self.iniItems.mapsDir + "/" + "horizontal_conductivity_lowermost_layer.map") #JV
-            pcr.report(vertical_conductivity_layer_1, self.iniItems.mapsDir + "/" + "vertical_conductivity_lowermost_layer.map") #JV
+            pcr.report(horizontal_conductivity_layer_1, self.iniItems.mapsDir + "/" + "horizontal_conductivity_lowermost_layer.map")
+            pcr.report(vertical_conductivity_layer_1, self.iniItems.mapsDir + "/" + "vertical_conductivity_lowermost_layer.map")
             self.pcr_modflow.setConductivity(00, horizontal_conductivity_layer_1, \
                                                  vertical_conductivity_layer_1, 1)
             #~ self.pcr_modflow.setConductivity(20, horizontal_conductivity_layer_1, \
@@ -1439,7 +1439,7 @@ class GroundwaterModflow(object):
         msg = "Saving some pcraster maps (MODFLOW parameters/input files) to the folder"
         logger.info(msg)
 
-        return #JV
+        return
 
         # - top and bottom layer elevations, as well as thicknesses
         pcr.report(pcr.ifthen(self.landmask, self.top_layer_2), self.iniItems.mapsDir + "/" + "top_uppermost_layer.map")
@@ -1496,10 +1496,10 @@ class GroundwaterModflow(object):
         for i in range(1, self.number_of_layers+1):
             var_name = 'groundwaterHeadLayer'+str(i)
             initial_head = pcr.scalar(groundwaterHead[var_name])
-            if i == 1: #JV
-                pcr.report(initial_head, self.iniItems.mapsDir + "/" + "initial_head_lowermost_layer.map") #JV
-            if i == 2: #JV
-                pcr.report(initial_head, self.iniItems.mapsDir + "/" + "initial_head_uppermost_layer.map") #JV
+            if i == 1:
+                pcr.report(initial_head, self.iniItems.mapsDir + "/" + "initial_head_lowermost_layer.map")
+            if i == 2:
+                pcr.report(initial_head, self.iniItems.mapsDir + "/" + "initial_head_uppermost_layer.map")
             self.pcr_modflow.setInitialHead(initial_head, i)
 
         # read input files (for the steady-state condition, we use pcraster maps):
@@ -1676,7 +1676,7 @@ class GroundwaterModflow(object):
 
 
         # execute MODFLOW
-        while self.modflow_converged == True #JV
+        while self.modflow_converged == True
 
             # convergence criteria
             HCLOSE = float(self.criteria_HCLOSE[self.iteration_HCLOSE])
@@ -1811,7 +1811,7 @@ class GroundwaterModflow(object):
         self.pcr_modflow = None
 
         # calculate some variables that will be accessed from PCR-GLOBWB (for online coupling purpose)
-        # self.calculate_values_for_pcrglobwb() #JV
+        # self.calculate_values_for_pcrglobwb()
 
     def calculate_values_for_pcrglobwb(self):
 
@@ -2207,9 +2207,9 @@ class GroundwaterModflow(object):
         # set the RIV package only to the uppermost layer
         if set_the_modflow_river_package:
             logger.info('Set the RIVER package.')
-            pcr.report(surface_water_elevation,          self.iniItems.mapsDir + "/" + "surface_water_elevation.map") #JV
-            pcr.report(surface_water_bed_elevation_used, self.iniItems.mapsDir + "/" + "surface_water_bed_elevation_used.map") #JV
-            pcr.report(bed_conductance_used,             self.iniItems.mapsDir + "/" + "bed_conductance_used.map") #JV
+            pcr.report(surface_water_elevation,          self.iniItems.mapsDir + "/" + "surface_water_elevation.map")
+            pcr.report(surface_water_bed_elevation_used, self.iniItems.mapsDir + "/" + "surface_water_bed_elevation_used.map")
+            pcr.report(bed_conductance_used,             self.iniItems.mapsDir + "/" + "bed_conductance_used.map")
             self.pcr_modflow.setRiver(surface_water_elevation, surface_water_bed_elevation_used, bed_conductance_used, self.number_of_layers)
         else:
             return surface_water_elevation, surface_water_bed_elevation_used, bed_conductance_used
@@ -2258,7 +2258,7 @@ class GroundwaterModflow(object):
         net_RCH = pcr.cover(pcr.ifthenelse(pcr.abs(net_RCH) < 1e-20, 0.0, net_RCH), 0.0)
 
         # put the recharge to the top grid/layer
-        pcr.report(net_RCH, self.iniItems.mapsDir + "/" + "net_RCH.map") #JV
+        pcr.report(net_RCH, self.iniItems.mapsDir + "/" + "net_RCH.map")
         self.pcr_modflow.setRecharge(net_RCH, 1)
 
         #~ # if we want to put RCH in the lower layer
@@ -2338,9 +2338,9 @@ class GroundwaterModflow(object):
         abstraction_layer_2 = abstraction_layer_2 * self.cellAreaMap * pcr.scalar(-1.0)
 
         # set the well package
-        pcr.report(abstraction_layer_1, self.iniItems.mapsDir + "/" + "abstraction_lowermost_layer.map") #JV
+        pcr.report(abstraction_layer_1, self.iniItems.mapsDir + "/" + "abstraction_lowermost_layer.map")
         self.pcr_modflow.setWell(abstraction_layer_1, 1)
-        pcr.report(abstraction_layer_2, self.iniItems.mapsDir + "/" + "abstraction_uppermost_layer.map") #JV
+        pcr.report(abstraction_layer_2, self.iniItems.mapsDir + "/" + "abstraction_uppermost_layer.map")
         self.pcr_modflow.setWell(abstraction_layer_2, 2)
 
     def set_drain_package(self):
@@ -2378,12 +2378,12 @@ class GroundwaterModflow(object):
 
         # a new idea 9 Nov 2018:
         drain_elevation_lowermost_layer = pcr.max(drain_elevation, self.bottom_layer_1)
-        pcr.report(drain_elevation_lowermost_layer, self.iniItems.mapsDir + "/" + "drain_elevation_lowermost_layer.map") #JV
-        pcr.report(drain_conductance, self.iniItems.mapsDir + "/" + "drain_conductance.map") #JV
+        pcr.report(drain_elevation_lowermost_layer, self.iniItems.mapsDir + "/" + "drain_elevation_lowermost_layer.map")
+        pcr.report(drain_conductance, self.iniItems.mapsDir + "/" + "drain_conductance.map")
         self.pcr_modflow.setDrain(drain_elevation_lowermost_layer, drain_conductance, 1)
 
         drain_elevation_uppermost_layer = pcr.max(drain_elevation, self.bottom_layer_2)
-        pcr.report(drain_elevation_uppermost_layer, self.iniItems.mapsDir + "/" + "drain_elevation_uppermost_layer.map") #JV
+        pcr.report(drain_elevation_uppermost_layer, self.iniItems.mapsDir + "/" + "drain_elevation_uppermost_layer.map")
         self.pcr_modflow.setDrain(drain_elevation_uppermost_layer, drain_conductance, 2)
 
         # TODO: Shall we link the specificYield used to the BCF package ??
