@@ -1676,7 +1676,7 @@ class GroundwaterModflow(object):
 
 
         # execute MODFLOW
-        while self.modflow_converged == True #JV False:
+        while self.modflow_converged == True #JV
 
             # convergence criteria
             HCLOSE = float(self.criteria_HCLOSE[self.iteration_HCLOSE])
