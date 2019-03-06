@@ -67,6 +67,8 @@ program maprcb
     do iproc = 1, np
       ic0 = proc_icolmin(iproc); ic1 = proc_icolmax(iproc)
       ir0 = proc_irowmin(iproc); ir1 = proc_irowmax(iproc)
+      ic0 = max(1, ic0 - 1); ic1 = min(ncol, ic1 + 1) ! additional box for BC
+      ir0 = max(1, ir0 - 1); ir1 = min(nrow, ir1 + 1) ! additional box for BC
       nc = ic1-ic0+1; nr = ir1-ir0+1
       xmin = xul+(ic0-1)*cs; ymin = yul-ir1*cs
       xmax = xmin + nc*cs; ymax = ymin + nr*cs
