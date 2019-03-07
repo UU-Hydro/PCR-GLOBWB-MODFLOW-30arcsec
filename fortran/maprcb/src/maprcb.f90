@@ -8,18 +8,19 @@ program maprcb
   type(tMap), pointer :: map
   logical :: ok
   character(len=1024) :: f, s, fmt
-  integer :: np, maxlev, ilev, iproc, ncol, nrow, icol, irow, n, nr, nc
-  integer :: ic0 ,ic1, ir0, ir1, jc0 , jc1, jr0, jr1
+  integer :: np, iverb, maxlev, ilev, iproc, ncol, nrow, icol, irow, n, nr, nc
+  integer :: ic0 ,ic1, ir0, ir1, jc0 , jc1, jr0, jr1, lun, i
   integer(kind=8) :: m
   integer, dimension(:), allocatable :: ncut, proc_icolmin, proc_icolmax, proc_irowmin, proc_irowmax
   real :: nodata, dmin, dmax
   real, dimension(:,:), allocatable :: loadptr, wrk
   double precision :: xul, yul, xmin, xmax, ymin, ymax, cs, dxmin, dxmax, dymin, dymax
   logical, parameter :: lround = .true.
-  
+  character(len=1024), dimension(10) :: sa
   
   call getarg(1,f)
   call getarg(2,s); read(s,*) np
+  call getarg(3,s); read(s,*) iverb
   
   ! read the map file
   allocate(map)
@@ -76,12 +77,33 @@ program maprcb
       jr0 = (yul-ceiling(ymax))/cs + 1; jr1 = (yul-floor(ymin))/cs
       jc0 = min(jc0, ic0); jc1 = max(jc1, ic1)
       jr0 = min(jr0, ir0); jr1 = max(jr1, ir1)
+      jc0 = max(1, jc0); jc1 = min(ncol, jc1)
+      jr0 = max(1, jr0); jr1 = min(nrow, jr1)
       proc_icolmin(iproc) = jc0; proc_icolmax(iproc) = jc1;
       proc_irowmin(iproc) = jr0; proc_irowmax(iproc) = jr1;
     end do
   end if
   
   m = np; n = getdigits(m)
+
+  ! write information
+  write(fmt,'(2(a,i),a)') '(i',n,'.',n,')'
+  write(f,fmt) np
+  write(*,*) 'Writing '//trim(f)//'.txt...'
+  open(file=trim(f)//'.txt', newunit=lun, status='replace')
+  write(sa(1),*) np
+  write(sa(2),*) ncol
+  write(sa(3),*) nrow
+  write(lun,'(2(a,1x),a)')(trim(adjustl(sa(i))) ,i=1,3)
+  do iproc = 1, np
+    write(sa(1),*) proc_icolmin(iproc)
+    write(sa(2),*) proc_icolmax(iproc)
+    write(sa(3),*) proc_irowmin(iproc)
+    write(sa(4),*) proc_irowmax(iproc)
+    write(lun,'(3(a,1x),a)')(trim(adjustl(sa(i))),i=1,4)
+  end do
+  close(lun)
+  if (iverb == 1) stop  
   
   write(fmt,'(4(a,i),a)') '(i',n,'.',n,',a,i',n,'.',n,')'
   do iproc = 1, np
