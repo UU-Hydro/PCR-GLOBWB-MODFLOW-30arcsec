@@ -92,35 +92,35 @@ if __name__ == "__main__":
             th = cla['th']; tm = cla['tm']; ts = cla['ts']; q = cla['q']
             if cla['fs'] is not None:
                 lst = cla['fs']
-                itgt = -1
+                jtgt = -1
                 fs_min = 0
-                for i in range(len(lst)):
-                    fs_max = lst[i]
+                for j in range(len(lst)):
+                    fs_max = lst[j]
                     if ((fs_min <= fs) and (fs <= fs_max)):
-                        itgt = i
+                        jtgt = j
                         break
-                if (itgt > -1):
+                if (jtgt > -1):
                     s = ''
                     found = False
                     lst = cla['th_a']
                     if lst is not None:
                         found = True
-                        th = lst[itgt]
+                        th = lst[jtgt]
                         s = s.strip() + ' ' + '-th %i'%th
                     lst = cla['tm_a']
                     if lst is not None:
                         found = True
-                        tm = lst[itgt]
+                        tm = lst[jtgt]
                         s = s.strip() +' ' + '-tm %i'%tm
                     lst = cla['ts_a']
                     if lst is not None:
                         found = True
-                        ts = lst[itgt]
+                        ts = lst[jtgt]
                         s = s.strip() +' ' + '-ts %i'%ts
                     lst = cla['q_a']
                     if lst is not None:
                         found = True
-                        q = lst[itgt]
+                        q = lst[jtgt]
                         s = s.strip() +' ' + '-q %s'%q
                     if found:
                         s = ' (fs %iMB: %s)'%(fs,s.strip())
