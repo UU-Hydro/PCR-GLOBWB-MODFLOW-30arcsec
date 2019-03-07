@@ -13,10 +13,12 @@ clp.add_argument('-a', '--a', action='store_true', default=False,
                 help='Do for all RCB partitions.')
 clp.add_argument('-s', '--s', nargs='+', type=str, default=False,
                 help='Script name.')
-clp.add_argument('-n', '--n', nargs='+', type=int, default=False,
+clp.add_argument('-n', '--n', nargs='+', type=int, default=[],
                 help='Subdomain numbers.')
 clp.add_argument('-np', '--np', type=int, default=False,
                 help='Number of RCB partitions.')
+clp.add_argument('-ms', '--ms', type=int, default=10,
+                help='Maximum jobs short queue.')
 #
 clp.add_argument('-q', '--q', type=str, default='normal',
                 help='Queue.')
@@ -75,12 +77,18 @@ def writejob(fn, s, th, tm, ts, q, n, np, nd):
 
 if __name__ == "__main__":
 
+    max_short = cla['ms']
+    n_short = 0
     np = cla['np']
     nd = len(str(np))
     ns = cla['n']
 
     if cla['a']:
          for i in range(1, np+1):
+            if ns != []:
+                if i not in ns:
+                    continue
+
             fn = 'rcb_'+ getn(np, nd) + '_' + getn(i, nd)
             mf = os.path.join(cla['mapdir'], 'rcb_' + getn(i, nd) + '-' + getn(np, nd) + '.map')
             if not os.path.isfile(mf):
@@ -122,8 +130,14 @@ if __name__ == "__main__":
                         found = True
                         q = lst[jtgt]
                         s = s.strip() +' ' + '-q %s'%q
-                    if found:
-                        s = ' (fs %iMB: %s)'%(fs,s.strip())
+                if found:
+                    s = ' (fs %iMB: %s)'%(fs,s.strip())
+
+            if q == 'short':
+                n_short += 1
+                if (n_short > max_short):
+                    q = 'normal'
+                    s = s.strip() + ' short->normal'
 
             writejob(fn, s, th, tm, ts, q, [i], np, nd)
             #print '%s --> %i'%(mf,fs)
