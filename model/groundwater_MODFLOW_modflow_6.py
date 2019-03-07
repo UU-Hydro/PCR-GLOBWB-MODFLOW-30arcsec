@@ -69,6 +69,7 @@ class GroundwaterModflow(object):
     def getVariableValuesForPCRGLOBWB(self):
 
         result = {}
+        return result
 
         result['relativeGroundwaterHead'] = pcr.ifthen(self.landmask, self.relativeGroundwaterHead)
         result['baseflow']                = pcr.ifthen(self.landmask, self.baseflow)
