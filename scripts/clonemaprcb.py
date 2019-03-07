@@ -35,7 +35,7 @@ if __name__ == "__main__":
 
     py  = 'deterministic_runner_for_offline_monthly_modflow.py'
     ini = '../config/rcb/template.ini'
-    opt = 'debug steady-state'
+    opt = 'debug steady-state-only'
 
     if cla['s']:
         fn = cla['s']
