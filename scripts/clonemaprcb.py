@@ -53,7 +53,7 @@ if __name__ == "__main__":
     f.write('#SBATCH -t %i:00:00\n'%cla['t'])
     f.write('#SBATCH --output=%s.out\n'%os.path.splitext(fn)[0].strip())
     f.write('#SBATCH --error=%s.err\n'%os.path.splitext(fn)[0].strip())
-    f.write('#SBATCH -p normal\n')
+    f.write('#SBATCH -p %s\n'%cla['q'])
     f.write('#SBATCH -N 1\n')
     f.write('\n')
     f.write('. /home/hydrowld/opt/pcr43dev/load_pcraster_2019-01-18.sh\n')
