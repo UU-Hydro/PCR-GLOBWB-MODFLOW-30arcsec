@@ -15,8 +15,12 @@ clp.add_argument('-n', '--n', nargs='+', type=int, default=False,
                 help='Subdomain numbers.')
 clp.add_argument('-np', '--np', type=int, default=False,
                 help='Number of RCB partitions.')
-clp.add_argument('-t', '--t', type=int, default=4,
-                help='Node running time.')
+clp.add_argument('-th', '--th', type=int, default=4,
+                help='Node running hours.')
+clp.add_argument('-tm', '--tm', type=int, default=0,
+                help='Node running minutes.')
+clp.add_argument('-ts', '--ts', type=int, default=0,
+                help='Node running seconds.')
 clp.add_argument('-q', '--q', type=str, default='normal',
                 help='Queue.')
 clp.add_argument('-r', '--r', action='store_true', default=False,
@@ -50,7 +54,7 @@ if __name__ == "__main__":
 
     f = open(fn, 'w')
     f.write('#!/bin/bash\n')
-    f.write('#SBATCH -t %i:00:00\n'%cla['t'])
+    f.write('#SBATCH -t %.2i:%.2i:%.2i\n'%(cla['th'],cla['tm'],cla['ts']))
     f.write('#SBATCH --output=%s.out\n'%os.path.splitext(fn)[0].strip())
     f.write('#SBATCH --error=%s.err\n'%os.path.splitext(fn)[0].strip())
     f.write('#SBATCH -p %s\n'%cla['q'])
