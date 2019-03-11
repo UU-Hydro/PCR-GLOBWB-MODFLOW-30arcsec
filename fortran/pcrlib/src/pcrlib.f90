@@ -3,11 +3,12 @@ module pcrModule
   use, intrinsic :: iso_fortran_env , only: error_unit, output_unit, &
     i1b => int8, i2b => int16, i4b => int32, r4b => real32, r8b => real64
   use ieee_arithmetic 
-  use utils
+  use utilsmod
   
   implicit none
   
   private
+  public :: i1b, i2b, i4b, r4b, r8b
 
   integer, parameter :: cr_int1  = 1 ! 4
   integer, parameter :: cr_int2  = 2 ! 21
@@ -67,7 +68,8 @@ module pcrModule
 
   type tMapHdr
     ! main header
-    character(len=27) :: signature
+    character(len=32) :: signature
+!    character(len=27) :: signature
     integer(kind=2)   :: version
     integer(kind=4)   :: gisFileId
     integer(kind=2)   :: projection
@@ -83,10 +85,10 @@ module pcrModule
     integer(kind=4)  :: nrCols
     real(kind=8)     :: cellSizeX
     real(kind=8)     :: cellSizeY
-    real(kind=8)     :: angle    
+    real(kind=8)     :: angle
     !
-    integer :: i4minVal, i4maxVal
-    real :: r4minVal, r4maxVal
+    integer(kind=8) :: i4minVal, i4maxVal
+    real(kind=8)     :: r4minVal, r4maxVal
   end type tMapHdr
   
   type tMap
@@ -103,13 +105,16 @@ module pcrModule
     real(r8b),                    pointer :: r8mv  => null()
     real(r8b),    dimension(:,:), pointer :: r8a   => null()
   contains
-    procedure :: read_header => map_read_header
-    procedure :: read_data   => map_read_data
-    procedure :: set_nodata  => map_set_nodata
-    procedure :: close       => map_close
-    procedure :: clean       => map_clean
-    procedure :: idf_export  => map_idf_export
-    procedure :: get_r4ar    => map_get_r4ar
+    procedure :: read_header  => map_read_header
+    procedure :: read_data    => map_read_data
+    procedure :: write_header => map_write_header
+    procedure :: write_data   => map_write_data
+    procedure :: set_nodata   => map_set_nodata
+    procedure :: close        => map_close
+    procedure :: clean        => map_clean
+    procedure :: clean_data   => map_clean_data
+    procedure :: idf_export   => map_idf_export
+    procedure :: get_r4ar     => map_get_r4ar
   end type tMap
   public :: tMap
   
@@ -167,7 +172,7 @@ contains
     call chkexist(f)
     
     ! open file in stream mode
-    allocate(this%iu)
+    if (.not.associated(this%iu)) allocate(this%iu)
     this%iu=getlun()
     write(*,*) 'Opening '//trim(f)//'...'
     open(unit=this%iu,file=f,form='unformatted',access='stream',status='old')
@@ -179,7 +184,7 @@ contains
     
     ! main header
     read(this%iu,pos=  0+1) hdr%signature
-    if (hdr%signature.ne.'RUU CROSS SYSTEM MAP FORMAT')then
+    if (hdr%signature(1:27).ne.'RUU CROSS SYSTEM MAP FORMAT')then
        call errmsg('File not recognized as MAP-file: ')
     end if   
     read(this%iu,pos= 32+1) hdr%version
@@ -227,7 +232,7 @@ contains
     read(this%iu,pos=104+1) hdr%nrCols
     read(this%iu,pos=108+1) hdr%cellSizeX
     read(this%iu,pos=116+1) hdr%cellSizeY
-    read(this%iu,pos=124 +1) hdr%angle
+    read(this%iu,pos=124+1) hdr%angle
     
     ! checks
     select case(hdr%cellRepr)
@@ -239,6 +244,69 @@ contains
     ok = .true.
     
   end function map_read_header
+
+  function map_write_header(this, f) result(ok)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+    ! -- modules
+    use iso_c_binding, only: c_int16_t, c_int32_t
+    ! -- dummy
+    class(tMap) :: this
+    character(len=*), intent(in) :: f
+    logical :: ok
+    ! -- local
+    integer(kind=c_int16_t) :: uint2
+    integer(kind=c_int32_t) :: uint4
+    
+    integer :: i, iinc
+    real, parameter :: nodata = -9999. ! should be exactly the same as in rdrsmodule !
+    type(tMapHdr), pointer :: hdr
+! ------------------------------------------------------------------------------
+    
+    ! open file in stream mode
+    if (.not.associated(this%iu)) allocate(this%iu)
+    this%iu=getlun()
+    write(*,*) 'Opening '//trim(f)//'...'
+    open(unit=this%iu,file=f,form='unformatted',access='stream',status='replace')
+    
+    ! READ HEADER
+    write(*,*) 'Writing header...'
+    hdr => this%header
+    
+    ! main header
+    write(this%iu,pos=  0+1) hdr%signature
+    uint2 = hdr%version;    write(this%iu,pos= 32+1) uint2
+    uint4 = hdr%gisFileId;  write(this%iu,pos= 34+1) uint4
+    uint2 = hdr%projection; write(this%iu,pos= 38+1) uint2
+    uint4 = hdr%attrTable;  write(this%iu,pos= 40+1) uint4
+    uint2 = hdr%dataType;   write(this%iu,pos= 44+1) uint2
+    uint4 =  hdr%byteOrder; write(this%iu,pos= 46+1) uint4
+    ! raster header
+    uint2 = hdr%valueScale; write(this%iu,pos= 64+1) uint2
+    uint2 = hdr%cellRepr;   write(this%iu,pos= 66+1) uint2
+    select case(hdr%cellRepr)
+    case(cr_int4)
+       write(this%iu,pos= 68+1) hdr%i4minVal
+       write(this%iu,pos= 76+1) hdr%i4maxVal
+    case(cr_real4)
+       write(this%iu,pos= 68+1) hdr%r4minVal
+       write(this%iu,pos= 76+1) hdr%r4maxVal
+    end select
+    write(this%iu,pos= 84+1) hdr%xUL
+    write(this%iu,pos= 92+1) hdr%yUL
+    uint4 = hdr%nrRows; write(this%iu,pos=100+1) uint4
+    uint4 = hdr%nrCols; write(this%iu,pos=104+1) uint4
+    write(this%iu,pos=108+1) hdr%cellSizeX
+    write(this%iu,pos=116+1) hdr%cellSizeY
+    write(this%iu,pos=124+1) hdr%angle
+    
+    ! set return value
+    ok = .true.
+    
+  end function map_write_header
   
   subroutine map_read_data(this)
 ! ******************************************************************************
@@ -287,6 +355,39 @@ contains
     call this%set_nodata()
       
   end subroutine map_read_data
+
+  subroutine map_write_data(this)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+    ! -- dummy
+    class(tMap) :: this
+    ! -- local
+    integer(i4b) :: nc, nr, ic, ir, p
+    character(len=1), dimension(:,:), allocatable :: wrk
+! ------------------------------------------------------------------------------
+    nc = this%header%nrCols; nr = this%header%nrRows
+    p = 256+1
+    
+    write(*,*) 'Writing array...'
+    select case(this%header%cellrepr)
+      case(cr_int1)
+        write(unit=this%iu,pos=p)((this%i1a(ic,ir),ic=1,nc),ir=1,nr)
+      case(cr_int2)
+        write(unit=this%iu,pos=p)((this%i2a(ic,ir),ic=1,nc),ir=1,nr)
+      case(cr_int4)
+        write(unit=this%iu,pos=p)((this%i4a(ic,ir),ic=1,nc),ir=1,nr)
+      case(cr_real4)
+        write(unit=this%iu,pos=p)((this%r4a(ic,ir),ic=1,nc),ir=1,nr)
+      case(cr_real8)
+        write(unit=this%iu,pos=p)((this%r8a(ic,ir),ic=1,nc),ir=1,nr)
+      case default
+        call errmsg('Kind of MAP-file not supported.')
+    end select 
+      
+  end subroutine map_write_data
   
   subroutine map_set_nodata(this)
 ! ******************************************************************************
@@ -514,7 +615,28 @@ contains
     end if
   end subroutine map_close
 
- subroutine map_clean(this)
+  subroutine map_clean_data(this)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+    ! -- dummy
+    class(tMap) :: this
+    ! -- local
+! ------------------------------------------------------------------------------
+    ! close the file
+    write(*,*) 'Cleaning map-file data structures...'
+    if (associated(this%i1a))    deallocate(this%i1a)
+    if (associated(this%i1a))    deallocate(this%i1a)
+    if (associated(this%i2a))    deallocate(this%i2a)
+    if (associated(this%i4a))    deallocate(this%i4a)
+    if (associated(this%r4a))    deallocate(this%r4a)
+    if (associated(this%r8a))    deallocate(this%r8a)
+    
+  end subroutine map_clean_data
+  
+  subroutine map_clean(this)
 ! ******************************************************************************
 ! ******************************************************************************
 !
@@ -529,12 +651,8 @@ contains
     call this%close()
     if (associated(this%iu))     deallocate(this%iu)
     if (associated(this%header)) deallocate(this%header)
-    if (associated(this%i1a))    deallocate(this%i1a)
-    if (associated(this%i1a))    deallocate(this%i1a)
-    if (associated(this%i2a))    deallocate(this%i2a)
-    if (associated(this%i4a))    deallocate(this%i4a)
-    if (associated(this%r4a))    deallocate(this%r4a)
-    if (associated(this%r8a))    deallocate(this%r8a)
+    
+    call this%clean_data()
     
   end subroutine map_clean
   
