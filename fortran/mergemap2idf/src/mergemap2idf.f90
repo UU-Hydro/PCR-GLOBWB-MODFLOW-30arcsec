@@ -9,11 +9,14 @@ program mergemap2idf
  
   logical :: ok, lex
   character(len=1024) :: s, f, fo, fp
-  integer(i4b) :: ic, ir, nc, nr, np, lun, ios, ip, ir0, ir1, ic0, ic1
+  integer(i4b) :: iact, ic, ir, nc, nr, np, lun, ios, ip, ir0, ir1, ic0, ic1, dir0, dir1, dic0, dic1
+  integer(i4b), dimension(:,:), allocatable :: iwrk
   real(r4b), dimension(:,:), allocatable :: gx, lx
   integer(i4b), dimension(:), allocatable :: icmin, icmax, irmin, irmax
+  integer(i4b), dimension(:), allocatable :: dicmin, dicmax, dirmin, dirmax
   real(r4b) :: lmv, lmin, lmax, gval, lval
   real(r4b) :: gxll, gyll, gcs, gmv
+  character(len=1024) :: s1, s2
   
   ! read input
   !### rcb.idf 8.txt -180 90 rcb_{1}-{2}.map  
@@ -23,58 +26,96 @@ program mergemap2idf
   open(file=f, newunit=lun, action='read')
   read(lun,*) np, nc, nr
   allocate(icmin(np), icmax(np), irmin(np), irmax(np))
+  allocate(dicmin(np), dicmax(np), dirmin(np), dirmax(np))
   do ip = 1, np
-    read(lun,*,iostat=ios) icmin(ip), icmax(ip), irmin(ip), irmax(ip)
+    read(lun,*,iostat=ios) icmin(ip), icmax(ip), irmin(ip), irmax(ip), &
+      dicmin(ip), dicmax(ip), dirmin(ip), dirmax(ip)
   end do
   close(lun)
   call getarg(3,s); read(s,*) gxll
   call getarg(4,s); read(s,*) gyll
   call getarg(5,fp)
   !
-  allocate(gx(nc,nr))
-  !
+  allocate(gx(nc,nr), iwrk(nc,nr))
+  
   allocate(map)
-  do ip = 1, np
-    call get_map_fname(f, fp, ip, np)
-    inquire(file=f,exist=lex)
-    if (.not.lex) then
-      write(*,*) 'Skipping '//trim(f)//'...'
-      cycle
-    end if
-    ok = map%read_header(f)
-    call map%read_data()
-    call map%get_r4ar(lx, lmv, lmin, lmax)
-    if (ip == 1) then
-       gcs = real(map%header%cellsizex)
-       gmv = lmv
-       do ir = 1, nr
-         do ic = 1, nc
-           gx(ic,ir) = lmv
-         end do
-      end do
-    end if
-    ir0 = irmin(ip); ir1 = irmax(ip)
-    ic0 = icmin(ip); ic1 = icmax(ip)
-    do ir = ir0, ir1
-      do ic = ic0, ic1
-        lval = lx(ic-ic0+1,ir-ir0+1) 
-        if (lval /= lmv) then
-          ! check
-          gval = gx(ic,ir)
-          if (gval /= gmv) then
-            if (lval /= gval) then
-              write(*,*) 'Inconsistent data!'
-              stop 1
+  do iact = 1, 2
+    do ip = 1, np
+      call get_map_fname(f, fp, ip, np)
+      inquire(file=f,exist=lex)
+      if (.not.lex) then
+        write(*,*) 'Skipping '//trim(f)//'...'
+        cycle
+      end if
+      ok = map%read_header(f)
+      call map%read_data()
+      call map%get_r4ar(lx, lmv, lmin, lmax)
+      if ((ip == 1) .and. (iact == 1)) then
+         gcs = real(map%header%cellsizex)
+         gmv = lmv
+         do ir = 1, nr
+           do ic = 1, nc
+             gx(ic,ir) = lmv
+             iwrk(ic,ir) = 0
+           end do
+        end do
+      end if
+      ir0 = irmin(ip); ir1 = irmax(ip); ic0 = icmin(ip); ic1 = icmax(ip)
+      dir0 = dirmin(ip); dir1 = dirmax(ip); dic0 = dicmin(ip); dic1 = dicmax(ip)
+      if (iact == 2) then
+        dir0 = dir0 - 1; dir0 = max(0, dir0)
+        dir1 = dir1 - 1; dir1 = max(0, dir1)
+        dic0 = dic0 - 1; dic0 = max(0, dic0)
+        dic1 = dic1 - 1; dic1 = max(0, dic1)
+      end if
+      if (iact == 1) then
+        do ir = ir0+dir0, ir1-dir1
+          do ic = ic0+dic0, ic1-dic1
+            lval = lx(ic-ic0+1, ir-ir0+1)
+            if (lval /= lmv) then
+              ! check
+              gval = gx(ic,ir)
+              if (gval /= gmv) then
+                if (lval /= gval) then
+                  write(s1,*) ic; write(s2,*) ir
+                  write(*,*) 'Error, inconsistent data for '//trim(adjustl(s1))//' '//trim(adjustl(s2))//'!'
+                  stop 1
+                end if
+              end if
+              ! set
+              gx(ic,ir) = lval
+              iwrk(ic,ir) = 1
             end if
-          end if
-          ! set
-          gx(ic,ir) = lval
-        end if
-      end do
+          end do
+        end do
+      else
+        do ir = ir0+dir0, ir1-dir1
+          do ic = ic0+dic0, ic1-dic1
+            if (iwrk(ic,ir) /= 1) then
+              lval = lx(ic-ic0+1, ir-ir0+1)
+              if (lval /= lmv) then
+                gval = gx(ic,ir)
+                ! check
+                if ((iwrk(ic,ir) == -1) .and. (gval /= gmv)) then
+                  if (lval /= gval) then
+                    write(s1,*) ic; write(s2,*) ir
+                    write(*,*) 'Warning, inconsistent data for '//trim(adjustl(s1))//' '//trim(adjustl(s2))//'!'
+                  end if
+                end if
+                ! set data
+                if (gval == gmv) then
+                  gx(ic,ir) = lval
+                  iwrk(ic, ir) = -1
+                end if
+              end if
+            end if
+          end do
+        end do
+      end if
+      call map%close()
+      call map%clean()
     end do
-    call map%close()
-    call map%clean()
-  end do
+  end do !iact
   !
   call writeidf(fo, gx, nc, nr, gxll, gyll, gcs, gmv)
   
