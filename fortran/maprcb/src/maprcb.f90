@@ -12,6 +12,7 @@ program maprcb
   integer :: ic0 ,ic1, ir0, ir1, jc0 , jc1, jr0, jr1, lun, i
   integer(kind=8) :: m
   integer, dimension(:), allocatable :: ncut, proc_icolmin, proc_icolmax, proc_irowmin, proc_irowmax
+  integer, dimension(:), allocatable :: proc_dicolmin, proc_dicolmax, proc_dirowmin, proc_dirowmax
   real :: nodata, dmin, dmax
   real, dimension(:,:), allocatable :: loadptr, wrk
   double precision :: xul, yul, xmin, xmax, ymin, ymax, cs, dxmin, dxmax, dymin, dymax
@@ -52,10 +53,8 @@ program maprcb
   
   ilev   = 0
   iproc  = 0
-  allocate(proc_icolmin(np))
-  allocate(proc_icolmax(np))
-  allocate(proc_irowmin(np))
-  allocate(proc_irowmax(np))
+  allocate(proc_icolmin(np), proc_icolmax(np), proc_irowmin(np), proc_irowmax(np))
+  allocate(proc_dicolmin(np), proc_dicolmax(np), proc_dirowmin(np), proc_dirowmax(np))
   
   write(*,*) 'Calling RCB...'
   call rcb(loadptr, nodata, ncol, nrow, 1, ncol, 1, nrow, ilev, maxlev, &
@@ -79,8 +78,14 @@ program maprcb
       jr0 = min(jr0, ir0); jr1 = max(jr1, ir1)
       jc0 = max(1, jc0); jc1 = min(ncol, jc1)
       jr0 = max(1, jr0); jr1 = min(nrow, jr1)
-      proc_icolmin(iproc) = jc0; proc_icolmax(iproc) = jc1;
-      proc_irowmin(iproc) = jr0; proc_irowmax(iproc) = jr1;
+      ! deltas to non-overlapping
+      proc_dicolmin(iproc) = proc_icolmin(iproc)-jc0
+      proc_dicolmax(iproc) = jc1-proc_icolmax(iproc)
+      proc_dirowmin(iproc) = proc_irowmin(iproc)-jr0
+      proc_dirowmax(iproc) = jr1-proc_irowmax(iproc)
+      ! set new bb
+      proc_icolmin(iproc) = jc0; proc_icolmax(iproc) = jc1
+      proc_irowmin(iproc) = jr0; proc_irowmax(iproc) = jr1
     end do
   end if
   
@@ -100,7 +105,11 @@ program maprcb
     write(sa(2),*) proc_icolmax(iproc)
     write(sa(3),*) proc_irowmin(iproc)
     write(sa(4),*) proc_irowmax(iproc)
-    write(lun,'(3(a,1x),a)')(trim(adjustl(sa(i))),i=1,4)
+    write(sa(5),*) proc_dicolmin(iproc)
+    write(sa(6),*) proc_dicolmax(iproc)
+    write(sa(7),*) proc_dirowmin(iproc)
+    write(sa(8),*) proc_dirowmax(iproc)
+    write(lun,'(7(a,1x),a)')(trim(adjustl(sa(i))),i=1,8)
   end do
   close(lun)
   if (iverb == 1) stop  
