@@ -14,7 +14,7 @@ program catmerge
   integer :: ic0, ic1, ir0, ir1, ic, ir, jc, jr, iv, ivmin, ivmax, nmerge, lddp, lddn, nbr, ncol, nrow
   integer, dimension(:), allocatable :: catmap, catmapinv, cid, cidinv, iwrk
   integer, dimension(:,:), allocatable :: bb, bord, catgx
-  double precision :: areamin, xmin, ymin, xmax, ymax, nbrarea
+  double precision :: areamin, xmin, ymin, xmax, ymax, nbrarea, ddum1, ddum2
   double precision, dimension(:), allocatable :: area, areas
   logical :: ldat, lwrt
   !
@@ -302,6 +302,11 @@ program catmerge
     ic1 = min(ncol, bb(4,ip)+1)
     if (nbr > 0) then ! neighbor found
       inbr = maxloc(iwrk,1)
+      if (ip == inbr) then
+        write(*,*) 'Program error, ip = inbr!'
+        stop 1
+      end if
+      
       area(inbr) = area(inbr) + area(ip)
       nbrarea = area(inbr)
       !
@@ -322,10 +327,22 @@ program catmerge
       bb(3,inbr) = min(bb(3,inbr), bb(3,ip))
       bb(4,inbr) = max(bb(4,inbr), bb(4,ip))
       !
+      !do i = 1, mcat
+      !  areas(i) = 10*i
+      !end do
+      !it = 5
+      !nbrarea = 105
+      !areas(it) = nbrarea
+      !
       ! correct the sorting list
       it = cidinv(inbr)
+      if (it == 1) then
+        write(*,*) 'Program error, it!'
+        stop 1
+      end if
+      jt = it
       do i = it, mcat-1
-        if (areas(i+1) > nbrarea) then
+        if (areas(i+1) /= huge(DZERO) .and. (areas(i+1) > nbrarea)) then
           jt = i
           exit
         end if
@@ -354,6 +371,7 @@ program catmerge
       do i = 1, mcat-1
         if (areas(i) > areas(i+1)) then
           write(*,*) 'Program error, sorting.'
+          write(*,*) i, it, jt, areas(i), areas(i+1)
           stop
         end if
       end do
