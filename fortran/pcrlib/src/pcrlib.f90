@@ -174,11 +174,10 @@ contains
     ! open file in stream mode
     if (.not.associated(this%iu)) allocate(this%iu)
     this%iu=getlun()
-    write(*,*) 'Opening '//trim(f)//'...'
+    write(*,*) 'Reading '//trim(f)//'...'
     open(unit=this%iu,file=f,form='unformatted',access='stream',status='old')
     
     ! READ HEADER
-    write(*,*) 'Reading header...'
     allocate(this%header)
     hdr => this%header
     
@@ -323,7 +322,6 @@ contains
     nc = this%header%nrCols; nr = this%header%nrRows
     p = 256+1
     
-    write(*,*) 'Reading array...'
     select case(this%header%cellrepr)
       case(cr_uint1)
         allocate(this%i1a(nc,nr), wrk(nc,nr))
@@ -399,8 +397,11 @@ contains
     class(tMap) :: this
     ! -- local
     integer(i4b) :: nc, nr, ic, ir
+    real(r4b) :: r4huge
+    real(r8b) :: r8huge
 ! ------------------------------------------------------------------------------
     nc = this%header%nrCols; nr = this%header%nrRows
+    r4huge = huge(r4huge); r8huge = huge(r8huge)
     
     select case(this%header%cellrepr)
     case(cr_uint1)
@@ -426,6 +427,13 @@ contains
             if (ieee_is_nan(this%r4a(ic,ir))) then
               this%r4a(ic,ir) = this%r4mv
             end if
+            if (.not.ieee_is_finite(this%r4a(ic,ir))) then
+              if (this%r4a(ic,ir) > 0) then
+                this%r4a(ic,ir) = r4huge
+              else
+                this%r4a(ic,ir) = -r4huge
+              end if
+            end if
           end do
         end do
       case(cr_real8)
@@ -436,6 +444,13 @@ contains
           do ic = 1, nc
             if (ieee_is_nan(this%r8a(ic,ir))) then
               this%r8a(ic,ir) = this%r8mv
+            end if
+            if (.not.ieee_is_finite(this%r8a(ic,ir))) then
+              if (this%r8a(ic,ir) > 0) then
+                this%r8a(ic,ir) = r8huge
+              else
+                this%r8a(ic,ir) = -r8huge
+              end if
             end if
           end do
         end do
@@ -609,7 +624,7 @@ contains
     if (associated(this%iu)) then
       inquire(unit=this%iu,opened=lop)
       if (lop) then
-        write(*,*) 'Closing map-file...'
+        !write(*,*) 'Closing map-file...'
         close(this%iu)
       end if
     end if
