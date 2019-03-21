@@ -5,7 +5,7 @@ module mf6_module
      i1b => int8, i4b => int32, i8b => int64, r4b => real32, r8b => real64
   use utilsmod, only: getlun, chkexist, readline, change_case, errmsg, logmsg, &
     readidf_block, readidf_val, writeidf, checkdim, addboundary, tUnp, &
-    calc_unique, sa, open_file, create_dir, swap_slash, tas, ta
+    calc_unique, sa, open_file, create_dir, swap_slash, tas, ta, get_rel_up
   use imod_idf
   
   implicit none 
@@ -148,27 +148,29 @@ module mf6_module
     logical,                       pointer :: lchd_int    => null()
     logical,                       pointer :: lchd_ext    => null()
   contains
-    procedure :: set_disu    => mf6_mod_set_disu
-    procedure :: get_array   => mf6_mod_get_array_r8
-    generic   :: write_array => mf6_mod_write_array_i4, &
-                                mf6_mod_write_array_r8
+    procedure :: get_model_name => mf_mod_get_model_name
+    procedure :: set_disu       => mf6_mod_set_disu
+    procedure :: get_array      => mf6_mod_get_array_r8
+    generic   :: write_array    => mf6_mod_write_array_i4, &
+                                   mf6_mod_write_array_r8
     procedure :: mf6_mod_write_array_i4
     procedure :: mf6_mod_write_array_r8
-    generic   :: write_list => mf6_mod_write_list_1, &
-                               mf6_mod_write_list_2, &
-                               mf6_mod_write_list_3
+    generic   :: write_list    => mf6_mod_write_list_1, &
+                                  mf6_mod_write_list_2, &
+                                  mf6_mod_write_list_3
     procedure :: mf6_mod_write_list_1
     procedure :: mf6_mod_write_list_2
     procedure :: mf6_mod_write_list_3
     !
     procedure :: write_nam   => mf6_mod_write_nam
     procedure :: write_disu  => mf6_mod_write_disu
+    procedure :: write_ic    => mf6_mod_write_ic
+    procedure :: write_oc    => mf6_mod_write_oc
     procedure :: write_npf   => mf6_mod_write_npf
     procedure :: write_chd   => mf6_mod_write_chd
     procedure :: write_drn   => mf6_mod_write_drn
     procedure :: write_riv   => mf6_mod_write_riv
     procedure :: write_rch   => mf6_mod_write_rch
-    procedure :: write_oc    => mf6_mod_write_oc
   end type tMf6_mod
   
   type tMf6
@@ -468,7 +470,7 @@ module mf6_module
     do imod = 1, this%nmod !loop over number of partitions
       mod => this%mod(imod)
       allocate(mod%modelname, mod%rootdir)
-      write(mod%modelname,'(a,i6.6)') 'm', this%partmapinv(imod)
+      call mod%get_model_name(this%partmapinv(imod), mod%modelname)
       mod%rootdir = trim(this%rootdir)//trim(mod%modelname)//'\'
       call create_dir(mod%rootdir)
       ir0 = this%partbb(1,imod); ir1 = this%partbb(2,imod)
@@ -852,16 +854,21 @@ module mf6_module
     integer(i4b) :: imod
     type(tMf6_mod), pointer :: mod => null()
 ! ------------------------------------------------------------------------------
-    call this%write_tdis()
-    call this%write_ims()
+    !call this%write_tdis()
+    !call this%write_ims()
+    !call this%write_exchanges()
+    !call this%write_mfsim()
     !
     do imod = 1, this%nmod
       mod => this%mod(imod)
-      !call mod%write_disu(.false.)
-      !call mod%write_npf(.false.)
-      !call mod%write_chd(.false.)
-      !call mod%write_drn(.false.)
-      !call mod%write_riv(.false.)
+      call mod%write_nam()
+      call mod%write_disu(.false.)
+      call mod%write_ic(.false.)
+      call mod%write_oc()
+      call mod%write_npf(.false.)
+      call mod%write_chd(.false.)
+      call mod%write_drn(.false.)
+      call mod%write_riv(.false.)
       call mod%write_rch(.false.)
     end do
       
@@ -879,8 +886,89 @@ module mf6_module
     ! -- dummy
     class(tMf6) :: this
     ! -- local
+    character(len=mxslen) :: f, ms
+    integer(i4b) :: iu, imod
+    type(tMf6_mod), pointer :: mod => null()
 ! ------------------------------------------------------------------------------
-  
+    !
+    ! all connected models
+    f = trim(this%rootdir)//trim(this%solname)//'.mfsim.nam'
+    call open_file(f, iu, 'w')
+    write(iu,'(   a)') 'BEGIN OPTIONS'
+    write(iu,'(2x,a)') 'MEMORY_PRINT_OPTION SUMMARY'
+    write(iu,'(2x,a)') 'DOMAIN_DECOMPOSITION '//ta((/this%nmod/))
+    write(iu,'(   a)') 'END OPTIONS'
+    write(iu,'(a)')
+    write(iu,'(   a)') 'BEGIN TIMING'
+    write(iu,'(2x,a)') 'TDIS6 '//trim(this%solname)//'.tdis'
+    write(iu,'(   a)') 'END TIMING'
+    write(iu,'(a)')
+    write(iu,'(   a)') 'BEGIN MODELS'
+    write(iu,'(2x,a)') 'OPEN/CLOSE '//trim(this%solname)//'.models.asc'
+    write(iu,'(   a)') 'END MODELS'
+    write(iu,'(a)')
+    write(iu,'(   a)') 'BEGIN EXCHANGES'
+    write(iu,'(2x,a)') 'OPEN/CLOSE '//trim(this%solname)//'.exchanges.asc'
+    write(iu,'(   a)') 'END EXCHANGES'
+    write(iu,'(a)')
+    write(iu,'(   a)') 'BEGIN SOLUTIONGROUP 1'
+    write(iu,'(2x,a)') 'IMS6 '//trim(this%solname)//'.ims FILEIN '// &
+      trim(this%solname)//'.solmodels.wrp.asc'
+    write(iu,'(   a)') 'END SOLUTIONGROUP'
+    close(iu)
+    !
+    f = trim(this%rootdir)//trim(this%solname)//'.models.asc'
+    call open_file(f, iu, 'w')
+    do imod = 1, this%nmod
+      mod => this%mod(imod)
+      f = 'GWF6 .\'//trim(mod%modelname)//'\'//trim(mod%modelname)//'.ext.nam '// &
+        trim(mod%modelname)//' '//ta((/imod/))
+      call swap_slash(f)
+      write(iu,'(a)') trim(f)
+    end do
+    close(iu)
+    !
+    f = trim(this%rootdir)//trim(this%solname)//'.solmodels.wrp.asc'
+    call open_file(f, iu, 'w')
+    write(iu,'(   a)') 'BEGIN MODELS'
+    write(iu,'(2x,a)') 'OPEN/CLOSE '//trim(this%solname)//'.solmodels.asc'
+    write(iu,'(   a)') 'END MODELS'
+    close(iu)
+    !
+    f = trim(this%rootdir)//trim(this%solname)//'.solmodels.asc'
+    call open_file(f, iu, 'w')
+    do imod = 1, this%nmod
+      mod => this%mod(imod)
+      write(iu,'(a)') trim(mod%modelname)
+      !write(iu,'(a)') trim(mod%modelname)//' '//ta((/imod/)) !CGC
+    end do
+    close(iu)
+    !
+    ! separate models
+    do imod = 1, this%nmod
+      mod => this%mod(imod)
+      f = trim(this%rootdir)//trim(this%solname)//'.'// &
+        trim(mod%modelname)//'.mfsim.nam'
+      call open_file(f, iu, 'w')
+      write(iu,'(   a)') 'BEGIN OPTIONS'
+      write(iu,'(2x,a)') 'MEMORY_PRINT_OPTION SUMMARY'
+      write(iu,'(   a)') 'END OPTIONS'
+      write(iu,'(a)')
+      write(iu,'(   a)') 'BEGIN TIMING'
+      write(iu,'(2x,a)') 'TDIS6 '//trim(this%solname)//'.tdis'
+      write(iu,'(   a)') 'END TIMING'
+      write(iu,'(a)')
+      write(iu,'(   a)') 'BEGIN MODELS'
+      f = '.\'//trim(mod%modelname)//'.int.ext.nam '//trim(mod%modelname)
+      call swap_slash(f)
+      write(iu,'(2x,a)') 'GWF6 '//trim(f)
+      write(iu,'(   a)') 'END MODELS'
+      write(iu,'(a)')
+      write(iu,'(   a)') 'BEGIN SOLUTIONGROUP 1'
+      write(iu,'(2x,a)') 'IMS6 '//trim(this%solname)//'.ims '//trim(mod%modelname)
+      write(iu,'(   a)') 'END SOLUTIONGROUP'
+      close(iu)
+    end do
   end subroutine mf6_write_mfsim
 
   subroutine mf6_write_tdis(this)
@@ -959,8 +1047,57 @@ module mf6_module
     ! -- dummy
     class(tMf6) :: this
     ! -- local
+    character(len=mxslen) :: f, fexg, m1s, m2s
+    integer(i4b) :: iu, ju, imod, ixch, iexg
+    type(tMf6_mod), pointer :: mod => null()
+    type(tExchange), pointer :: xch => null()
 ! ------------------------------------------------------------------------------
-  
+    f = trim(this%rootdir)//'exchanges'
+    call create_dir(f)
+    
+    f = trim(this%rootdir)//trim(this%solname)//'.exchanges.asc'
+    call open_file(f, iu, 'w')
+    do imod = 1, this%nmod
+      mod => this%mod(imod)
+      do ixch = 1, mod%nxch
+        xch => mod%xch(ixch)
+        !
+        call mod%get_model_name(xch%m1part, m1s)
+        call mod%get_model_name(xch%m2part, m2s)
+        !
+        fexg = trim(m1s)//'-'//trim(m2s)//'.exg'
+        f =  'GWF6-GWF6 .\exchanges\'//trim(fexg)//' '//trim(m1s)//' '//trim(m2s)
+        call swap_slash(f)
+        write(iu,'(a)') trim(f)
+        !
+        ! .exg file
+        f = trim(this%rootdir)//'exchanges\'//trim(fexg)
+        call open_file(f, ju, 'w')
+        write(ju,'(   a)') 'BEGIN OPTIONS'
+        write(ju,'(   a)') 'END OPTIONS'
+        write(ju,'(a)')
+        write(ju,'(   a)') 'BEGIN DIMENSIONS'
+        write(ju,'(2x,a)') 'NEXG '//ta((/xch%nexg/))
+        write(ju,'(   a)') 'END DIMENSIONS'
+        write(ju,'(a)')
+        write(ju,'(   a)') 'BEGIN EXCHANGEDATA'
+        f = '.\exchanges\'//trim(fexg)//'.asc'; call swap_slash(f)
+        write(ju,'(2x,a)') 'OPEN/CLOSE '//trim(f)
+        write(ju,'(   a)') 'END EXCHANGEDATA'
+        close(ju)
+        !
+        ! .asc file
+        f = trim(this%rootdir)//'exchanges\'//trim(fexg)//'.asc'
+        call open_file(f, ju, 'w')
+        do iexg = 1, xch%nexg
+          write(ju,'(a)') ta((/xch%cellidm1(iexg), xch%cellidm2(iexg)/))//' '//&
+                          ta((/delrc/2, delrc/2, delrc/))
+        end do
+        close(ju)
+      end do
+    end do
+    close(iu)
+    
   end subroutine mf6_write_exchanges
 
 ! ==============================================================================
@@ -1063,6 +1200,23 @@ module mf6_module
     end do
     
   end subroutine mf6_mod_get_array_r8
+  
+  subroutine mf_mod_get_model_name(this, i, modelname)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+!
+    ! -- dummy
+    class(tMf6_mod) :: this
+    integer(i4b), intent(in) :: i
+    character(len=*), intent(out) :: modelname
+    ! -- local
+! ------------------------------------------------------------------------------
+    write(modelname,'(a,i6.6)') 'm', i
+    !
+  end subroutine mf_mod_get_model_name
   
   subroutine mf6_mod_set_disu(this)
 ! ******************************************************************************
@@ -1237,20 +1391,56 @@ module mf6_module
     write(fmt,'(a,i,a)') '(',nx,'x,a)'
     if (lbin) then
       f = trim(f)//'.bin'
-      write(iu,fmt) 'OPEN/CLOSE '//trim(f)// ' (BINARY)'
       call open_file(f, ju, 'w', .true.)
       write(ju) arr
       close(ju)
+      call get_rel_up(f, 2); write(iu,fmt) 'OPEN/CLOSE '//trim(f)// ' (BINARY)'
     else
       f = trim(f)//'.asc'
-      write(iu,fmt) 'OPEN/CLOSE '//trim(f)
       call open_file(f, ju, 'w')
       do i = 1, size(arr)
         write(ju,'(a)') ta((/arr(i)/))
       end do
       close(ju)
+      call get_rel_up(f, 2); write(iu,fmt) 'OPEN/CLOSE '//trim(f)
     end if
   end subroutine mf6_mod_write_array_i4
+  
+  subroutine mf6_mod_write_array_r8(this, iu, nx, f, arr, lbin)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+!
+    ! -- dummy
+    class(tMf6_mod) :: this
+    integer(i4b), intent(in) :: iu 
+    integer(i4b), intent(in) :: nx
+    character(len=*), intent(inout) :: f
+    real(r8b), dimension(:), intent(in) :: arr
+    logical, intent(in) :: lbin
+    ! -- local
+    integer(i4b) :: ju, i
+    character(len=mxslen) :: fmt
+! ------------------------------------------------------------------------------
+    write(fmt,'(a,i,a)') '(',nx,'x,a)'
+    if (lbin) then
+      f = trim(f)//'.bin'
+      call open_file(f, ju, 'w', .true.)
+      write(ju) arr
+      close(ju)
+      call get_rel_up(f, 2); write(iu,fmt) 'OPEN/CLOSE '//trim(f)// '(BINARY)'
+    else
+      f = trim(f)//'.asc'
+      call open_file(f, ju, 'w')
+      do i = 1, size(arr)
+        write(ju,'(a)') ta((/arr(i)/))
+      end do
+      close(ju)
+      call get_rel_up(f, 2); write(iu,fmt) 'OPEN/CLOSE '//trim(f)
+    end if
+  end subroutine mf6_mod_write_array_r8
   
   subroutine mf6_mod_write_list_1(this, iu, nx, f, arrflg, arr, lbin)
 ! ******************************************************************************
@@ -1274,7 +1464,6 @@ module mf6_module
     write(fmt,'(a,i,a)') '(',nx,'x,a)'
     if (lbin) then
       f = trim(f)//'.bin'
-      write(iu,fmt) 'OPEN/CLOSE '//trim(f)// ' (BINARY)'
       call open_file(f, ju, 'w', .true.)
       do i = 1, size(arrflg)
         if (arrflg(i) == 1) then
@@ -1282,9 +1471,9 @@ module mf6_module
         end if
       end do
       close(ju)
+      call get_rel_up(f, 2); write(iu,fmt) 'OPEN/CLOSE '//trim(f)// ' (BINARY)'
     else
       f = trim(f)//'.asc'
-      write(iu,fmt) 'OPEN/CLOSE '//trim(f)
       call open_file(f, ju, 'w')
       do i = 1, size(arrflg)
         if (arrflg(i) == 1) then
@@ -1292,6 +1481,7 @@ module mf6_module
         end if
       end do
       close(ju)
+      call get_rel_up(f, 2); write(iu,fmt) 'OPEN/CLOSE '//trim(f)
     end if
   end subroutine mf6_mod_write_list_1
   
@@ -1318,7 +1508,6 @@ module mf6_module
     write(fmt,'(a,i,a)') '(',nx,'x,a)'
     if (lbin) then
       f = trim(f)//'.bin'
-      write(iu,fmt) 'OPEN/CLOSE '//trim(f)// ' (BINARY)'
       call open_file(f, ju, 'w', .true.)
       do i = 1, size(arrflg)
         if (arrflg(i) == 1) then
@@ -1326,9 +1515,9 @@ module mf6_module
         end if
       end do
       close(ju)
+      call get_rel_up(f, 2); write(iu,fmt) 'OPEN/CLOSE '//trim(f)// ' (BINARY)'
     else
       f = trim(f)//'.asc'
-      write(iu,fmt) 'OPEN/CLOSE '//trim(f)
       call open_file(f, ju, 'w')
       do i = 1, size(arrflg)
         if (arrflg(i) == 1) then
@@ -1336,6 +1525,7 @@ module mf6_module
         end if
       end do
       close(ju)
+      call get_rel_up(f, 2); write(iu,fmt) 'OPEN/CLOSE '//trim(f)
     end if
   end subroutine mf6_mod_write_list_2
   
@@ -1363,7 +1553,6 @@ module mf6_module
     write(fmt,'(a,i,a)') '(',nx,'x,a)'
     if (lbin) then
       f = trim(f)//'.bin'
-      write(iu,fmt) 'OPEN/CLOSE '//trim(f)// ' (BINARY)'
       call open_file(f, ju, 'w', .true.)
       do i = 1, size(arrflg)
         if (arrflg(i) == 1) then
@@ -1371,9 +1560,9 @@ module mf6_module
         end if
       end do
       close(ju)
+      call get_rel_up(f, 2); write(iu,fmt) 'OPEN/CLOSE '//trim(f)// ' (BINARY)'
     else
       f = trim(f)//'.asc'
-      write(iu,fmt) 'OPEN/CLOSE '//trim(f)
       call open_file(f, ju, 'w')
       do i = 1, size(arrflg)
         if (arrflg(i) == 1) then
@@ -1382,44 +1571,9 @@ module mf6_module
         end if
       end do
       close(ju)
+      call get_rel_up(f, 2); write(iu,fmt) 'OPEN/CLOSE '//trim(f)
     end if
   end subroutine mf6_mod_write_list_3
-  
-  subroutine mf6_mod_write_array_r8(this, iu, nx, f, arr, lbin)
-! ******************************************************************************
-! ******************************************************************************
-!
-!    SPECIFICATIONS:
-! ------------------------------------------------------------------------------
-!
-    ! -- dummy
-    class(tMf6_mod) :: this
-    integer(i4b), intent(in) :: iu 
-    integer(i4b), intent(in) :: nx
-    character(len=*), intent(inout) :: f
-    real(r8b), dimension(:), intent(in) :: arr
-    logical, intent(in) :: lbin
-    ! -- local
-    integer(i4b) :: ju, i
-    character(len=mxslen) :: fmt
-! ------------------------------------------------------------------------------
-    write(fmt,'(a,i,a)') '(',nx,'x,a)'
-    if (lbin) then
-      f = trim(f)//'.bin'
-      write(iu,fmt) 'OPEN/CLOSE '//trim(f)// '(BINARY)'
-      call open_file(f, ju, 'w', .true.)
-      write(ju) arr
-      close(ju)
-    else
-      f = trim(f)//'.asc'
-      write(iu,fmt) 'OPEN/CLOSE '//trim(f)
-      call open_file(f, ju, 'w')
-      do i = 1, size(arr)
-        write(ju,'(a)') ta((/arr(i)/))
-      end do
-      close(ju)
-    end if
-  end subroutine mf6_mod_write_array_r8
   
   subroutine mf6_mod_write_nam(this)
 ! ******************************************************************************
@@ -1431,11 +1585,54 @@ module mf6_module
     ! -- dummy
     class(tMf6_mod) :: this
     ! -- local
+    character(len=mxslen) :: p, f, mn
+    integer(i4b) :: iu, maxbound, i
+    integer(i4b), parameter :: npck = 8
+    character(len=4), dimension(npck) :: pck
+    data pck/'disu', 'ic  ', 'oc  ', 'npf ', 'chd ', &
+             'drn ', 'riv ', 'rch '/
 ! ------------------------------------------------------------------------------
-  
+    mn = this%modelname
+    p = '.\'//trim(mn)//'\'
+    f = trim(this%rootdir)//trim(mn)//'.int.ext.nam'
+    call open_file(f, iu, 'w')
+    write(iu,'(   a)') 'BEGIN OPTIONS'
+    write(iu,'(   a)') 'END OPTIONS'
+    write(iu,'(a)')
+    write(iu,'(   a)') 'BEGIN PACKAGES'
+    do i = 1, npck
+      if (pck(i) == 'chd') then
+        f = trim(p)//trim(mn)//'.int.'//trim(pck(i)); call swap_slash(f)
+        write(iu,'(2x,a)') change_case(pck(i),'u')//'6 '//trim(f)
+        f = trim(p)//trim(mn)//'.ext.'//trim(pck(i)); call swap_slash(f)
+        write(iu,'(2x,a)') change_case(pck(i),'u')//'6 '//trim(f)
+      else
+        f = trim(p)//trim(mn)//'.'//trim(pck(i)); call swap_slash(f)
+      end if  
+    end do
+    write(iu,'(   a)') 'END PACKAGES'
+    close(iu)
+    !
+    f = trim(p)//'.ext.nam'
+    call open_file(f, iu, 'w')
+    write(iu,'(   a)') 'BEGIN OPTIONS'
+    write(iu,'(   a)') 'END OPTIONS'
+    write(iu,'(a)')
+    write(iu,'(   a)') 'BEGIN PACKAGES'
+    do i = 1, npck
+      if (pck(i) == 'chd') then
+        f = trim(p)//trim(mn)//'.ext.'//trim(pck(i)); call swap_slash(f)
+        write(iu,'(2x,a)') change_case(pck(i),'u')//'6 '//trim(f)
+      else
+        f = trim(p)//trim(mn)//'.'//trim(pck(i)); call swap_slash(f)
+      end if  
+    end do
+    write(iu,'(   a)') 'END PACKAGES'
+    close(iu)
+    !
   end subroutine mf6_mod_write_nam
   
-  subroutine mf6_mod_write_disu(this)
+  subroutine mf6_mod_write_disu(this, lbin)
 ! ******************************************************************************
 ! ******************************************************************************
 !
@@ -1444,8 +1641,8 @@ module mf6_module
 !
     ! -- dummy
     class(tMf6_mod) :: this
+    logical, intent(in) :: lbin
     ! -- local
-    logical, parameter :: lbin = .true.
     character(len=mxslen) :: p, f, s
     integer(i4b) :: iu, n
     type(tDisu), pointer :: disu
@@ -1499,6 +1696,92 @@ module mf6_module
     write(iu,'(   a)') 'END CONNECTIONDATA'
     close(iu)
   end subroutine mf6_mod_write_disu
+
+  subroutine mf6_mod_write_ic(this, lbin)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+!
+    ! -- dummy
+    class(tMf6_mod) :: this
+    logical, intent(in) :: lbin
+    ! -- local
+    character(len=mxslen) :: p, f
+    integer(i4b) :: iu, n
+! ------------------------------------------------------------------------------
+    call clear_wrk()
+    !
+    p = trim(this%rootdir)//trim(this%modelname)
+    !
+    f = trim(p)//'.int.ext.ic'
+    call open_file(f, iu, 'w')
+    write(iu,'(   a)') 'BEGIN OPTIONS'
+    write(iu,'(   a)') 'END OPTIONS'
+    write(iu,'(a)')
+    write(iu,'(   a)') 'BEGIN GRIDDATA'
+    write(iu,'(2x,a)') 'STRT'
+    call this%get_array(i_strt_l1, 1, i1wrk, r8wrk, n)
+    call this%get_array(i_strt_l2, 2, i1wrk, r8wrk, n)
+    f = trim(p)//'.ext.ic'; call this%write_array(iu, 4, f, r8wrk, lbin)
+    write(iu,'(   a)') 'END GRIDDATA'
+    close(iu)
+
+    f = trim(p)//'.ext.ic'
+    call open_file(f, iu, 'w')
+    write(iu,'(   a)') 'BEGIN OPTIONS'
+    write(iu,'(   a)') 'END OPTIONS'
+    write(iu,'(a)')
+    write(iu,'(   a)') 'BEGIN GRIDDATA'
+    write(iu,'(2x,a)') 'STRT'
+    f = trim(p)//'.int.ext.hds';  call get_rel_up(f, 2)
+    write(iu,'(2x,a)') 'OPEN/CLOSE '//trim(f)//' (BINARY)'
+    write(iu,'(   a)') 'END GRIDDATA'
+    close(iu)
+  end subroutine mf6_mod_write_ic
+  
+  subroutine mf6_mod_write_oc(this)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+!
+    ! -- dummy
+    class(tMf6_mod) :: this
+    ! -- local
+    character(len=mxslen) :: p, f
+    integer(i4b) :: iu
+! ------------------------------------------------------------------------------
+    !
+    p = trim(this%rootdir)//trim(this%modelname)
+    !
+    f = trim(p)//'.int.ext.oc'
+    call open_file(f, iu, 'w')
+    
+    write(iu,'(   a)') 'BEGIN OPTIONS'
+    f = trim(p)//'.int.ext.hds'; call get_rel_up(f, 2)
+    write(iu,'(2x,a)') 'HEAD FILEOUT '//trim(f)
+    write(iu,'(   a)') 'END OPTIONS'
+    write(iu,'(a)')
+    write(iu,'(   a)') 'BEGIN PERIOD 1'
+    write(iu,'(2x,a)') 'SAVE HEAD ALL'
+    write(iu,'(   a)') 'END PERIOD'
+    close(iu)
+    
+    f = trim(p)//'.ext.oc'
+    call open_file(f, iu, 'w')
+    write(iu,'(   a)') 'BEGIN OPTIONS'
+    f = trim(p)//'.int.ext.hds'; call get_rel_up(f, 2)
+    write(iu,'(2x,a)') 'HEAD FILEOUT '//trim(f)
+    write(iu,'(   a)') 'END OPTIONS'
+    write(iu,'(a)')
+    write(iu,'(   a)') 'BEGIN PERIOD 1'
+    write(iu,'(2x,a)') 'SAVE HEAD ALL'
+    write(iu,'(   a)') 'END PERIOD'
+    close(iu)
+  end subroutine mf6_mod_write_oc
   
   subroutine mf6_mod_write_npf(this, lbin)
 ! ******************************************************************************
@@ -1758,19 +2041,5 @@ module mf6_module
     end if
     
   end subroutine mf6_mod_write_rch
-  
-  subroutine mf6_mod_write_oc(this)
-! ******************************************************************************
-! ******************************************************************************
-!
-!    SPECIFICATIONS:
-! ------------------------------------------------------------------------------
-!
-    ! -- dummy
-    class(tMf6_mod) :: this
-    ! -- local
-! ------------------------------------------------------------------------------
-  
-  end subroutine mf6_mod_write_oc
   
 end module
