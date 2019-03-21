@@ -10,9 +10,8 @@ program test
   call getarg(1,f)
   
   allocate(ggm)
-  call ggm%init(f, 49) !australia
-  call ggm%exchange_init() !australia
-!  call ggm%init(f, 9)
+  call ggm%init(f)
+  call ggm%write()
   deallocate(ggm)
   
 end program
