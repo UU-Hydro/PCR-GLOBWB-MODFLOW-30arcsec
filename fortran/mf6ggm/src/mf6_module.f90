@@ -403,7 +403,7 @@ module mf6_module
         end if
       end do 
     end do
-    deallocate(iwrk2d)
+    deallocate(iwrk2d); iwrk2d => null() 
     !
     ! add the constant head boundary
     call addboundary(this%part, size(this%part,1), size(this%part,2))
@@ -494,7 +494,7 @@ module mf6_module
       !
       ! determine number of independent regions
       call calc_unique(iwrk2d, 9, regun, regbb, nreg, idum, 0., 0., 0.)
-      deallocate(iwrk2d)
+      deallocate(iwrk2d); iwrk2d => null()
       !
       if (.false. .and. (nreg >1)) then !DEBUG
         xll = gdat(i_part)%idf%xmin; yll = gdat(i_part)%idf%ymin; cs = gdat(i_part)%idf%dx
@@ -522,6 +522,13 @@ module mf6_module
         !
         allocate(reg%nodmap(reg%ncol,reg%nrow))
         allocate(reg%bndmap(reg%ncol,reg%nrow))
+        do ir = 1, reg%nrow
+          do ic = 1, reg%ncol
+            reg%nodmap(ic,ir) = 0
+            reg%bndmap(ic,ir) = 0
+          end do
+        end do
+        !
         do ir = reg%ir0, reg%ir1
           do ic = reg%ic0, reg%ic1
             kr = ir -     ir0 + 1; kc = ic -     ic0 + 1
@@ -539,11 +546,11 @@ module mf6_module
               reg%nodmap(jc,jr) = 0
               reg%bndmap(jc,jr) = 0
             end if
-            if (i < 0) then
-              reg%bndmap(jc,jr) = -n
-            else
-              reg%bndmap(jc,jr) = 0
-            end if
+            !if (i < 0) then
+            !  reg%bndmap(jc,jr) = -n
+            !else
+            !  reg%bndmap(jc,jr) = 0
+            !end if
           end do
         end do
         n = n + (nlay-1)*reg%layer_nodes
@@ -571,7 +578,7 @@ module mf6_module
     character(len=mxslen) :: f
     real(r4b) :: xll, yll, cs, nodata !DEBUG
     integer(i4b) :: ic, ir, jc, jr, kc, kr, i, j, imod, jmod, ireg, ixch, nexgf
-    integer(i4b) :: iact, n, imod1, imod2
+    integer(i4b) :: iact, n, imod1, imod2, ilay
     type(tMf6_mod), pointer  :: mod  => null()
     type(tMf6_mod), pointer  :: mod1 => null()
     type(tMf6_mod), pointer  :: mod2 => null()
@@ -714,7 +721,7 @@ module mf6_module
     !
     end do
     !
-    deallocate(iwrk2d)
+    deallocate(iwrk2d); iwrk2d => null()
     allocate(iwrk2d(this%ncol,this%nrow))
     do imod1 = 1, this%nmod
       write(sa(1),*) imod1; write(sa(2),*) this%nmod
@@ -828,7 +835,60 @@ module mf6_module
       end do
       stop 1
     end if
-    
+
+    if (.false.) then
+    xll = gdat(i_part)%idf%xmin; yll = gdat(i_part)%idf%ymin; cs = gdat(i_part)%idf%dx
+    do imod = 1, this%nmod
+      mod => this%mod(imod)
+      do ilay = 1, nlay
+        do ir = 1, this%nrow
+          do ic = 1, this%ncol
+            iwrk2d(ic,ir) = 0
+          end do
+        end do
+        do ireg = 1, mod2%nreg
+          reg => mod2%reg(ireg)
+          do ir = reg%ir0, reg%ir1
+            do ic = reg%ic0, reg%ic1
+              kr = ir - this%ir0 + 1; kc = ic - this%ic0 + 1
+              jr = ir - reg%ir0  + 1; jc = ic - reg%ic0  + 1
+              n = reg%nodmap(jc,jr)
+              if (n /= 0) then
+                iwrk2d(kc,kr) = n + (ilay-1)*reg%layer_nodes
+              end if
+            end do
+          end do
+        end do
+        f = 'nodmap_'//trim(mod%modelname)//'_l'//ta((/ilay/))//'.idf'
+        call writeidf(f, iwrk2d, size(iwrk2d,1), size(iwrk2d,2), &
+          xll+(this%ic0-1)*cs, yll+(gdat(i_part)%idf%nrow-this%ir1)*cs, cs, 0.)
+      end do
+      do ir = 1, this%nrow
+        do ic = 1, this%ncol
+          iwrk2d(ic,ir) = 0
+        end do
+      end do
+      do ireg = 1, mod2%nreg
+        reg => mod2%reg(ireg)
+        do ir = reg%ir0, reg%ir1
+          do ic = reg%ic0, reg%ic1
+            kr = ir - this%ir0 + 1; kc = ic - this%ic0 + 1
+            jr = ir - reg%ir0  + 1; jc = ic - reg%ic0  + 1
+            n = reg%bndmap(jc,jr)
+            if (n > 0) then
+              iwrk2d(kc,kr) = 1
+            else if (n < 0) then
+              iwrk2d(kc,kr) = -1
+            end if
+          end do
+        end do
+      end do
+      f = 'bndmap_'//trim(mod%modelname)//'.idf'
+      call writeidf(f, iwrk2d, size(iwrk2d,1), size(iwrk2d,2), &
+        xll+(this%ic0-1)*cs, yll+(gdat(i_part)%idf%nrow-this%ir1)*cs, cs, 0.)
+    end do
+    end if
+    !
     if (.false.) then !DEBUG
       xll = gdat(i_part)%idf%xmin; yll = gdat(i_part)%idf%ymin; cs = gdat(i_part)%idf%dx
       call writeidf('regnodmap.idf', reg%nodmap, size(reg%nodmap,1), size(reg%nodmap,2), &
@@ -862,8 +922,8 @@ module mf6_module
     !
     do imod = 1, this%nmod
       mod => this%mod(imod)
+      !if (mod%modelname /= 'm000958') cycle
       call logmsg('***** Processing for model '//trim(mod%modelname)//'...')
-      call mod%write_nam()
       call mod%write_disu(lbin)
       call mod%write_ic(lbin)
       call mod%write_oc()
@@ -872,6 +932,7 @@ module mf6_module
       call mod%write_drn(lbin)
       call mod%write_riv(lbin)
       call mod%write_rch(lbin)
+      call mod%write_nam()
     end do
       
   end subroutine mf6_write
@@ -1194,7 +1255,8 @@ module mf6_module
               end if
             end if
             if ((n < 1) .or. (n > arrsiz)) then
-              call errmsg('mf6_mod_get_array_r8: program error 2')
+              call errmsg('mf6_mod_get_array_r8: program error 3 '//ta((/ib/))//' '//&
+                ta((/n/))//' '//ta((/arrsiz/)))
             end if
             arr(n) = dble(r4val)
             arrflg(n) = 1
@@ -1632,15 +1694,21 @@ module mf6_module
     write(iu,'(   a)') 'BEGIN PACKAGES'
     do i = 1, npck
       if (pck(i) == 'chd') then
-        f = trim(p)//trim(mn)//'.int.'//trim(pck(i)); call swap_slash(f)
-        write(iu,'(2x,a)') trim(change_case(pck(i),'u'))//'6 '//trim(f)
-        f = trim(p)//trim(mn)//'.ext.'//trim(pck(i)); call swap_slash(f)
+        if (this%lchd_int) then
+          f = trim(p)//trim(mn)//'.int.'//trim(pck(i)); call swap_slash(f)
+          write(iu,'(2x,a)') trim(change_case(pck(i),'u'))//'6 '//trim(f)
+        end if
+        if (this%lchd_ext) then
+          f = trim(p)//trim(mn)//'.ext.'//trim(pck(i)); call swap_slash(f)
+          write(iu,'(2x,a)') trim(change_case(pck(i),'u'))//'6 '//trim(f)
+        end if
       else if ((pck(i) == 'ic').or.(pck(i) == 'oc')) then
         f = trim(p)//trim(mn)//'.int.ext.'//trim(pck(i)); call swap_slash(f)
+        write(iu,'(2x,a)') trim(change_case(pck(i),'u'))//'6 '//trim(f)
       else  
         f = trim(p)//trim(mn)//'.'//trim(pck(i)); call swap_slash(f)
+        write(iu,'(2x,a)') trim(change_case(pck(i),'u'))//'6 '//trim(f)
       end if  
-      write(iu,'(2x,a)') trim(change_case(pck(i),'u'))//'6 '//trim(f)
     end do
     write(iu,'(   a)') 'END PACKAGES'
     close(iu)
@@ -1653,13 +1721,17 @@ module mf6_module
     write(iu,'(   a)') 'BEGIN PACKAGES'
     do i = 1, npck
       if (pck(i) == 'chd') then
-        f = trim(p)//trim(mn)//'.ext.'//trim(pck(i)); call swap_slash(f)
+        if (this%lchd_ext) then
+          f = trim(p)//trim(mn)//'.ext.'//trim(pck(i)); call swap_slash(f)
+          write(iu,'(2x,a)') trim(change_case(pck(i),'u'))//'6 '//trim(f)
+        end if
       else if ((pck(i) == 'ic').or.(pck(i) == 'oc')) then
         f = trim(p)//trim(mn)//'.ext.'//trim(pck(i)); call swap_slash(f)
+        write(iu,'(2x,a)') trim(change_case(pck(i),'u'))//'6 '//trim(f)
       else
         f = trim(p)//trim(mn)//'.'//trim(pck(i)); call swap_slash(f)
+        write(iu,'(2x,a)') trim(change_case(pck(i),'u'))//'6 '//trim(f)
       end if  
-      write(iu,'(2x,a)') trim(change_case(pck(i),'u'))//'6 '//trim(f)
     end do
     write(iu,'(   a)') 'END PACKAGES'
     close(iu)
@@ -1900,10 +1972,10 @@ module mf6_module
         r8wrk(i) = DZERO
       end do
       f = trim(p)//'.ext.chd'; call this%write_list(iu, 2, f, i1wrk, r8wrk, lbin)
-      call clear_wrk()
       write(iu,'(   a)') 'END PERIOD'
       close(iu)
     end if
+    call clear_wrk()
     
     ! internal boundaries (partitions)
     call this%get_array(i_strt_l1, 1, i1wrk, r8wrk, maxbound, 2)
@@ -1922,10 +1994,10 @@ module mf6_module
       write(iu,'(a)')
       write(iu,'(   a)') 'BEGIN PERIOD 1'
       f = trim(p)//'.int.chd'; call this%write_list(iu, 4, f, i1wrk, r8wrk, lbin)
-      call clear_wrk()
       write(iu,'(   a)') 'END PERIOD'
       close(iu)
     end if
+    call clear_wrk()
     
   end subroutine mf6_mod_write_chd
   
