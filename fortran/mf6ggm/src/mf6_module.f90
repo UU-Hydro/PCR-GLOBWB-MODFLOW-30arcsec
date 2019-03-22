@@ -147,6 +147,12 @@ module mf6_module
     type(tExchange), dimension(:), pointer :: xch         => null()
     logical,                       pointer :: lchd_int    => null()
     logical,                       pointer :: lchd_ext    => null()
+    integer(i4b),                  pointer :: ir0         => null()
+    integer(i4b),                  pointer :: ir1         => null()
+    integer(i4b),                  pointer :: ic0         => null()
+    integer(i4b),                  pointer :: ic1         => null()
+    integer(i4b),                  pointer :: ncol        => null()
+    integer(i4b),                  pointer :: nrow        => null()
   contains
     procedure :: get_model_name => mf_mod_get_model_name
     procedure :: set_disu       => mf6_mod_set_disu
@@ -503,6 +509,8 @@ module mf6_module
       end if
       
       allocate(mod%nreg, mod%layer_nodes)
+      allocate(mod%ir0, mod%ir1, mod%ic0, mod%ic1, mod%ncol, mod%nrow)
+      mod%ir0 = gnrow; mod%ir1 = 0; mod%ic0 = gncol; mod%ic1 = 0
       mod%nreg = nreg
       allocate(mod%reg(nreg))
       mod%layer_nodes = 0
@@ -517,6 +525,8 @@ module mf6_module
         !
         reg%ir0 = regbb(ireg)%ir0 + ir0 - 1; reg%ir1 = regbb(ireg)%ir1 + ir0 - 1 !index bb
         reg%ic0 = regbb(ireg)%ic0 + ic0 - 1; reg%ic1 = regbb(ireg)%ic1 + ic0 - 1 !index bb
+        mod%ir0 = min(mod%ir0, reg%ir0); mod%ir1 = max(mod%ir1, reg%ir1)
+        mod%ic0 = min(mod%ic0, reg%ic0); mod%ic1 = max(mod%ic1, reg%ic1)
         reg%nrow = reg%ir1 - reg%ir0 + 1
         reg%ncol = reg%ic1 - reg%ic0 + 1
         !
@@ -557,6 +567,8 @@ module mf6_module
         mod%layer_nodes = mod%layer_nodes + reg%layer_nodes
       end do
       !
+      mod%nrow = mod%ir1 - mod%ir0 + 1
+      mod%ncol = mod%ic1 - mod%ic0 + 1
       ! determine DISU data structures
     end do !model loop
     !
@@ -835,23 +847,25 @@ module mf6_module
       end do
       stop 1
     end if
-
-    if (.false.) then
+    !
+    ! write nodmap and bndmap
     xll = gdat(i_part)%idf%xmin; yll = gdat(i_part)%idf%ymin; cs = gdat(i_part)%idf%dx
     do imod = 1, this%nmod
       mod => this%mod(imod)
+      call clear_wrk()
+      allocate(iwrk2d(mod%ncol,mod%nrow))
       do ilay = 1, nlay
-        do ir = 1, this%nrow
-          do ic = 1, this%ncol
+        do ir = 1, mod%nrow
+          do ic = 1, mod%ncol
             iwrk2d(ic,ir) = 0
           end do
         end do
-        do ireg = 1, mod2%nreg
-          reg => mod2%reg(ireg)
+        do ireg = 1, mod%nreg
+          reg => mod%reg(ireg)
           do ir = reg%ir0, reg%ir1
             do ic = reg%ic0, reg%ic1
-              kr = ir - this%ir0 + 1; kc = ic - this%ic0 + 1
-              jr = ir - reg%ir0  + 1; jc = ic - reg%ic0  + 1
+              kr = ir - mod%ir0 + 1;  kc = ic - mod%ic0 + 1
+              jr = ir - reg%ir0  + 1; jc = ic - reg%ic0 + 1
               n = reg%nodmap(jc,jr)
               if (n /= 0) then
                 iwrk2d(kc,kr) = n + (ilay-1)*reg%layer_nodes
@@ -861,18 +875,18 @@ module mf6_module
         end do
         f = 'nodmap_'//trim(mod%modelname)//'_l'//ta((/ilay/))//'.idf'
         call writeidf(f, iwrk2d, size(iwrk2d,1), size(iwrk2d,2), &
-          xll+(this%ic0-1)*cs, yll+(gdat(i_part)%idf%nrow-this%ir1)*cs, cs, 0.)
+          xll+(mod%ic0-1)*cs, yll+(gdat(i_part)%idf%nrow-mod%ir1)*cs, cs, 0.)
       end do
-      do ir = 1, this%nrow
-        do ic = 1, this%ncol
+      do ir = 1, mod%nrow
+        do ic = 1, mod%ncol
           iwrk2d(ic,ir) = 0
         end do
       end do
       do ireg = 1, mod2%nreg
-        reg => mod2%reg(ireg)
+        reg => mod%reg(ireg)
         do ir = reg%ir0, reg%ir1
           do ic = reg%ic0, reg%ic1
-            kr = ir - this%ir0 + 1; kc = ic - this%ic0 + 1
+            kr = ir - mod%ir0 + 1;  kc = ic - mod%ic0 + 1
             jr = ir - reg%ir0  + 1; jc = ic - reg%ic0  + 1
             n = reg%bndmap(jc,jr)
             if (n > 0) then
@@ -885,9 +899,8 @@ module mf6_module
       end do
       f = 'bndmap_'//trim(mod%modelname)//'.idf'
       call writeidf(f, iwrk2d, size(iwrk2d,1), size(iwrk2d,2), &
-        xll+(this%ic0-1)*cs, yll+(gdat(i_part)%idf%nrow-this%ir1)*cs, cs, 0.)
+        xll+(mod%ic0-1)*cs, yll+(gdat(i_part)%idf%nrow-mod%ir1)*cs, cs, 0.)
     end do
-    end if
     !
     if (.false.) then !DEBUG
       xll = gdat(i_part)%idf%xmin; yll = gdat(i_part)%idf%ymin; cs = gdat(i_part)%idf%dx
