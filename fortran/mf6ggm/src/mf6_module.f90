@@ -21,11 +21,11 @@ module mf6_module
   !
   ! stencil
   integer(i4b), parameter :: jp = 1
-  integer(i4b), parameter :: jn = 2
-  integer(i4b), parameter :: js = 3
+  integer(i4b), parameter :: jt = 2
+  integer(i4b), parameter :: jn = 3
   integer(i4b), parameter :: jw = 4
   integer(i4b), parameter :: je = 5
-  integer(i4b), parameter :: jt = 6
+  integer(i4b), parameter :: js = 6
   integer(i4b), parameter :: jb = 7
   integer(i4b), parameter :: ns = jb
   integer(i4b), dimension(ns) :: s
@@ -238,9 +238,9 @@ module mf6_module
       deallocate(r8wrk2)
       r8wrk2 => null()
     end if
-    if (associated(r8wrk)) then
-      deallocate(r8wrk2)
-      r8wrk2 => null()
+    if (associated(r8wrk3)) then
+      deallocate(r8wrk3)
+      r8wrk3 => null()
     end if
   end subroutine clear_wrk
   
@@ -258,8 +258,8 @@ module mf6_module
     character(len=*), intent(inout) :: f_in
     ! -- local
     character(len=mxslen) :: s, key, f, val
-    integer(i4b) :: iu, ju, n, i, j, ifound, idum, jsol, ip, imod, ireg
-    integer(i4b) :: ir0, ir1, ic0, ic1, ir, ic, jr, jc, kr, kc, maxid, nr, nc, nreg
+    integer(i4b) :: iu, ju, n, i, j, ifound, idum, jsol, imod, ireg
+    integer(i4b) :: ir0, ir1, ic0, ic1, ir, ic, jr, jc, kr, kc, nr, nc, nreg
     integer(i4b), dimension(:,:), allocatable :: regun
     real(r4b) :: xll, yll, cs, nodata !DEBUG
     type(tUnp), dimension(:), allocatable :: regbb
@@ -268,7 +268,7 @@ module mf6_module
 ! ------------------------------------------------------------------------------
     !
     ! solver initialization
-    solverdat(i_print_option)      = 'ALL'
+    solverdat(i_print_option)      = 'ALLITER'
     solverdat(i_complexity)        = 'SIMPLE'
     solverdat(i_outer_hclose)      = '0.001'
     solverdat(i_outer_maximum)     = '50'
@@ -554,7 +554,7 @@ module mf6_module
     end do !model loop
     !
     ! initialize exchanges
-    !call this%exchange_init()
+    call this%exchange_init()
 
   end subroutine mf6_init
   
@@ -851,25 +851,27 @@ module mf6_module
     ! -- dummy
     class(tMf6) :: this
     ! -- local
+    logical, parameter :: lbin = .true.
     integer(i4b) :: imod
     type(tMf6_mod), pointer :: mod => null()
 ! ------------------------------------------------------------------------------
-    !call this%write_tdis()
-    !call this%write_ims()
-    !call this%write_exchanges()
-    !call this%write_mfsim()
+    call this%write_tdis()
+    call this%write_ims()
+    call this%write_exchanges()
+    call this%write_mfsim()
     !
     do imod = 1, this%nmod
       mod => this%mod(imod)
+      call logmsg('***** Processing for model '//trim(mod%modelname)//'...')
       call mod%write_nam()
-      call mod%write_disu(.false.)
-      call mod%write_ic(.false.)
+      call mod%write_disu(lbin)
+      call mod%write_ic(lbin)
       call mod%write_oc()
-      call mod%write_npf(.false.)
-      call mod%write_chd(.false.)
-      call mod%write_drn(.false.)
-      call mod%write_riv(.false.)
-      call mod%write_rch(.false.)
+      call mod%write_npf(lbin)
+      call mod%write_chd(lbin)
+      call mod%write_drn(lbin)
+      call mod%write_riv(lbin)
+      call mod%write_rch(lbin)
     end do
       
   end subroutine mf6_write
@@ -886,7 +888,7 @@ module mf6_module
     ! -- dummy
     class(tMf6) :: this
     ! -- local
-    character(len=mxslen) :: f, ms
+    character(len=mxslen) :: f
     integer(i4b) :: iu, imod
     type(tMf6_mod), pointer :: mod => null()
 ! ------------------------------------------------------------------------------
@@ -959,10 +961,14 @@ module mf6_module
       write(iu,'(   a)') 'END TIMING'
       write(iu,'(a)')
       write(iu,'(   a)') 'BEGIN MODELS'
-      f = '.\'//trim(mod%modelname)//'.int.ext.nam '//trim(mod%modelname)
+      f = '.\'//trim(mod%modelname)//'\'//trim(mod%modelname)//&
+        '.int.ext.nam '//trim(mod%modelname)
       call swap_slash(f)
       write(iu,'(2x,a)') 'GWF6 '//trim(f)
       write(iu,'(   a)') 'END MODELS'
+      write(iu,'(a)')
+      write(iu,'(   a)') 'BEGIN EXCHANGES'
+      write(iu,'(   a)') 'END EXCHANGES'
       write(iu,'(a)')
       write(iu,'(   a)') 'BEGIN SOLUTIONGROUP 1'
       write(iu,'(2x,a)') 'IMS6 '//trim(this%solname)//'.ims '//trim(mod%modelname)
@@ -1020,7 +1026,7 @@ module mf6_module
     
     write(iu,'(   a)') 'BEGIN OPTIONS'
     write(iu,'(2x,a)') 'PRINT_OPTION '//trim(solverdat(i_print_option))
-    write(iu,'(2x,a)') 'COMPLEXITY'//trim(solverdat(i_complexity))
+    write(iu,'(2x,a)') 'COMPLEXITY '//trim(solverdat(i_complexity))
     write(iu,'(   a)') 'END OPTIONS'
     write(iu,'(a)')
     write(iu,'(   a)') 'BEGIN NONLINEAR'
@@ -1123,7 +1129,7 @@ module mf6_module
     integer(i4b), intent(in), optional :: ib_in
     ! -- local
     type(tReg), pointer :: reg
-    integer(i4b) :: n, i, ireg, ir, ic, jr, jc, kr, kc, ir0, ir1, ic0, ic1, ib
+    integer(i4b) :: n, i, ireg, ir, ic, jr, jc, ib
     integer(i4b) :: arrsiz
     real(r4b) :: r4val
     logical :: lfirst = .true.
@@ -1172,7 +1178,12 @@ module mf6_module
               if (n < 0) then
                 n = 0
               end if
+            case default
+              call errmsg('mf6_mod_get_array_r8: program error 1')
           end select
+          if (n < 0) then 
+            call errmsg('mf6_mod_get_array_r8: program error 2')
+          end if
           if (n /= 0) then
             n = n + (ilay-1)*reg%layer_nodes
             r4val = readidf_val(gdat(i_dat)%idf, ic, ir)
@@ -1232,14 +1243,16 @@ module mf6_module
     real(r8b), parameter :: thkmin = 0.1D0
     !
     integer(i4b), dimension(ns) :: ihc
-    data ihc/0,1,1,1,1,0,0/
+    !        p t n w e s b
+    data ihc/0,0,1,1,1,1,0/
     real(r8b), dimension(ns) :: hwva, cl12
     type(tDisu), pointer :: disu => null()
     type(tReg), pointer :: reg => null()
-    integer(i4b) :: ireg, n, ilay, iact
+    integer(i4b) :: ireg, n, ilay, iact, nja
     integer(i4b), dimension(ns) :: s
-    integer(i4b) :: ir0, ir1, ic0, ic1, ic, ir, jc, jr, i
-    real(r4b), dimension(:,:), pointer :: top, bot
+    integer(i4b) :: ic, ir, i
+    real(r4b), dimension(:,:), pointer :: top => null()
+    real(r4b), dimension(:,:), pointer :: bot => null()
     real(r8b) :: thk
 ! ------------------------------------------------------------------------------
     hwva(jp) = DZERO
@@ -1280,7 +1293,7 @@ module mf6_module
             call readidf_block(gdat(i_top)%idf,    reg%ir0, reg%ir1, reg%ic0, reg%ic1, top, nodata)
             call readidf_block(gdat(i_bot_l1)%idf, reg%ir0, reg%ir1, reg%ic0, reg%ic1, bot, nodata)
           else
-            call errmsg('Nlay > 2 not yet supported')
+            call errmsg('mf6_mod_set_disu: Nlay > 2 not yet supported')
           end if
           !
           do ir = 1, reg%nrow
@@ -1320,7 +1333,7 @@ module mf6_module
                 if (ilay > 1) then !TOP
                   s(jt) = n - reg%layer_nodes
                   if ((top(ic,ir) == nodata).or.(bot(ic,ir) == nodata)) then
-                    call errmsg('Program error: top/bot.')
+                    call errmsg('mf6_mod_set_disu: program error (top/bot).')
                   end if
                   cl12(jt) = max(thkmin, top(ic,ir)-bot(ic,ir))
                   cl12(jt) = cl12(jt)/2
@@ -1328,7 +1341,7 @@ module mf6_module
                 if (ilay < nlay) then !BOT
                   s(jb) = n + reg%layer_nodes
                   if ((top(ic,ir) == nodata).or.(bot(ic,ir) == nodata)) then
-                    call errmsg('Program error: top/bot.')
+                    call errmsg('mf6_mod_set_disu: program error (top/bot).')
                   end if
                   cl12(jb) = max(thkmin, top(ic,ir)-bot(ic,ir))
                   cl12(jb) = cl12(jb)/2
@@ -1336,15 +1349,21 @@ module mf6_module
                 do i = 1, ns
                   if (s(i) /= 0) then
                     if (s(i) < 0) then
-                      call errmsg('Program error')
+                      call errmsg('mf6_mod_set_disu: program error')
+                    end if
+                    if ((n < 1).or.(n > disu%nodes)) then
+                     call errmsg('mf6_mod_set_disu: program error')
                     end if
                     disu%iac(n) = disu%iac(n) + 1
                     disu%nja = disu%nja + 1
                     if (iact == 2) then
+                      if ((disu%nja < 1).or.(disu%nja > nja)) then
+                       call errmsg('mf6_mod_set_disu: program error')
+                      end if
                       disu%ja(disu%nja)   = s(i)
                       disu%ihc(disu%nja)  = ihc(i)
-                      disu%hwva(disu%nja) = hwva(i)
                       disu%cl12(disu%nja) = cl12(i)
+                      disu%hwva(disu%nja) = hwva(i)
                     end if
                   end if
                   s(i) = 0
@@ -1354,10 +1373,11 @@ module mf6_module
               end if
             end do
           end do
-          deallocate(top, bot)
+          deallocate(top, bot); top => null(); bot => null()
         end do !ilay
       end do !rreg
       if (iact == 1) then
+        nja = disu%nja
         allocate(disu%ja(disu%nja))
         allocate(disu%ihc(disu%nja))
         allocate(disu%cl12(disu%nja))
@@ -1385,16 +1405,21 @@ module mf6_module
     integer(i4b), dimension(:), intent(in) :: arr
     logical, intent(in) :: lbin
     ! -- local
-    integer(i4b) :: ju, i
+    integer(i4b), parameter :: i4dum = 1
+    real(r8b), parameter :: r8dum = DZERO
+    character(len=16) :: c16dum = ''
+    integer(i4b) :: ju, i, narr
     character(len=mxslen) :: fmt
 ! ------------------------------------------------------------------------------
     write(fmt,'(a,i,a)') '(',nx,'x,a)'
     if (lbin) then
       f = trim(f)//'.bin'
       call open_file(f, ju, 'w', .true.)
+      narr = size(arr)
+      write(ju) i4dum, i4dum, r8dum, r8dum, c16dum, narr, i4dum, i4dum
       write(ju) arr
       close(ju)
-      call get_rel_up(f, 2); write(iu,fmt) 'OPEN/CLOSE '//trim(f)// ' (BINARY)'
+      call get_rel_up(f, 2); write(iu,fmt) 'OPEN/CLOSE '//trim(f)//' (BINARY)'
     else
       f = trim(f)//'.asc'
       call open_file(f, ju, 'w')
@@ -1421,16 +1446,21 @@ module mf6_module
     real(r8b), dimension(:), intent(in) :: arr
     logical, intent(in) :: lbin
     ! -- local
-    integer(i4b) :: ju, i
+    integer(i4b), parameter :: i4dum = 1
+    real(r8b), parameter :: r8dum = DZERO
+    character(len=16) :: c16dum = ''
+    integer(i4b) :: ju, i, narr
     character(len=mxslen) :: fmt
 ! ------------------------------------------------------------------------------
     write(fmt,'(a,i,a)') '(',nx,'x,a)'
     if (lbin) then
       f = trim(f)//'.bin'
       call open_file(f, ju, 'w', .true.)
+      narr = size(arr)
+      write(ju) i4dum, i4dum, r8dum, r8dum, c16dum, narr, i4dum, i4dum
       write(ju) arr
       close(ju)
-      call get_rel_up(f, 2); write(iu,fmt) 'OPEN/CLOSE '//trim(f)// '(BINARY)'
+      call get_rel_up(f, 2); write(iu,fmt) 'OPEN/CLOSE '//trim(f)//' (BINARY)'
     else
       f = trim(f)//'.asc'
       call open_file(f, ju, 'w')
@@ -1586,7 +1616,7 @@ module mf6_module
     class(tMf6_mod) :: this
     ! -- local
     character(len=mxslen) :: p, f, mn
-    integer(i4b) :: iu, maxbound, i
+    integer(i4b) :: iu, i
     integer(i4b), parameter :: npck = 8
     character(len=4), dimension(npck) :: pck
     data pck/'disu', 'ic  ', 'oc  ', 'npf ', 'chd ', &
@@ -1603,17 +1633,19 @@ module mf6_module
     do i = 1, npck
       if (pck(i) == 'chd') then
         f = trim(p)//trim(mn)//'.int.'//trim(pck(i)); call swap_slash(f)
-        write(iu,'(2x,a)') change_case(pck(i),'u')//'6 '//trim(f)
+        write(iu,'(2x,a)') trim(change_case(pck(i),'u'))//'6 '//trim(f)
         f = trim(p)//trim(mn)//'.ext.'//trim(pck(i)); call swap_slash(f)
-        write(iu,'(2x,a)') change_case(pck(i),'u')//'6 '//trim(f)
-      else
+      else if ((pck(i) == 'ic').or.(pck(i) == 'oc')) then
+        f = trim(p)//trim(mn)//'.int.ext.'//trim(pck(i)); call swap_slash(f)
+      else  
         f = trim(p)//trim(mn)//'.'//trim(pck(i)); call swap_slash(f)
       end if  
+      write(iu,'(2x,a)') trim(change_case(pck(i),'u'))//'6 '//trim(f)
     end do
     write(iu,'(   a)') 'END PACKAGES'
     close(iu)
     !
-    f = trim(p)//'.ext.nam'
+    f = trim(this%rootdir)//trim(mn)//'.ext.nam'
     call open_file(f, iu, 'w')
     write(iu,'(   a)') 'BEGIN OPTIONS'
     write(iu,'(   a)') 'END OPTIONS'
@@ -1622,10 +1654,12 @@ module mf6_module
     do i = 1, npck
       if (pck(i) == 'chd') then
         f = trim(p)//trim(mn)//'.ext.'//trim(pck(i)); call swap_slash(f)
-        write(iu,'(2x,a)') change_case(pck(i),'u')//'6 '//trim(f)
+      else if ((pck(i) == 'ic').or.(pck(i) == 'oc')) then
+        f = trim(p)//trim(mn)//'.ext.'//trim(pck(i)); call swap_slash(f)
       else
         f = trim(p)//trim(mn)//'.'//trim(pck(i)); call swap_slash(f)
       end if  
+      write(iu,'(2x,a)') trim(change_case(pck(i),'u'))//'6 '//trim(f)
     end do
     write(iu,'(   a)') 'END PACKAGES'
     close(iu)
@@ -1643,7 +1677,7 @@ module mf6_module
     class(tMf6_mod) :: this
     logical, intent(in) :: lbin
     ! -- local
-    character(len=mxslen) :: p, f, s
+    character(len=mxslen) :: p, f
     integer(i4b) :: iu, n
     type(tDisu), pointer :: disu
 ! ------------------------------------------------------------------------------
@@ -1856,16 +1890,16 @@ module mf6_module
       write(iu,'(   a)') 'BEGIN OPTIONS'
       write(iu,'(   a)') 'END OPTIONS'
       write(iu,'(a)')
-      write(iu,'(   a)') 'BEGIN DIMENSION'
+      write(iu,'(   a)') 'BEGIN DIMENSIONS'
       write(iu,'(2x,a)') 'MAXBOUND '//ta((/maxbound/))
-      write(iu,'(   a)') 'END DIMENSION'
+      write(iu,'(   a)') 'END DIMENSIONS'
       write(iu,'(a)')
       write(iu,'(   a)') 'BEGIN PERIOD 1'
       ! set the external boundary to zero (sea-level) ***WORKAROUND***
       do i = 1, size(r8wrk)
         r8wrk(i) = DZERO
       end do
-      f = trim(p)//'.ext.chd'; call this%write_list(iu, 4, f, i1wrk, r8wrk, lbin)
+      f = trim(p)//'.ext.chd'; call this%write_list(iu, 2, f, i1wrk, r8wrk, lbin)
       call clear_wrk()
       write(iu,'(   a)') 'END PERIOD'
       close(iu)
@@ -1882,9 +1916,9 @@ module mf6_module
       write(iu,'(   a)') 'BEGIN OPTIONS'
       write(iu,'(   a)') 'END OPTIONS'
       write(iu,'(a)')
-      write(iu,'(   a)') 'BEGIN DIMENSION'
+      write(iu,'(   a)') 'BEGIN DIMENSIONS'
       write(iu,'(2x,a)') 'MAXBOUND '//ta((/maxbound/))
-      write(iu,'(   a)') 'END DIMENSION'
+      write(iu,'(   a)') 'END DIMENSIONS'
       write(iu,'(a)')
       write(iu,'(   a)') 'BEGIN PERIOD 1'
       f = trim(p)//'.int.chd'; call this%write_list(iu, 4, f, i1wrk, r8wrk, lbin)
@@ -1907,14 +1941,11 @@ module mf6_module
     logical, intent(in) :: lbin
     ! -- local
     character(len=mxslen) :: p, f
-    integer(i4b) :: iu, maxbound, i
+    integer(i4b) :: iu, maxbound
 ! ------------------------------------------------------------------------------
     call clear_wrk()
     !
     p = trim(this%rootdir)//trim(this%modelname)
-
-    f = trim(p)//'.drn'
-    call open_file(f, iu, 'w')
     !
     call this%get_array(i_drn_elev_l1, 1, i1wrk, r8wrk,  maxbound)
     call this%get_array(i_drn_elev_l1, 2, i1wrk, r8wrk,  maxbound)
@@ -1922,12 +1953,14 @@ module mf6_module
     call this%get_array(i_drn_cond,    2, i1wrk, r8wrk2, maxbound)
     
     if (maxbound > 0) then 
+      f = trim(p)//'.drn'
+      call open_file(f, iu, 'w')
       write(iu,'(   a)') 'BEGIN OPTIONS'
       write(iu,'(   a)') 'END OPTIONS'
       write(iu,'(a)')
-      write(iu,'(   a)') 'BEGIN DIMENSION'
+      write(iu,'(   a)') 'BEGIN DIMENSIONS'
       write(iu,'(2x,a)') 'MAXBOUND '//ta((/maxbound/))
-      write(iu,'(   a)') 'END DIMENSION'
+      write(iu,'(   a)') 'END DIMENSIONS'
       write(iu,'(a)')
       write(iu,'(   a)') 'BEGIN PERIOD 1'
       f = trim(p)//'.drn'; call this%write_list(iu, 4, f, &
@@ -1959,9 +1992,6 @@ module mf6_module
     call clear_wrk()
     !
     p = trim(this%rootdir)//trim(this%modelname)
-
-    f = trim(p)//'.riv'
-    call open_file(f, iu, 'w')
     !
     call this%get_array(i_riv_stage_l1, 1, i1wrk, r8wrk,  maxbound)
     call this%get_array(i_riv_cond,     1, i1wrk, r8wrk2, maxbound)
@@ -1981,15 +2011,17 @@ module mf6_module
     end do
     
     if (maxbound > 0) then 
+      f = trim(p)//'.riv'
+      call open_file(f, iu, 'w')
       write(iu,'(   a)') 'BEGIN OPTIONS'
       write(iu,'(   a)') 'END OPTIONS'
       write(iu,'(a)')
-      write(iu,'(   a)') 'BEGIN DIMENSION'
+      write(iu,'(   a)') 'BEGIN DIMENSIONS'
       write(iu,'(2x,a)') 'MAXBOUND '//ta((/maxbound/))
-      write(iu,'(   a)') 'END DIMENSION'
+      write(iu,'(   a)') 'END DIMENSIONS'
       write(iu,'(a)')
       write(iu,'(   a)') 'BEGIN PERIOD 1'
-      f = trim(p)//'.riv'; call this%write_list(iu, 4, f, i1wrk, &
+      f = trim(p)//'.riv'; call this%write_list(iu, 2, f, i1wrk, &
         r8wrk, r8wrk2, r8wrk3, lbin)
       call clear_wrk()
       write(iu,'(   a)') 'END PERIOD'
@@ -1997,7 +2029,8 @@ module mf6_module
     else
       call errmsg('No rivers found')
     end if
-    
+    !
+    call clear_wrk()
   end subroutine mf6_mod_write_riv
   
   subroutine mf6_mod_write_rch(this, lbin)
@@ -2012,27 +2045,26 @@ module mf6_module
     logical, intent(in) :: lbin
     ! -- local
     character(len=mxslen) :: p, f
-    integer(i4b) :: iu, maxbound, i
+    integer(i4b) :: iu, maxbound
 ! ------------------------------------------------------------------------------
     call clear_wrk()
     !
     p = trim(this%rootdir)//trim(this%modelname)
-
-    f = trim(p)//'.rch'
-    call open_file(f, iu, 'w')
     !
     call this%get_array(i_recharge, 1, i1wrk, r8wrk, maxbound)
     !
     if (maxbound > 0) then 
+      f = trim(p)//'.rch'
+      call open_file(f, iu, 'w')
       write(iu,'(   a)') 'BEGIN OPTIONS'
       write(iu,'(   a)') 'END OPTIONS'
       write(iu,'(a)')
-      write(iu,'(   a)') 'BEGIN DIMENSION'
+      write(iu,'(   a)') 'BEGIN DIMENSIONS'
       write(iu,'(2x,a)') 'MAXBOUND '//ta((/maxbound/))
-      write(iu,'(   a)') 'END DIMENSION'
+      write(iu,'(   a)') 'END DIMENSIONS'
       write(iu,'(a)')
       write(iu,'(   a)') 'BEGIN PERIOD 1'
-      f = trim(p)//'.rch'; call this%write_list(iu, 4, f, i1wrk, r8wrk, lbin)
+      f = trim(p)//'.rch'; call this%write_list(iu, 2, f, i1wrk, r8wrk, lbin)
       call clear_wrk()
       write(iu,'(   a)') 'END PERIOD'
       close(iu)

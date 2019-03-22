@@ -62,6 +62,8 @@
 		<File RelativePath="..\..\pcrlib\src\pcrlib.f90"/></Filter>
 		<Filter Name="Utility library">
 		<File RelativePath="..\..\utilslib_svn\src\utils_mod.f90"/></Filter>
-		<File RelativePath="..\src\mf6_module.f90"/>
+		<File RelativePath="..\src\mf6_module.f90">
+			<FileConfiguration Name="Debug|x64">
+				<Tool Name="VFFortranCompilerTool" WarnDeclarations="true" WarnUnusedVariables="true"/></FileConfiguration></File>
 		<File RelativePath="..\src\mf6ggm.f90"/></Filter></Files>
 	<Globals/></VisualStudioProject>
