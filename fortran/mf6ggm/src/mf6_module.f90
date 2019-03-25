@@ -11,13 +11,14 @@ module mf6_module
   implicit none 
   
   ! parameters
-  integer(i4b), parameter     :: mxslen = 1024
-  character(len=1), parameter :: slash = '\' !DOS/LINUX slash
-  !
-  integer(i4b), parameter :: nlay = 2
-  real(r8b), parameter    :: delrc = 0.008333333333333D0
-  real(r8b), parameter    :: DZERO = 0.D0
-  real(r8b), parameter    :: DONE  = 1.D0
+  integer(i4b),          parameter :: mxslen = 1024
+  character(len=1),      parameter :: slash = '\' !DOS/LINUX slash
+  character(len=mxslen), parameter :: resultsdir = 'results'
+  integer(i4b),          parameter :: nlay = 2
+  real(r8b),             parameter :: delrc = 0.008333333333333D0
+  real(r8b),             parameter :: DZERO = 0.D0
+  real(r8b),             parameter :: DONE  = 1.D0
+  
   !
   ! stencil
   integer(i4b), parameter :: jp = 1
@@ -325,6 +326,11 @@ module mf6_module
       end if
     end do
     close(ju)
+    !
+    ! create output directory
+    f= trim(this%rootdir)//trim(resultsdir)
+    call create_dir(f)
+    !
     ! check
     if (jsol == 0) then
       call errmsg('Reading solution bounding box.')
@@ -849,6 +855,8 @@ module mf6_module
     end if
     !
     ! write nodmap and bndmap
+    f = trim(this%rootdir)//'mappings'
+    call create_dir(f)
     xll = gdat(i_part)%idf%xmin; yll = gdat(i_part)%idf%ymin; cs = gdat(i_part)%idf%dx
     do imod = 1, this%nmod
       mod => this%mod(imod)
@@ -873,7 +881,8 @@ module mf6_module
             end do
           end do
         end do
-        f = 'nodmap_'//trim(mod%modelname)//'_l'//ta((/ilay/))//'.idf'
+        f = trim(this%rootdir)//'mappings\nodmap_'//trim(mod%modelname)//'_l'//ta((/ilay/))//'.idf'
+        call swap_slash(f)
         call writeidf(f, iwrk2d, size(iwrk2d,1), size(iwrk2d,2), &
           xll+(mod%ic0-1)*cs, yll+(gdat(i_part)%idf%nrow-mod%ir1)*cs, cs, 0.)
       end do
@@ -897,7 +906,8 @@ module mf6_module
           end do
         end do
       end do
-      f = 'bndmap_'//trim(mod%modelname)//'.idf'
+      f = trim(this%rootdir)//'mappings\bndmap_'//trim(mod%modelname)//'.idf'
+      call swap_slash(f)
       call writeidf(f, iwrk2d, size(iwrk2d,1), size(iwrk2d,2), &
         xll+(mod%ic0-1)*cs, yll+(gdat(i_part)%idf%nrow-mod%ir1)*cs, cs, 0.)
     end do
@@ -1854,7 +1864,8 @@ module mf6_module
     write(iu,'(a)')
     write(iu,'(   a)') 'BEGIN GRIDDATA'
     write(iu,'(2x,a)') 'STRT'
-    f = trim(p)//'.int.ext.hds';  call get_rel_up(f, 2)
+    f = '.\'//trim(resultsdir)//'\'//trim(this%modelname)//'.int.ext.hds'
+    call swap_slash(f)
     write(iu,'(2x,a)') 'OPEN/CLOSE '//trim(f)//' (BINARY)'
     write(iu,'(   a)') 'END GRIDDATA'
     close(iu)
@@ -1880,7 +1891,8 @@ module mf6_module
     call open_file(f, iu, 'w')
     
     write(iu,'(   a)') 'BEGIN OPTIONS'
-    f = trim(p)//'.int.ext.hds'; call get_rel_up(f, 2)
+    f = '.\'//trim(resultsdir)//'\'//trim(this%modelname)//'.int.ext.hds'
+    call swap_slash(f)
     write(iu,'(2x,a)') 'HEAD FILEOUT '//trim(f)
     write(iu,'(   a)') 'END OPTIONS'
     write(iu,'(a)')
@@ -1892,7 +1904,8 @@ module mf6_module
     f = trim(p)//'.ext.oc'
     call open_file(f, iu, 'w')
     write(iu,'(   a)') 'BEGIN OPTIONS'
-    f = trim(p)//'.int.ext.hds'; call get_rel_up(f, 2)
+    f = '.\'//trim(resultsdir)//'\'//trim(this%modelname)//'.int.ext.hds'
+    call swap_slash(f)
     write(iu,'(2x,a)') 'HEAD FILEOUT '//trim(f)
     write(iu,'(   a)') 'END OPTIONS'
     write(iu,'(a)')
