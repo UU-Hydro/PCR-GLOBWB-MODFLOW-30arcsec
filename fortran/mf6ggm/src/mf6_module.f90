@@ -1829,6 +1829,14 @@ module mf6_module
     f = trim(p)//'.disu.hwva'; call this%write_array(iu, 4, f, disu%hwva, lbin)
     write(iu,'(   a)') 'END CONNECTIONDATA'
     close(iu)
+    !
+    ! clean up memory
+    deallocate(disu%iac);  disu%iac  => null()
+    deallocate(disu%ja);   disu%ja   => null()
+    deallocate(disu%ihc);  disu%ihc  => null()
+    deallocate(disu%cl12); disu%cl12 => null()
+    deallocate(disu%hwva); disu%hwva => null()
+    
   end subroutine mf6_mod_write_disu
 
   subroutine mf6_mod_write_ic(this, lbin)
@@ -1909,7 +1917,7 @@ module mf6_module
     f = trim(p)//'.ext.oc'
     call open_file(f, iu, 'w')
     write(iu,'(   a)') 'BEGIN OPTIONS'
-    f = '.\'//trim(resultsdir)//'\'//trim(this%modelname)//'.int.ext.hds'
+    f = '.\'//trim(resultsdir)//'\'//trim(this%modelname)//'.ext.hds'
     call swap_slash(f)
     write(iu,'(2x,a)') 'HEAD FILEOUT '//trim(f)
     write(iu,'(   a)') 'END OPTIONS'
