@@ -20,7 +20,7 @@ if __name__ == "__main__":
     exe = cla['exe']
     mod = cla['mod']
     os.chdir(mod)
-    mfsim_list = glob('%s.m*.mfsim'%mod)
+    mfsim_list = glob('%s.m*.mfsim.nam'%mod)
 
     for mfsim in mfsim_list:
         s = '%s -s %s'(exe, mfsim)
