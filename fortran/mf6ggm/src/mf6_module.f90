@@ -1185,7 +1185,7 @@ module mf6_module
         f = trim(this%rootdir)//'exchanges\'//trim(fexg)//'.asc'
         call open_file(f, ju, 'w')
         do iexg = 1, xch%nexg
-          write(ju,'(a)') ta((/xch%cellidm1(iexg), xch%cellidm2(iexg)/))//' '//&
+          write(ju,'(a)') ta((/xch%cellidm1(iexg), xch%cellidm2(iexg)/))//' 1 '//&
                           ta((/delrc/2, delrc/2, delrc/))
         end do
         close(ju)
