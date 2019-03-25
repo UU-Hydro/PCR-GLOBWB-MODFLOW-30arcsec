@@ -489,6 +489,11 @@ module mf6_module
       ic0 = this%partbb(3,imod); ic1 = this%partbb(4,imod)
       nr = ir1 - ir0 + 1; nc = ic1 - ic0 + 1
       allocate(iwrk2d(nc,nr))
+      do ir = 1, nr
+        do ic = 1, nc
+          iwrk2d(ic,ir) = 0
+        end do
+      end do
       do ir = ir0, ir1
         do ic = ic0, ic1
           kr = ir - this%ir0 + 1; kc = ic - this%ic0 + 1
