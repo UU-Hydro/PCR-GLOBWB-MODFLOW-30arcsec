@@ -23,6 +23,6 @@ if __name__ == "__main__":
     mfsim_list = glob('%s.m*.mfsim.nam'%mod)
 
     for mfsim in mfsim_list:
-        s = '%s -s %s'(exe, mfsim)
+        s = '%s -s %s'%(exe, mfsim)
         os.system(s)
 
