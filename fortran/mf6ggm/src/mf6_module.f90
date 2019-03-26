@@ -902,7 +902,7 @@ module mf6_module
           iwrk2d(ic,ir) = 0
         end do
       end do
-      do ireg = 1, mod2%nreg
+      do ireg = 1, mod%nreg
         reg => mod%reg(ireg)
         do ir = reg%ir0, reg%ir1
           do ic = reg%ic0, reg%ic1
