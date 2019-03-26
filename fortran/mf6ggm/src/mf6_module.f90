@@ -18,7 +18,7 @@ module mf6_module
   real(r8b),             parameter :: delrc = 0.008333333333333D0
   real(r8b),             parameter :: DZERO = 0.D0
   real(r8b),             parameter :: DONE  = 1.D0
-  
+  integer(i4b),          parameter :: dcell = 5 ! boundary
   !
   ! stencil
   integer(i4b), parameter :: jp = 1
@@ -396,8 +396,8 @@ module mf6_module
     close(iu)
     !
     ! make the bounding box a little larger to include the boundary
-    this%ir0 = max(this%ir0-1,1); this%ir1 = min(this%ir1+1,gnrow)
-    this%ic0 = max(this%ic0-1,1); this%ic1 = min(this%ic1+1,gncol)
+    this%ir0 = max(this%ir0-1,1+dcell); this%ir1 = min(this%ir1+1,gnrow-dcell-1)
+    this%ic0 = max(this%ic0-1,1+dcell); this%ic1 = min(this%ic1+1,gncol-dcell-1)
     this%nrow = this%ir1 - this%ir0 + 1; this%ncol = this%ic1 - this%ic0 + 1
     !
     ! read the partition and solution
@@ -601,7 +601,7 @@ module mf6_module
     character(len=mxslen) :: f
     real(r4b) :: xll, yll, cs, nodata !DEBUG
     integer(i4b) :: ic, ir, jc, jr, kc, kr, i, j, imod, jmod, ireg, ixch, nexgf
-    integer(i4b) :: iact, n, imod1, imod2, ilay
+    integer(i4b) :: iact, n, imod1, imod2, ilay, iu
     type(tMf6_mod), pointer  :: mod  => null()
     type(tMf6_mod), pointer  :: mod1 => null()
     type(tMf6_mod), pointer  :: mod2 => null()
@@ -862,9 +862,15 @@ module mf6_module
     ! write nodmap and bndmap
     f = trim(this%rootdir)//'mappings'
     call create_dir(f)
+    f = trim(this%rootdir)//'mappings\'//trim(this%solname)//'.asc'
+    call open_file(f, iu, 'w')
     xll = gdat(i_part)%idf%xmin; yll = gdat(i_part)%idf%ymin; cs = gdat(i_part)%idf%dx
+    write(iu,'(a)') ta((/gncol, gnrow, this%ncol, this%nrow, nlay, this%ir0, this%ir1, this%ic0, this%ic1/))
+    write(iu,'(a)') ta((/this%nmod/))
     do imod = 1, this%nmod
       mod => this%mod(imod)
+      !if ((mod%modelname /= 'm000167').and.(mod%modelname /= 'm000168')) cycle
+      write(iu,'(a)') trim(mod%modelname)//' '//ta((/mod%ncol, mod%nrow, mod%ir0, mod%ir1, mod%ic0, mod%ic1/))
       call clear_wrk()
       allocate(iwrk2d(mod%ncol,mod%nrow))
       do ilay = 1, nlay
@@ -916,6 +922,7 @@ module mf6_module
       call writeidf(f, iwrk2d, size(iwrk2d,1), size(iwrk2d,2), &
         xll+(mod%ic0-1)*cs, yll+(gdat(i_part)%idf%nrow-mod%ir1)*cs, cs, 0.)
     end do
+    close(iu)
     !
     if (.false.) then !DEBUG
       xll = gdat(i_part)%idf%xmin; yll = gdat(i_part)%idf%ymin; cs = gdat(i_part)%idf%dx
@@ -950,7 +957,7 @@ module mf6_module
     !
     do imod = 1, this%nmod
       mod => this%mod(imod)
-      !if (mod%modelname /= 'm000958') cycle
+      !if ((mod%modelname /= 'm000167').and.(mod%modelname /= 'm000168')) cycle
       call logmsg('***** Processing for model '//trim(mod%modelname)//'...')
       call mod%write_disu(lbin)
       call mod%write_ic(lbin)
