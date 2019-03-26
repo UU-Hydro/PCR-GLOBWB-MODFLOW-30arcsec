@@ -420,13 +420,12 @@ module mf6_module
     ! add the constant head boundary
     call addboundary(this%part, size(this%part,1), size(this%part,2))
     !
-    if (.false.) then !DEBUG
-      xll = gdat(i_part)%idf%xmin; yll = gdat(i_part)%idf%ymin
-      cs = gdat(i_part)%idf%dx
-      call writeidf('part.idf', this%part, this%ic1-this%ic0+1, this%ir1-this%ir0+1, &
-        xll+(this%ic0-1)*cs, yll+(gdat(i_part)%idf%nrow-this%ir1)*cs, cs, 0.); stop
-    end if
-    
+    xll = gdat(i_part)%idf%xmin; yll = gdat(i_part)%idf%ymin
+    cs = gdat(i_part)%idf%dx
+    f = trim(this%rootdir)//'mappings\'//trim(this%solname)//'_part.idf'
+    call writeidf(f, this%part, this%ic1-this%ic0+1, this%ir1-this%ir0+1, &
+      xll+(this%ic0-1)*cs, yll+(gdat(i_part)%idf%nrow-this%ir1)*cs, cs, 0.)
+    !
     ! create some mappings
     allocate(this%maxpart)
     this%maxpart = maxval(this%part)
