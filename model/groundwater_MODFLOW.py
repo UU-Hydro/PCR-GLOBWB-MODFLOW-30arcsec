@@ -138,7 +138,8 @@ class GroundwaterModflow(object):
         for var in ['dem_minimum', 'dem_average']:
             if self.iniItems.modflowParameterOptions['topographyNC'] != "None":
                 vars(self)[var] = vos.netcdf2PCRobjCloneWithoutTime(self.iniItems.modflowParameterOptions['topographyNC'], \
-            else:                                                    var, self.cloneMap)
+                                                                    var, self.cloneMap)
+            else:                                                   
                 # read from pcraster file, if topographyNC == None
                 vars(self)[var] = vos.readPCRmapClone(self.iniItems.modflowParameterOptions['var'],\
                                                       self.cloneMap, self.tmpDir, self.inputDir)
