@@ -141,7 +141,7 @@ class GroundwaterModflow(object):
                                                                     var, self.cloneMap)
             else:                                                   
                 # read from pcraster file, if topographyNC == None
-                vars(self)[var] = vos.readPCRmapClone(self.iniItems.modflowParameterOptions['var'],\
+                vars(self)[var] = vos.readPCRmapClone(self.iniItems.modflowParameterOptions[var],\
                                                       self.cloneMap, self.tmpDir, self.inputDir)
             vars(self)[var] = pcr.cover(vars(self)[var], 0.0)
 
