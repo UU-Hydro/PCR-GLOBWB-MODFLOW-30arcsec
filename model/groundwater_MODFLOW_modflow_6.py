@@ -151,8 +151,8 @@ class GroundwaterModflow(object):
             for var in ['gradient', 'bankfull_width',
                         'bankfull_depth', 'dem_floodplain', 'dem_riverbed']:
                 if self.iniItems.modflowParameterOptions['channelNC'] != "None":
-                vars(self)[var] = vos.netcdf2PCRobjCloneWithoutTime(self.iniItems.modflowParameterOptions['channelNC'], \
-                                                                    var, self.cloneMap)
+                    vars(self)[var] = vos.netcdf2PCRobjCloneWithoutTime(self.iniItems.modflowParameterOptions['channelNC'], \
+                                                                        var, self.cloneMap)
                 else:
                     # read from pcraster file, if topographyNC == None
                     vars(self)[var] = vos.readPCRmapClone(self.iniItems.modflowParameterOptions[var],\
