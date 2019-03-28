@@ -138,9 +138,9 @@ class GroundwaterModflow(object):
             self.iniItems.modflowParameterOptions['topographyNC'] = self.iniItems.landSurfaceOptions['topographyNC']
         for var in ['dem_minimum', 'dem_average']:
             if self.iniItems.modflowParameterOptions['topographyNC'] != "None":
-            vars(self)[var] = vos.netcdf2PCRobjCloneWithoutTime(self.iniItems.modflowParameterOptions['topographyNC'], \
-                                                                var, self.cloneMap)
-            else:                                                   
+                vars(self)[var] = vos.netcdf2PCRobjCloneWithoutTime(self.iniItems.modflowParameterOptions['topographyNC'], \
+                                                                    var, self.cloneMap)
+            else:
                 # read from pcraster file, if topographyNC == None
                 vars(self)[var] = vos.readPCRmapClone(self.iniItems.modflowParameterOptions[var],\
                                                       self.cloneMap, self.tmpDir, self.inputDir)
@@ -153,7 +153,7 @@ class GroundwaterModflow(object):
                 if self.iniItems.modflowParameterOptions['channelNC'] != "None":
                 vars(self)[var] = vos.netcdf2PCRobjCloneWithoutTime(self.iniItems.modflowParameterOptions['channelNC'], \
                                                                     var, self.cloneMap)
-                else:                                                   
+                else:
                     # read from pcraster file, if topographyNC == None
                     vars(self)[var] = vos.readPCRmapClone(self.iniItems.modflowParameterOptions[var],\
                                                           self.cloneMap, self.tmpDir, self.inputDir)
@@ -287,9 +287,9 @@ class GroundwaterModflow(object):
 
         extrapolateParameters = True
         if "doNotExtrapolateParameters" in iniItems.modflowParameterOptions.keys() and \
-                                           iniItems.modflowParameterOptions["doNotExtrapolateParameters"] == "True":  
+                                           iniItems.modflowParameterOptions["doNotExtrapolateParameters"] == "True":
             extrapolateParameters = False
-        
+
         if extrapolateParameters:
 
         # Perform extrapolation for the following variables:
