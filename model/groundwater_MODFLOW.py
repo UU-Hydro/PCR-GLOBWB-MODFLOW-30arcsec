@@ -287,7 +287,7 @@ class GroundwaterModflow(object):
         extrapolateParameters = True
         if "doNotExtrapolateParameters" in iniItems.modflowParameterOptions.keys() and \
                                            iniItems.modflowParameterOptions["doNotExtrapolateParameters"] == "True":  
-            extrapolateGroundwaterThickness = False
+            extrapolateParameters = False
         
         if extrapolateParameters:
 
