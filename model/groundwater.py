@@ -498,7 +498,7 @@ class Groundwater(object):
         # initiate old style reporting (this is useful for debugging)
         self.initiate_old_style_groundwater_reporting(iniItems)
         
-        print("reaching the end of init of groundwater.py")
+        #~ print("reaching the end of init of groundwater.py")
 
 
     def initiate_old_style_groundwater_reporting(self,iniItems):
