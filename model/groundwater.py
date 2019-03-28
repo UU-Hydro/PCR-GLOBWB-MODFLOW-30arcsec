@@ -337,7 +337,8 @@ class Groundwater(object):
                                             pcr.windowaverage(totalGroundwaterThickness, 0.75))
                 totalGroundwaterThickness = pcr.cover(totalGroundwaterThickness,
                                             pcr.windowaverage(totalGroundwaterThickness, 1.00))
-                totalGroundwaterThickness = pcr.cover(totalGroundwaterThickness, 0.0)
+            
+            totalGroundwaterThickness = pcr.cover(totalGroundwaterThickness, 0.0)
             # - TODO: Check whether totalGroundwaterThickness = 0 can work? 
 
             # set minimum thickness
