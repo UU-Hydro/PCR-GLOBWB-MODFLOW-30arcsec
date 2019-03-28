@@ -337,7 +337,8 @@ class Groundwater(object):
                                             pcr.windowaverage(totalGroundwaterThickness, 0.75))
                 totalGroundwaterThickness = pcr.cover(totalGroundwaterThickness,
                                             pcr.windowaverage(totalGroundwaterThickness, 1.00))
-                totalGroundwaterThickness = pcr.cover(totalGroundwaterThickness, 0.0)
+            
+            totalGroundwaterThickness = pcr.cover(totalGroundwaterThickness, 0.0)
             # - TODO: Check whether totalGroundwaterThickness = 0 can work? 
 
             # set minimum thickness
@@ -497,6 +498,8 @@ class Groundwater(object):
             
         # initiate old style reporting (this is useful for debugging)
         self.initiate_old_style_groundwater_reporting(iniItems)
+        
+        #~ print("reaching the end of init of groundwater.py")
 
 
     def initiate_old_style_groundwater_reporting(self,iniItems):
