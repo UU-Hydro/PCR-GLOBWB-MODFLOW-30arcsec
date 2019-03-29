@@ -422,6 +422,8 @@ module mf6_module
     !
     xll = gdat(i_part)%idf%xmin; yll = gdat(i_part)%idf%ymin
     cs = gdat(i_part)%idf%dx
+    f = trim(this%rootdir)//'mappings'
+    call create_dir(f)
     f = trim(this%rootdir)//'mappings\'//trim(this%solname)//'_part.idf'
     call writeidf(f, this%part, this%ic1-this%ic0+1, this%ir1-this%ir0+1, &
       xll+(this%ic0-1)*cs, yll+(gdat(i_part)%idf%nrow-this%ir1)*cs, cs, 0.)
@@ -859,8 +861,6 @@ module mf6_module
     end if
     !
     ! write nodmap and bndmap
-    f = trim(this%rootdir)//'mappings'
-    call create_dir(f)
     f = trim(this%rootdir)//'mappings\'//trim(this%solname)//'.asc'
     call open_file(f, iu, 'w')
     xll = gdat(i_part)%idf%xmin; yll = gdat(i_part)%idf%ymin; cs = gdat(i_part)%idf%dx
