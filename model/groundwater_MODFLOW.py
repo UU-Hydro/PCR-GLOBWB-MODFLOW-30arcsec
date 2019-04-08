@@ -2209,7 +2209,11 @@ class GroundwaterModflow(object):
         else:
             return surface_water_elevation, surface_water_bed_elevation_used, bed_conductance_used
 
-
+        # for reporting
+        self.surface_water_elevation = surface_water_elevation
+        self.surface_water_bed_elevation_used = surface_water_bed_elevation_used
+        self.bed_conductance_used = bed_conductance_used
+        
         #~ # set also the RIV package to the lowermost layer # TODO: Still experimental. Need further checks/tests !!
         #~ bed_conductance_lower_layer = pcr.ifthenelse(surface_water_bed_elevation_used < self.bottom_layer_2, bed_conductance_used, 0.0)
         #~ self.pcr_modflow.setRiver(surface_water_elevation, surface_water_bed_elevation_used, bed_conductance_used, 1)
@@ -2374,6 +2378,13 @@ class GroundwaterModflow(object):
         drain_elevation_uppermost_layer = pcr.max(drain_elevation, self.bottom_layer_2)
         self.pcr_modflow.setDrain(drain_elevation_uppermost_layer, drain_conductance, 2)
 
+
+        # for reporting
+        self.drain_conductance = drain_conductance
+        self.drain_elevation_lowermost_layer = drain_elevation_lowermost_layer
+        self.drain_elevation_uppermost_layer = drain_elevation_uppermost_layer
+        
+        
         # TODO: Shall we link the specificYield used to the BCF package ??
         
         #~ pcr.aguila(pcr.ifthen(self.landmask, self.recessionCoeff))
