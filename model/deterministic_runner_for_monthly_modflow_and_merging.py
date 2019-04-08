@@ -211,7 +211,7 @@ class DeterministicRunner(DynamicModel):
                                                                                             str(self.netcdf_format)  + " "  +\
                                                                                             str(self.zlib_option  )  + " "  +\
                                                                                             str(max_number_of_cores) + " "  +\
-                                                                                            str("Global")  + " "
+                                                                                            str(self.configuration.globalOptions['cloneAreas'])  + " "
             
             msg = "Using the following command line: " + cmd
             logger.info(msg)
