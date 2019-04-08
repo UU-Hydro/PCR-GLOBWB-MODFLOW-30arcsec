@@ -5,7 +5,8 @@ module mf6_module
      i1b => int8, i4b => int32, i8b => int64, r4b => real32, r8b => real64
   use utilsmod, only: getlun, chkexist, readline, change_case, errmsg, logmsg, &
     readidf_block, readidf_val, writeidf, checkdim, addboundary, tUnp, &
-    calc_unique, sa, open_file, create_dir, swap_slash, tas, ta, get_rel_up
+    calc_unique, sa, open_file, create_dir, swap_slash, tas, ta, get_rel_up, &
+    writebin
   use imod_idf
   
   implicit none 
@@ -19,6 +20,7 @@ module mf6_module
   real(r8b),             parameter :: DZERO = 0.D0
   real(r8b),             parameter :: DONE  = 1.D0
   integer(i4b),          parameter :: dcell = 5 ! boundary
+  logical,               parameter :: writemapidf = .false.
   !
   ! stencil
   integer(i4b), parameter :: jp = 1
@@ -210,6 +212,7 @@ module mf6_module
   end type tMf6
   
   public :: tMf6
+  public :: i1b, i4b, i8b, r4b, r8b
   
   save
   
@@ -253,7 +256,7 @@ module mf6_module
   
 ! ==============================================================================
   
-  subroutine mf6_init(this, f_in)
+  subroutine mf6_init(this, isol, rootdir, f_in)
 ! ******************************************************************************
 ! ******************************************************************************
 !
@@ -262,6 +265,8 @@ module mf6_module
 !
     ! -- dummy
     class(tMf6) :: this
+    integer(i4b), intent(in) :: isol
+    character(len=*), intent(in) :: rootdir
     character(len=*), intent(inout) :: f_in
     ! -- local
     character(len=mxslen) :: s, key, f, val
@@ -287,18 +292,17 @@ module mf6_module
     call logmsg('Reading '//trim(f_in)//'...')
     call open_file(f_in, iu)
     !
-    ! read the solution ID
-    call readline(iu, s)
+    ! set the solution ID
     allocate(this%isol)
-    read(s,*) this%isol
+    this%isol = isol
     !
     ! set solution name
     allocate(this%solname)
     write(this%solname,'(a,i2.2)') 's', this%isol
     !
-    ! root directory
+    ! set the root directory
     allocate(this%rootdir)
-    call readline(iu, this%rootdir)
+    this%rootdir = rootdir
     call create_dir(this%rootdir)
     !
     ! read the partition file
@@ -422,9 +426,17 @@ module mf6_module
     !
     xll = gdat(i_part)%idf%xmin; yll = gdat(i_part)%idf%ymin
     cs = gdat(i_part)%idf%dx
-    f = trim(this%rootdir)//'mappings\'//trim(this%solname)//'_part.idf'
-    call writeidf(f, this%part, this%ic1-this%ic0+1, this%ir1-this%ir0+1, &
-      xll+(this%ic0-1)*cs, yll+(gdat(i_part)%idf%nrow-this%ir1)*cs, cs, 0.)
+    f = trim(this%rootdir)//'mappings'
+    call create_dir(f)
+    if (writemapidf) then
+      f = trim(this%rootdir)//'mappings\'//trim(this%solname)//'_part.idf'
+      call swap_slash(f)
+      call writeidf(f, this%part, this%ic1-this%ic0+1, this%ir1-this%ir0+1, &
+        xll+(this%ic0-1)*cs, yll+(gdat(i_part)%idf%nrow-this%ir1)*cs, cs, 0.)
+    else
+      f = trim(this%rootdir)//'mappings\'//trim(this%solname)//'_part.bin'
+       call writebin(f, this%part, 0)
+    end if
     !
     ! create some mappings
     allocate(this%maxpart)
@@ -859,8 +871,6 @@ module mf6_module
     end if
     !
     ! write nodmap and bndmap
-    f = trim(this%rootdir)//'mappings'
-    call create_dir(f)
     f = trim(this%rootdir)//'mappings\'//trim(this%solname)//'.asc'
     call open_file(f, iu, 'w')
     xll = gdat(i_part)%idf%xmin; yll = gdat(i_part)%idf%ymin; cs = gdat(i_part)%idf%dx
@@ -882,8 +892,8 @@ module mf6_module
           reg => mod%reg(ireg)
           do ir = reg%ir0, reg%ir1
             do ic = reg%ic0, reg%ic1
-              kr = ir - mod%ir0 + 1;  kc = ic - mod%ic0 + 1
-              jr = ir - reg%ir0  + 1; jc = ic - reg%ic0 + 1
+              kr = ir - mod%ir0 + 1; kc = ic - mod%ic0 + 1
+              jr = ir - reg%ir0 + 1; jc = ic - reg%ic0 + 1
               n = reg%nodmap(jc,jr)
               if (n /= 0) then
                 iwrk2d(kc,kr) = n + (ilay-1)*reg%layer_nodes
@@ -891,10 +901,15 @@ module mf6_module
             end do
           end do
         end do
-        f = trim(this%rootdir)//'mappings\nodmap_'//trim(mod%modelname)//'_l'//ta((/ilay/))//'.idf'
-        call swap_slash(f)
-        call writeidf(f, iwrk2d, size(iwrk2d,1), size(iwrk2d,2), &
-          xll+(mod%ic0-1)*cs, yll+(gdat(i_part)%idf%nrow-mod%ir1)*cs, cs, 0.)
+        if (writemapidf) then
+          f = trim(this%rootdir)//'mappings\nodmap_'//trim(mod%modelname)//'_l'//ta((/ilay/))//'.idf'
+          call swap_slash(f)
+          call writeidf(f, iwrk2d, size(iwrk2d,1), size(iwrk2d,2), &
+            xll+(mod%ic0-1)*cs, yll+(gdat(i_part)%idf%nrow-mod%ir1)*cs, cs, 0.)
+        else
+          f = trim(this%rootdir)//'mappings\nodmap_'//trim(mod%modelname)//'_l'//ta((/ilay/))//'.bin'
+          call writebin(f, iwrk2d, 0)
+        end if
       end do
       do ir = 1, mod%nrow
         do ic = 1, mod%ncol
@@ -916,10 +931,15 @@ module mf6_module
           end do
         end do
       end do
-      f = trim(this%rootdir)//'mappings\bndmap_'//trim(mod%modelname)//'.idf'
-      call swap_slash(f)
-      call writeidf(f, iwrk2d, size(iwrk2d,1), size(iwrk2d,2), &
-        xll+(mod%ic0-1)*cs, yll+(gdat(i_part)%idf%nrow-mod%ir1)*cs, cs, 0.)
+      if (writemapidf) then
+        f = trim(this%rootdir)//'mappings\bndmap_'//trim(mod%modelname)//'.idf'
+        call swap_slash(f)
+        call writeidf(f, iwrk2d, size(iwrk2d,1), size(iwrk2d,2), &
+          xll+(mod%ic0-1)*cs, yll+(gdat(i_part)%idf%nrow-mod%ir1)*cs, cs, 0.)
+      else
+        f = trim(this%rootdir)//'mappings\bndmap_'//trim(mod%modelname)//'.bin'
+        call writebin(f, iwrk2d, 0)
+      end if
     end do
     close(iu)
     !
