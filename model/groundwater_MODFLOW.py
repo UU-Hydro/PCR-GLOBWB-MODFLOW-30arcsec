@@ -136,17 +136,28 @@ class GroundwaterModflow(object):
             logger.info(msg)
             self.iniItems.modflowParameterOptions['topographyNC'] = self.iniItems.landSurfaceOptions['topographyNC']
         for var in ['dem_minimum', 'dem_average']:
-            vars(self)[var] = vos.netcdf2PCRobjCloneWithoutTime(self.iniItems.modflowParameterOptions['topographyNC'], \
-                                                                var, self.cloneMap)
+            if self.iniItems.modflowParameterOptions['topographyNC'] != "None":
+                vars(self)[var] = vos.netcdf2PCRobjCloneWithoutTime(self.iniItems.modflowParameterOptions['topographyNC'], \
+                                                                    var, self.cloneMap)
+            else:                                                   
+                # read from pcraster file, if topographyNC == None
+                vars(self)[var] = vos.readPCRmapClone(self.iniItems.modflowParameterOptions[var],\
+                                                      self.cloneMap, self.tmpDir, self.inputDir)
             vars(self)[var] = pcr.cover(vars(self)[var], 0.0)
 
         # channel properties: read several variables from the netcdf file
         if 'channelNC' in self.iniItems.modflowParameterOptions.keys():
             for var in ['gradient', 'bankfull_width',
                         'bankfull_depth', 'dem_floodplain', 'dem_riverbed']:
-                vars(self)[var] = vos.netcdf2PCRobjCloneWithoutTime(self.iniItems.modflowParameterOptions['channelNC'], \
+                if self.iniItems.modflowParameterOptions['channelNC'] != "None":
+                    vars(self)[var] = vos.netcdf2PCRobjCloneWithoutTime(self.iniItems.modflowParameterOptions['channelNC'], \
                                                                     var, self.cloneMap)
+                else:                                                   
+                    # read from pcraster file, if topographyNC == None
+                    vars(self)[var] = vos.readPCRmapClone(self.iniItems.modflowParameterOptions[var],\
+                                                          self.cloneMap, self.tmpDir, self.inputDir)
                 vars(self)[var] = pcr.cover(vars(self)[var], 0.0)
+
         else:
             msg = 'The "channelNC" file is NOT defined in the "modflowParameterOptions" of the configuration file.'
             logger.info(msg)
@@ -276,7 +287,7 @@ class GroundwaterModflow(object):
         extrapolateParameters = True
         if "doNotExtrapolateParameters" in iniItems.modflowParameterOptions.keys() and \
                                            iniItems.modflowParameterOptions["doNotExtrapolateParameters"] == "True":  
-            extrapolateGroundwaterThickness = False
+            extrapolateParameters = False
         
         if extrapolateParameters:
 

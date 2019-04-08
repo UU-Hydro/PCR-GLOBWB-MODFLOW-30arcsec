@@ -137,17 +137,28 @@ class GroundwaterModflow(object):
             logger.info(msg)
             self.iniItems.modflowParameterOptions['topographyNC'] = self.iniItems.landSurfaceOptions['topographyNC']
         for var in ['dem_minimum', 'dem_average']:
-            vars(self)[var] = vos.netcdf2PCRobjCloneWithoutTime(self.iniItems.modflowParameterOptions['topographyNC'], \
-                                                                var, self.cloneMap)
+            if self.iniItems.modflowParameterOptions['topographyNC'] != "None":
+                vars(self)[var] = vos.netcdf2PCRobjCloneWithoutTime(self.iniItems.modflowParameterOptions['topographyNC'], \
+                                                                    var, self.cloneMap)
+            else:
+                # read from pcraster file, if topographyNC == None
+                vars(self)[var] = vos.readPCRmapClone(self.iniItems.modflowParameterOptions[var],\
+                                                      self.cloneMap, self.tmpDir, self.inputDir)
             vars(self)[var] = pcr.cover(vars(self)[var], 0.0)
 
         # channel properties: read several variables from the netcdf file
         if 'channelNC' in self.iniItems.modflowParameterOptions.keys():
             for var in ['gradient', 'bankfull_width',
                         'bankfull_depth', 'dem_floodplain', 'dem_riverbed']:
-                vars(self)[var] = vos.netcdf2PCRobjCloneWithoutTime(self.iniItems.modflowParameterOptions['channelNC'], \
-                                                                    var, self.cloneMap)
+                if self.iniItems.modflowParameterOptions['channelNC'] != "None":
+                    vars(self)[var] = vos.netcdf2PCRobjCloneWithoutTime(self.iniItems.modflowParameterOptions['channelNC'], \
+                                                                        var, self.cloneMap)
+                else:
+                    # read from pcraster file, if topographyNC == None
+                    vars(self)[var] = vos.readPCRmapClone(self.iniItems.modflowParameterOptions[var],\
+                                                          self.cloneMap, self.tmpDir, self.inputDir)
                 vars(self)[var] = pcr.cover(vars(self)[var], 0.0)
+
         else:
             msg = 'The "channelNC" file is NOT defined in the "modflowParameterOptions" of the configuration file.'
             logger.info(msg)
@@ -274,17 +285,23 @@ class GroundwaterModflow(object):
         self.riverBedThickness         = groundwater_pcrglobwb.riverBedThickness
         self.bed_resistance            = groundwater_pcrglobwb.bed_resistance
 
-        # Perform extrapolation for the following variables:
-        for var in ['kSatAquifer',\
-                    'specificYield',\
-                    'recessionCoeff',\
-                    'totalGroundwaterThickness',\
-                    ]:
-            vars(self)[var] = pcr.ifthen(self.landmask, vars(self)[var])
-            vars(self)[var] = pcr.cover(pcr.cover(vars(self)[var], pcr.windowaverage(vars(self)[var], 0.5)), vars(groundwater_pcrglobwb)[var])
-            #~ pcr.aguila(vars(self)[var])
-            #~ raw_input("Press Enter to continue...")
+        extrapolateParameters = True
+        if "doNotExtrapolateParameters" in iniItems.modflowParameterOptions.keys() and \
+                                           iniItems.modflowParameterOptions["doNotExtrapolateParameters"] == "True":
+            extrapolateParameters = False
 
+        if extrapolateParameters:
+
+            # Perform extrapolation for the following variables:
+            for var in ['kSatAquifer',\
+                        'specificYield',\
+                        'recessionCoeff',\
+                        'totalGroundwaterThickness',\
+                        ]:
+                vars(self)[var] = pcr.ifthen(self.landmask, vars(self)[var])
+                vars(self)[var] = pcr.cover(pcr.cover(vars(self)[var], pcr.windowaverage(vars(self)[var], 0.5)), vars(groundwater_pcrglobwb)[var])
+                #~ pcr.aguila(vars(self)[var])
+                #~ raw_input("Press Enter to continue...")
 
         #~ # remove isolated cells - a productive aquifer cell must be surrounded by at least a minimum number of cells - OPTIONAL (NOT RECOMMENDED) # TODO: Find a better method that this one.
         #~ if "minimizeIsolatedAquiferCellsUnderGroundwaterAbstraction" in iniItems.modflowParameterOptions.keys() and iniItems.modflowParameterOptions['minimizeIsolatedAquiferCellsUnderGroundwaterAbstraction'] == "True":
