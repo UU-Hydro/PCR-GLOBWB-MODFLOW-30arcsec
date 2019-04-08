@@ -127,7 +127,7 @@ class DeterministicRunner(DynamicModel):
                 logger.info(msg)
                 cmd = 'python '+ self.configuration.path_of_this_module + "/merge_pcraster_maps.py " + str(self.modelTime.fulldate) + " " +\
                                                                                                        str(self.configuration.main_output_directory)+"/ maps 8 "+\
-                                                                                                       str("Global")
+                                                                                                       str(self.configuration.globalOptions['cloneAreas'])
                 vos.cmd_line(cmd, using_subprocess = False)
                 
                 # cleaning up unmerged files (not tested yet)
@@ -152,7 +152,7 @@ class DeterministicRunner(DynamicModel):
             logger.info(msg)
             cmd = 'python '+ self.configuration.path_of_this_module + "/merge_pcraster_maps.py " + str(self.modelTime.fulldate) + " " +\
                                                                                                    str(self.configuration.main_output_directory)+"/ states 8 "+\
-                                                                                                   str("Global")
+                                                                                                   str(self.configuration.globalOptions['cloneAreas'])
             vos.cmd_line(cmd, using_subprocess = False)
             
             # cleaning up unmerged files (not tested yet)
