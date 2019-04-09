@@ -327,12 +327,20 @@ def netcdf2PCRobjClone(ncFile,varName,dateInput,\
                 msg += "The date "+str(date.year)+"-"+str(date.month)+"-"+str(date.day)+" is NOT available. The 'before' option is used while selecting netcdf time."
                 msg += "\n"
             except:
-                idx = nc.date2index(date, f.variables['time'], calendar = f.variables['time'].calendar, \
-                                    select = 'after')
-                msg  = "\n"
-                msg += "WARNING related to the netcdf file: "+str(ncFile)+" ; variable: "+str(varName)+" !!!!!!"+"\n"
-                msg += "The date "+str(date.year)+"-"+str(date.month)+"-"+str(date.day)+" is NOT available. The 'after' option is used while selecting netcdf time."
-                msg += "\n"
+                try:
+                    idx = nc.date2index(date, f.variables['time'], calendar = f.variables['time'].calendar, \
+                                        select = 'after')
+                    msg  = "\n"
+                    msg += "WARNING related to the netcdf file: "+str(ncFile)+" ; variable: "+str(varName)+" !!!!!!"+"\n"
+                    msg += "The date "+str(date.year)+"-"+str(date.month)+"-"+str(date.day)+" is NOT available. The 'after' option is used while selecting netcdf time."
+                    msg += "\n"
+                except:
+                    if len(f.variables['time']) == 1:
+                        idx = 0
+                        msg  = "\n"
+                        msg += "WARNING related to the netcdf file: "+str(ncFile)+" ; variable: "+str(varName)+" !!!!!!"+"\n"
+                        msg += "The date "+str(date.year)+"-"+str(date.month)+"-"+str(date.day)+" is NOT available. The file contains only one time step " + str(f.variables['time']) + " and this time is used."
+                        msg += "\n"
             logger.warning(msg)
                                                   
     idx = int(idx)                                                  
