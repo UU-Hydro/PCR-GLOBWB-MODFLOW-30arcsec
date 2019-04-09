@@ -447,6 +447,22 @@ if areas == "Global":
 else:
     areas = list(set(areas.split(",")))
 
+# optional define lat lon bounding boxes
+try:
+	lat_lon_box = str(sys.argv[11])
+    lat_lon_box = list(set(netcdfList.split(",")))
+    cell_length_in_arc_second = float(sys.argv[12])
+    deltaLon = cell_length_in_arc_second / 3600.
+    deltaLat = deltaLon
+    lonMin = lat_lon_box[0] + deltaLon / 2
+    latMin = lat_lon_box[1] + deltaLat / 2
+    latMax = lat_lon_box[2] - deltaLat / 2
+    lonMax = lat_lon_box[3] - deltaLon / 2
+except:
+    pass
+
+
+
 
 #~ # for testing, we use only a single core
 #~ mergeNetCDF((netcdfList[0], latMin, latMax, lonMin, lonMax, deltaLat, deltaLon, startDate, endDate, ncFormat, using_zlib))

@@ -212,7 +212,16 @@ class DeterministicRunner(DynamicModel):
                                                                                             str(self.zlib_option  )  + " "  +\
                                                                                             str(max_number_of_cores) + " "  +\
                                                                                             str(self.configuration.globalOptions['cloneAreas'])  + " "
-            
+            # - extent of merged maps
+            mapattr_of_merged_map = vos.getMapAttributesALL(self.configuration.globalOptions['globalMergingAndModflowOptions'])
+            cell_length_in_arc_second = round(mapattr_of_merged_map['cellsize'] * 3600.)        
+            latlon_box_and_cell_length_in_arc_second = str(round(mapattr_of_merged_map['xUL'])) + "," + \
+                                                       str(round(mapattr_of_merged_map['yUL'] - mapattr_of_merged_map['rows'] * mapattr_of_merged_map['cellsize']))  + "," + \
+                                                       str(round(mapattr_of_merged_map['xUL'] + mapattr_of_merged_map['cols'] * mapattr_of_merged_map['cellsize']))  + "," + \
+                                                       str(round(mapattr_of_merged_map['yUL']))  + " " + \
+                                                       str(cell_length_in_arc_second)
+            cmd = cmd + latlon_box_and_cell_length_in_arc_second
+
             msg = "Using the following command line: " + cmd
             logger.info(msg)
             
