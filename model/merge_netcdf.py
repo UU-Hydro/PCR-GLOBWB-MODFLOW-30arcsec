@@ -449,7 +449,7 @@ else:
 
 # optional define lat lon bounding boxes
 try:
-	lat_lon_box = str(sys.argv[11])
+    lat_lon_box = str(sys.argv[11])
     lat_lon_box = list(set(lat_lon_box.split(",")))
     cell_length_in_arc_second = float(sys.argv[12])
     deltaLon = cell_length_in_arc_second / 3600.
