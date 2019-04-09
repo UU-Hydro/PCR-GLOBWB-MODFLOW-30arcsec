@@ -339,7 +339,7 @@ def netcdf2PCRobjClone(ncFile,varName,dateInput,\
                         idx = 0
                         msg  = "\n"
                         msg += "WARNING related to the netcdf file: "+str(ncFile)+" ; variable: "+str(varName)+" !!!!!!"+"\n"
-                        msg += "The date "+str(date.year)+"-"+str(date.month)+"-"+str(date.day)+" is NOT available. The file contains only one time step " + str(f.variables['time'][idx]) + " and this time is used."
+                        msg += "The file contains only one time step " + str(f.variables['time'][idx]) + " and this time is used."
                         msg += "\n"
             logger.warning(msg)
                                                   
