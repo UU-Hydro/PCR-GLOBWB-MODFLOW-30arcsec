@@ -213,7 +213,7 @@ class DeterministicRunner(DynamicModel):
                                                                                             str(max_number_of_cores) + " "  +\
                                                                                             str(self.configuration.globalOptions['cloneAreas'])  + " "
             # - extent of merged maps
-            mapattr_of_merged_map = vos.getMapAttributesALL(self.configuration.globalOptions['globalMergingAndModflowOptions'])
+            mapattr_of_merged_map = vos.getMapAttributesALL(self.configuration.globalMergingAndModflowOptions['cloneMap'])
             cell_length_in_arc_second = round(mapattr_of_merged_map['cellsize'] * 3600.)        
             latlon_box_and_cell_length_in_arc_second = str(round(mapattr_of_merged_map['xUL'])) + "," + \
                                                        str(round(mapattr_of_merged_map['yUL'] - mapattr_of_merged_map['rows'] * mapattr_of_merged_map['cellsize']))  + "," + \
