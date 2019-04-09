@@ -28,7 +28,11 @@
 import os, sys
 import time as tm
 import numpy as np
+
+import pcraster as pcr
 import netCDF4 as nc
+# For the speedy machine (at UU), in order to properly load netCDF4, somehow we first have to load pcraster.
+
 import datetime
 import glob
 from multiprocessing import Pool
