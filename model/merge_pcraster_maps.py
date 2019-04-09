@@ -244,7 +244,7 @@ areas = ['M%02d'%i for i in range(1,number_of_clone_maps+1,1)]
 try:
     areas = str(sys.argv[5])
     areas = list(set(areas.split(",")))
-    if areas[0] == "Global": areas = ['M%02d'%i for i in range(1,number_of_clone_maps+1,1)] 
+    if areas[0] == "Global" or areas[0] == "part_one": areas = ['M%02d'%i for i in range(1,number_of_clone_maps+1,1)] 
 except:
     pass
 
