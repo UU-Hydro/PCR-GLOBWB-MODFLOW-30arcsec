@@ -459,10 +459,10 @@ try:
     cell_length_in_arc_second = float(sys.argv[12])
     deltaLon = cell_length_in_arc_second / 3600.
     deltaLat = deltaLon
-    lonMin = lat_lon_box[0] + deltaLon / 2
-    latMin = lat_lon_box[1] + deltaLat / 2
-    latMax = lat_lon_box[2] - deltaLat / 2
-    lonMax = lat_lon_box[3] - deltaLon / 2
+    lonMin = float(lat_lon_box[0]) + deltaLon / 2
+    latMin = float(lat_lon_box[1]) + deltaLat / 2
+    latMax = float(lat_lon_box[2]) - deltaLat / 2
+    lonMax = float(lat_lon_box[3]) - deltaLon / 2
 except:
     pass
 
