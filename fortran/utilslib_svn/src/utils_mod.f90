@@ -906,7 +906,7 @@ module utilsmod
     logical :: lex
 ! ------------------------------------------------------------------------------
 
-    do lun=10, 100
+    do lun=20, 5000
       inquire(unit=lun,opened=lex)
       if(.not.lex)exit
     end do
