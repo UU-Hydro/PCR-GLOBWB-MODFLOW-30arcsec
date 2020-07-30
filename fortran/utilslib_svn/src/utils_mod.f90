@@ -156,6 +156,117 @@ module utilsmod
 
   contains
 
+  recursive subroutine label_node(ia, ja, id1, i4wk1d, ireg)
+! ******************************************************************************
+    ! -- arguments
+    integer(i4b), dimension(:), intent(in) :: ia
+    integer(i4b), dimension(:), intent(in) :: ja
+    integer(i4b), intent(in) :: id1
+    integer(i4b), dimension(:), intent(inout) :: i4wk1d
+    integer(i4b), intent(in) :: ireg
+    !
+    ! -- locals
+    integer(i4b) :: i, id2
+! ------------------------------------------------------------------------------
+    !
+    i4wk1d(id1) = ireg
+    !
+    do i = ia(id1)+1, ia(id1+1)-1
+      id2 = ja(i)
+      if (i4wk1d(id2) == 0) then
+        call label_node(ia, ja, id2, i4wk1d, ireg)
+      end if
+    end do
+  end subroutine label_node
+
+  function get_jd(y, m, d) result(jd)
+! ******************************************************************************
+    ! -- arguments
+    integer(i4b), intent(in) :: y
+    integer(i4b), intent(in) :: m
+    integer(i4b), intent(in) :: d
+    real(r8b) :: jd
+    ! -- locals
+    integer(i4b) :: date
+    ! -- functions
+
+! ------------------------------------------------------------------------------
+    date = y*10000+m*100+d
+    call cfn_datehms2mjd(date,0,0,0,jd)
+
+  end function get_jd
+
+ subroutine get_ymd_from_jd(jd, date, y, m, d)
+! ******************************************************************************
+    ! -- arguments
+    real(r8b), intent(in) :: jd
+    integer(i4b), intent(out) :: date
+    integer(i4b), intent(out) :: y
+    integer(i4b), intent(out) :: m
+    integer(i4b), intent(out) :: d
+    ! -- locals
+    integer(i4b) :: idum
+    character(len=100) :: s
+
+
+! ------------------------------------------------------------------------------
+    call cfn_mjd2datehms(jd,date,idum,idum,idum)
+    write(s,*) date
+    s = adjustl(s)
+    read(s(1:4),*) y
+    read(s(5:6),*) m
+    read(s(7:8),*) d
+
+  end subroutine get_ymd_from_jd
+
+  subroutine jd_next_month(jd)
+! ******************************************************************************
+    ! -- arguments
+    real(r8b), intent(inout) :: jd
+
+
+    ! -- locals
+    integer(i4b) :: date, y, m, d
+! ------------------------------------------------------------------------------
+    call get_ymd_from_jd(jd, date, y, m, d)
+
+    if (m == 12) then
+      y = y + 1
+      m = 1
+    else
+      m = m + 1
+    end if
+    jd = get_jd(y, m, d)
+
+  end subroutine jd_next_month
+
+  function get_month_days(jd) result(nd)
+! ******************************************************************************
+    ! -- arguments
+    real(r8b), intent(in) :: jd
+    integer(i4b) :: nd
+    ! -- locals
+    integer(i4b) :: date1, date2, idum
+    real(r8b) :: jd1, jd2, djd
+    ! -- functions
+    integer(i4b) :: y, m, d
+    real(r8b) :: cfn_jd_delta
+! ------------------------------------------------------------------------------
+    call get_ymd_from_jd(jd, date1, y, m, d)
+    if (m == 12) then
+      date2 = (y+1)*10000+1*100+1
+    else
+      date2 = y*10000+(m+1)*100+1
+    end if
+
+    call cfn_datehms2mjd(date1,0,0,0,jd1)
+    call cfn_datehms2mjd(date2,0,0,0,jd2)
+    djd = cfn_jd_delta(jd2,jd1)
+
+    nd = nint(djd)
+
+  end function get_month_days
+
   function readgen(f) result(p)
 ! ******************************************************************************
     ! -- arguments
@@ -487,22 +598,19 @@ module utilsmod
     end if
   end subroutine checkdim
 
-  subroutine readline(iu, so)
+  function readline(iu, so) result(ios)
 ! ******************************************************************************
     ! -- arguments
     integer(i4b), intent(in) :: iu
     character(len=*), intent(out), optional :: so
+    integer(I4B) :: ios
     ! -- locals
-    character(len=1), parameter :: comment = '#'
     character(len=mxslen) :: s
-    integer(i4b) :: i, ios
+    integer(i4b) :: i
 ! ------------------------------------------------------------------------------
     do while(.true.)
       read(unit=iu, iostat=ios, fmt='(a)') s
-      if (ios /= 0) then
-        so = ''
-        exit
-      end if
+      if (ios /= 0) exit
       so = trim(adjustl(s))
       if ((so(1:1) /= comment) .and. (len_trim(so) > 0)) then
         i = index(so, comment, back=.true.)
@@ -513,7 +621,149 @@ module utilsmod
       end if
     end do
 
-  end subroutine readline
+  end function readline
+
+  function createtoken() result(t)
+! ******************************************************************************
+    ! -- arguments
+    character(len=1) :: t
+! ------------------------------------------------------------------------------
+    t = '?'
+  end function createtoken
+
+  function counttoken(s, t) result(n)
+! ******************************************************************************
+    ! -- arguments
+    character(len=*), intent(in) :: s
+    character(len=1), optional, intent(in) :: t
+    integer(i4b) :: n
+    ! -- locals
+    character(len=1) :: tloc
+    integer(i4b) :: i
+! ------------------------------------------------------------------------------
+    tloc = createtoken()
+    if (present(t)) then
+      tloc = t
+    end if
+    !
+    n = 0
+    do i = 1, len(s)
+      if (s(i:i) == tloc) then
+        n = n + 1
+      endif
+    enddo
+  end function counttoken
+
+  subroutine replacetoken(s, t, i)
+! ******************************************************************************
+    ! -- arguments
+    character(len=*), intent(inout) :: s
+    character(len=1), intent(in) :: t
+    integer(i4b) :: i
+    ! -- locals
+    integer(i4b) :: i1, i2, n
+    character(len=mxslen) :: ns, is, fmt
+! ------------------------------------------------------------------------------
+    i1 = index(s, t)
+    i2 = index(s, t, back=.true.)
+    n = i2 - i1 + 1
+    write(ns,*) n
+    fmt = '(i'//trim(ns)//'.'//trim(ns)//')'
+    write(is,fmt) i
+    is = adjustl(is)
+    s(i1:i2) = is(1:n)
+  end subroutine
+
+  subroutine getminmax(key, sep, token, imin, imax)
+! ******************************************************************************
+    ! -- arguments
+    character(len=*), intent(in) :: key
+    character(len=1), intent(in) :: sep
+    character(len=*), intent(in) :: token
+    integer(I4B), intent(out) :: imin
+    integer(I4B), intent(out) :: imax
+    ! -- locals
+    character(len=mxslen) :: s
+    integer(I4b) :: i, j, n
+    character(len=mxslen), dimension(:), allocatable :: words
+! ------------------------------------------------------------------------------
+    words = getwords(key, sep)
+    n = size(words)
+    if (n) return
+    !
+    imin = 0
+    imax = 0
+    do i = 1, n
+      s = words(i)
+      if (s(1:1) == token) then
+        j = index(s,':')
+        if (j == 0) then
+          read(s(2:),*) imin
+          imax = imin
+        else
+          read(s(2:j-1),*) imin
+          read(s(j+1:),*)  imax
+        end if
+      end if
+    end do
+    !
+  end subroutine getminmax
+
+  function getwords(s_in, token) result(words)
+! ******************************************************************************
+    ! -- arguments
+    character(len=*), intent(in), optional :: s_in
+    character(len=mxslen), dimension(:), allocatable :: words
+    character(len=1), optional, intent(in) :: token
+    ! -- locals
+    integer(i4b) :: ios, i, j, n, iact
+    character(len=1) :: tokenLocal
+    character(len=mxslen) :: s1, s2
+    integer(I4B), parameter :: maxwords = 100
+    integer(I4B), dimension(maxwords) :: ind
+! ------------------------------------------------------------------------------
+    tokenLocal = ' '
+    if (present(token)) then
+      tokenLocal = token
+    endif
+    !
+    i = index(s_in,comment)
+    if (i > 0) then
+      s1 = trim(s_in(1:i))
+    else
+      s1 = trim(s_in)
+    endif
+    s1 = adjustl(s1)
+    if (len_trim(s1) == n) then
+       call errmsg('getwords.')
+    end if
+    if (len_trim(s1) == 1) then
+      n = 1
+      allocate(words(1))
+      words(1) = s1
+      return
+    endif
+    !
+    ! count
+    ind(1) = 1
+    n = 1
+    do i = 2, len_trim(s1)
+      if ((s1(i:i) == tokenLocal).and. (s1(i-1:i-1) /= tokenLocal)) then
+        n = n + 1
+        ind(n) = i
+      end if
+    end do
+    ind(n+1) = len_trim(s1)+1
+    if (n > 0) then
+      if (allocated(words)) deallocate(words)
+      allocate(words(n))
+    endif
+    do i = 1, n
+      read(s1(ind(i):ind(i+1)-1),'(a)') s2
+      j = index(trim(s2), tokenLocal, back=.true.)+1
+      words(i) = s2(j:)
+    end do
+  end function getwords
 
   subroutine writetofile_i4(lun, arr, pre, post)
 ! ******************************************************************************
