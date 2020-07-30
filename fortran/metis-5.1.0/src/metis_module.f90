@@ -11,6 +11,7 @@ module metis_module
   integer(i4b), parameter :: mxslen = 1024
   
   real(r4b), parameter :: tolimbal = 1.00001  ! load imbalance tolerance
+  public :: tolimbal
   logical :: lump = .false.
   logical :: lump_indep = .false.
   real(r8b), parameter :: DZERO = 0.D0
@@ -31,6 +32,9 @@ module metis_module
     integer(kind=i8b),               pointer :: objval => null() ! edge-cut ot total communication volume
     integer(kind=i8b), dimension(:), pointer :: part   => null() ! partition vector of the graph (dim: nvtxs)
     !
+    real(r8b), pointer :: totload => null()
+    real(r8b), pointer :: imbal   => null()
+    !
     integer(i4b), dimension(:), pointer :: idmap    => null()
     integer(i4b), dimension(:), pointer :: idmapinv => null()
     
@@ -43,7 +47,7 @@ module metis_module
     procedure :: kway            => metis_kway
     procedure :: clean           => metis_clean
     procedure :: calc_imbal      => metis_calc_imbal
-    procedure :: check_empty    => metis_check_empty
+    procedure :: check_empty     => metis_check_empty
     procedure :: set_ids         => metis_set_ids
   end type tMetis
   
@@ -573,10 +577,13 @@ contains
     ! -- dummy
     class(tMetis) :: this
     ! -- local
-    real(r8b) :: totload, imbal
     real(r8b), dimension(:), allocatable :: load
     integer(i4b) :: i, ip, nr, nc, ir, ic, n
 ! ------------------------------------------------------------------------------
+    !
+    if (.not.associated(this%totload)) allocate(this%totload)
+    if (.not.associated(this%imbal))   allocate(this%imbal)
+    !
     allocate(load(this%nparts))
     do ip = 1, this%nparts
       load(ip) = DZERO
@@ -586,12 +593,12 @@ contains
       ip = this%part(i) + 1
       load(ip) = load(ip) + this%vwgt(i)
     end do
-    totload = sum(load)
+    this%totload = sum(load)
     do ip = 1, this%nparts
-      load(ip) = load(ip)/(totload*this%tpwgts(ip))
+      load(ip) = load(ip)/(this%totload*this%tpwgts(ip))
     end do
-    imbal = maxval(load)
-    write(*,*) 'Load imbalance:', imbal
+    this%imbal = maxval(load)
+    write(*,*) 'Load imbalance:', this%imbal
     
     deallocate(load)
 
