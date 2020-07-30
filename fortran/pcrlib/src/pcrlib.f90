@@ -8,7 +8,6 @@ module pcrModule
   implicit none
   
   private
-
   public :: i1b, i2b, i4b, i8b, r4b, r8b
   
   integer(i1b), parameter :: jsw = 1
@@ -25,7 +24,7 @@ module pcrModule
                                                      -1, -1, 0, -1, 1, -1 /)
   integer(i4b), dimension(9) :: jperm = (/ 9, 8, 7, 6, 5, 4, 3, 2, 1 /)
   public :: jsw, js, jse, jw, jp, je, jnw, jn, jne, st, jperm 
-
+  
   integer, parameter :: cr_int1  = 1 ! 4
   integer, parameter :: cr_int2  = 2 ! 21
   integer, parameter :: cr_int4  = 3 ! 38
@@ -108,6 +107,7 @@ module pcrModule
   end type tMapHdr
   
   type tMap
+    character(len=mxslen), pointer        :: f  => null()
     integer, pointer                      :: iu => null()
     type(tMapHdr), pointer                :: header => null()
     integer(i1b),                 pointer :: i1mv  => null()
@@ -120,8 +120,15 @@ module pcrModule
     real(r4b),    dimension(:,:), pointer :: r4a   => null()
     real(r8b),                    pointer :: r8mv  => null()
     real(r8b),    dimension(:,:), pointer :: r8a   => null()
+    !
+    integer(i4b), pointer :: gir0  => null() !global
+    integer(i4b), pointer :: gir1  => null() !global
+    integer(i4b), pointer :: gic0  => null() !global
+    integer(i4b), pointer :: gic1  => null() !global
   contains
+    procedure :: init         => map_init
     procedure :: read_header  => map_read_header
+    procedure :: set_bb       => map_set_bounding_box
     procedure :: read_data    => map_read_data
     procedure :: write_header => map_write_header
     procedure :: write_data   => map_write_data
@@ -143,7 +150,7 @@ module pcrModule
   public :: tMap
   
 contains
-
+  
   function is_map_file(fname) result(ok)
 ! ******************************************************************************
 ! ******************************************************************************
@@ -177,8 +184,8 @@ contains
     close(iu)
     
   end function is_map_file
-  
-  function map_read_header(this, f) result(ok)
+
+  function map_init(this, f, verb_in) result(ok)
 ! ******************************************************************************
 ! ******************************************************************************
 !
@@ -187,6 +194,96 @@ contains
     ! -- dummy
     class(tMap) :: this
     character(len=*), intent(in) :: f
+    integer(i4b), intent(in), optional :: verb_in
+    !
+    logical :: ok
+    ! -- local
+    integer(i4b) :: verb
+    real(r8b) :: xll, yll
+    real(i4b) :: ncol, nrow
+    logical :: lok
+! ------------------------------------------------------------------------------
+    if (present(verb_in)) then
+      verb = verb_in
+    else
+      verb = 0
+    end if
+    !
+    lok = this%read_header(f, verb)
+    !
+    allocate(this%gic0, this%gic1, this%gir0, this%gir1)
+    !
+    this%gic0 = IZERO
+    this%gic1 = IZERO
+    this%gir0 = IZERO
+    this%gir1 = IZERO
+    !
+    ! set return value
+    ok = .true.
+    
+  end function map_init
+  
+  function map_set_bounding_box(this, gic0, gic1, gir0, gir1, &
+    gxll, gyll, gnrow, gncol) result(ok)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+    ! -- dummy
+    class(tMap) :: this
+    integer(i4b), intent(in) :: gir0
+    integer(i4b), intent(in) :: gir1
+    integer(i4b), intent(in) :: gic0
+    integer(i4b), intent(in) :: gic1
+    real(r8b), optional, intent(in) :: gxll
+    real(r8b), optional, intent(in) :: gyll
+    integer(i4b), optional, intent(in) :: gncol
+    integer(i4b), optional, intent(in) :: gnrow
+    !
+    logical :: ok
+    ! -- local
+    real(r8b) :: xll, yll
+    integer(i4b) :: ncol, nrow
+    type(tMapHdr), pointer :: hdr
+! ------------------------------------------------------------------------------
+    hdr => this%header
+    !
+    this%gic0 = gic0
+    this%gic1 = gic1
+    this%gir0 = gir0
+    this%gir1 = gir1
+    !
+    ! first check
+    ncol = gic1-gic0+1
+    nrow = gir1-gir0+1
+    if (ncol /= hdr%NrCols) then
+      call errmsg('Inconsistent number of bb-columns for MAP-file: '//trim(this%f))
+    end if
+    if (nrow /= hdr%NrRows) then
+      call errmsg('Inconsistent number of bb-rows for MAP-file: '//trim(this%f))
+    end if
+    
+    ! check
+    if (present(gxll).and.present(gyll).and.present(gnrow).and.present(gncol)) then
+       write(*,*) 'Checking...'
+    end if
+    
+    ! set return value
+    ok = .true.
+    
+  end function map_set_bounding_box
+  
+  function map_read_header(this, f, verb) result(ok)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+    ! -- dummy
+    class(tMap) :: this
+    character(len=*), intent(in) :: f
+    integer(i4b), intent(in) :: verb
     logical :: ok
     ! -- local
     integer :: i, iinc
@@ -194,11 +291,13 @@ contains
     type(tMapHdr), pointer :: hdr
 ! ------------------------------------------------------------------------------
     call chkexist(f)
+    allocate(this%f)
+    this%f = f
     
     ! open file in stream mode
     if (.not.associated(this%iu)) allocate(this%iu)
     this%iu=getlun()
-    write(*,*) 'Reading '//trim(f)//'...'
+    if (verb == 0) write(*,*) 'Reading '//trim(f)//'...'
     open(unit=this%iu,file=f,form='unformatted',access='stream',status='old')
     
     ! READ HEADER
@@ -331,7 +430,7 @@ contains
     
   end function map_write_header
   
-  subroutine map_read_data(this)
+  subroutine map_read_data(this, rval)
 ! ******************************************************************************
 ! ******************************************************************************
 !
@@ -339,6 +438,7 @@ contains
 ! ------------------------------------------------------------------------------
     ! -- dummy
     class(tMap) :: this
+    real(r8b), optional, intent(in) :: rval
     ! -- local
     integer(i4b) :: nc, nr, ic, ir, p
     character(len=1), dimension(:,:), allocatable :: wrk
@@ -346,36 +446,97 @@ contains
     nc = this%header%nrCols; nr = this%header%nrRows
     p = 256+1
     
+    ! allocate
     select case(this%header%cellrepr)
       case(cr_uint1)
-        allocate(this%i1a(nc,nr), wrk(nc,nr))
-        read(unit=this%iu,pos=p)((wrk(ic,ir),ic=1,nc),ir=1,nr)
-        do ir = 1, nr
-          do ic = 1, nc
-            this%i1a(ic,ir) = ichar(wrk(ic,ir))
-          end do
-        end do
-        deallocate(wrk)
+        allocate(this%i1a(nc,nr))
       case(cr_int1)
         allocate(this%i1a(nc,nr))
-        read(unit=this%iu,pos=p)((this%i1a(ic,ir),ic=1,nc),ir=1,nr)
       case(cr_int2)
         allocate(this%i2a(nc,nr))
-        read(unit=this%iu,pos=p)((this%i2a(ic,ir),ic=1,nc),ir=1,nr)
       case(cr_int4)
         allocate(this%i4a(nc,nr))
-        read(unit=this%iu,pos=p)((this%i4a(ic,ir),ic=1,nc),ir=1,nr)
       case(cr_real4)
         allocate(this%r4a(nc,nr))
-        read(unit=this%iu,pos=p)((this%r4a(ic,ir),ic=1,nc),ir=1,nr)
       case(cr_real8)
         allocate(this%r8a(nc,nr))
-        read(unit=this%iu,pos=p)((this%r8a(ic,ir),ic=1,nc),ir=1,nr)
       case default
           call errmsg('Kind of MAP-file not supported.')
-    end select 
-    call this%set_nodata()
-    call this%correct_nodata()
+      end select
+      
+    ! read
+    if (present(rval)) then
+      select case(this%header%cellrepr)
+        case(cr_uint1)
+          do ir = 1, nr
+            do ic = 1, nc
+              this%i1a(ic,ir) = int(rval, i1b)
+            end do
+          end do
+          deallocate(wrk)
+        case(cr_int1)
+          do ir = 1, nr
+            do ic = 1, nc
+              this%i1a(ic,ir) = int(rval, i1b)
+            end do
+          end do
+        case(cr_int2)
+          do ir = 1, nr
+            do ic = 1, nc
+              this%i2a(ic,ir) = int(rval, i2b)
+            end do
+          end do
+        case(cr_int4)
+          do ir = 1, nr
+            do ic = 1, nc
+              this%i4a(ic,ir) = int(rval, i4b)
+            end do
+          end do
+        case(cr_real4)
+          do ir = 1, nr
+            do ic = 1, nc
+              this%r4a(ic,ir) = real(rval, r4b)
+            end do
+          end do
+        case(cr_real8)
+          do ir = 1, nr
+            do ic = 1, nc
+              this%r8a(ic,ir) = int(rval, r8b)
+            end do
+          end do
+        case default
+            call errmsg('Kind of MAP-file not supported.')
+      end select
+    else
+      select case(this%header%cellrepr)
+        case(cr_uint1)
+          allocate(wrk(nc,nr))
+          read(unit=this%iu,pos=p)((wrk(ic,ir),ic=1,nc),ir=1,nr)
+          do ir = 1, nr
+            do ic = 1, nc
+              this%i1a(ic,ir) = ichar(wrk(ic,ir))
+            end do
+          end do
+          deallocate(wrk)
+        case(cr_int1)
+          read(unit=this%iu,pos=p)((this%i1a(ic,ir),ic=1,nc),ir=1,nr)
+        case(cr_int2)
+          read(unit=this%iu,pos=p)((this%i2a(ic,ir),ic=1,nc),ir=1,nr)
+        case(cr_int4)
+          read(unit=this%iu,pos=p)((this%i4a(ic,ir),ic=1,nc),ir=1,nr)
+        case(cr_real4)
+          read(unit=this%iu,pos=p)((this%r4a(ic,ir),ic=1,nc),ir=1,nr)
+        case(cr_real8)
+          read(unit=this%iu,pos=p)((this%r8a(ic,ir),ic=1,nc),ir=1,nr)
+        case default
+            call errmsg('Kind of MAP-file not supported.')
+      end select
+        
+      ! set nodata
+      call this%set_nodata()
+      call this%correct_nodata()
+    end if
+    
       
   end subroutine map_read_data
 
@@ -421,7 +582,12 @@ contains
     ! -- dummy
     class(tMap) :: this
     ! -- local
+    integer(i4b) :: nc, nr, ic, ir
+    real(r4b) :: r4huge
+    real(r8b) :: r8huge
 ! ------------------------------------------------------------------------------
+    nc = this%header%nrCols; nr = this%header%nrRows
+    r4huge = huge(r4huge); r8huge = huge(r8huge)
     
     select case(this%header%cellrepr)
     case(cr_uint1)
@@ -432,16 +598,48 @@ contains
         this%i1mv = -128
       case(cr_int2)
         allocate(this%i2mv)
+        this%i2mv = 0
         this%i2mv = -huge(this%i2mv)-1
       case(cr_int4)
         allocate(this%i4mv)
+        this%i4mv = 0
         this%i4mv = -huge(this%i4mv)-1
       case(cr_real4)
         allocate(this%r4mv)
+        this%r4mv = 0
         this%r4mv = huge(this%r4mv)
+        do ir = 1, nr
+          do ic = 1, nc
+            if (ieee_is_nan(this%r4a(ic,ir))) then
+              this%r4a(ic,ir) = this%r4mv
+            end if
+            if (.not.ieee_is_finite(this%r4a(ic,ir))) then
+              if (this%r4a(ic,ir) > 0) then
+                this%r4a(ic,ir) = r4huge
+              else
+                this%r4a(ic,ir) = -r4huge
+              end if
+            end if
+          end do
+        end do
       case(cr_real8)
         allocate(this%r8mv)
+        this%r8mv = 0
         this%r8mv = huge(this%r8mv)
+        do ir = 1, nr
+          do ic = 1, nc
+            if (ieee_is_nan(this%r8a(ic,ir))) then
+              this%r8a(ic,ir) = this%r8mv
+            end if
+            if (.not.ieee_is_finite(this%r8a(ic,ir))) then
+              if (this%r8a(ic,ir) > 0) then
+                this%r8a(ic,ir) = r8huge
+              else
+                this%r8a(ic,ir) = -r8huge
+              end if
+            end if
+          end do
+        end do
     end select 
    
   end subroutine map_set_nodata
@@ -800,9 +998,14 @@ contains
     ! close the file
     write(*,*) 'Cleaning map-file data structures...'
     call this%close()
+    if (associated(this%f))      deallocate(this%f)
     if (associated(this%iu))     deallocate(this%iu)
     if (associated(this%header)) deallocate(this%header)
-    
+    if (associated(this%gic0))  deallocate(this%gic0)
+    if (associated(this%gic1))  deallocate(this%gic1)
+    if (associated(this%gir0))  deallocate(this%gir0)
+    if (associated(this%gir1))  deallocate(this%gir1)
+    !
     call this%clean_data()
     
   end subroutine map_clean
@@ -957,57 +1160,6 @@ contains
       end do
     end do
   
-  end subroutine map_readblock_i1
-  
-!  function getrval(this,irow,icol) result(rval)
-!! ******************************************************************************
-!! ******************************************************************************
-!!
-!!    SPECIFICATIONS:
-!! ------------------------------------------------------------------------------
-!  ! -- modules
-!  use ieee_arithmetic 
-!  ! -- dummy
-!  class(tMap) :: this
-!  integer,intent(in) :: irow,icol
-!  ! locals
-!  integer :: p, n
-!  integer(kind=1) :: i1
-!  integer(kind=2) :: i2
-!  integer(kind=4) :: i4
-!  real :: r4
-!  double precision :: r8
-!! ------------------------------------------------------------------------------
-!  
-!  p = 256+1; n = (irow-1)*idf%ncol+icol-1
-!  
-!  ! stream mode reading byte by byte
-!  select case(idf%maphdr%cellrepr)
-!  case(cr_int1)
-!     read(unit=idf%iu,pos=p+n) i1
-!     mapgetval = real(i1)
-!  case(cr_int2)
-!     read(unit=idf%iu,pos=p+2*n) i2
-!     mapgetval = real(i2)
-!  case(cr_int4)
-!     read(unit=idf%iu,pos=p+4*n) i4
-!     mapgetval = real(i4)
-!  case(cr_real4)
-!     read(unit=idf%iu,pos=p+4*n) r4
-!     if (ieee_is_nan(r4)) then
-!        mapgetval = idf%nodata    
-!     else
-!        mapgetval = r4
-!     end if   
-!  case(cr_real8)
-!     read(unit=idf%iu,pos=p+8*n) r8
-!     if (ieee_is_nan(r8)) then
-!        mapgetval = idf%nodata    
-!     else
-!        mapgetval = real(r8)
-!     end if   
-!  end select 
-!  
-!  end function mapgetval
+  end subroutine map_readblock_i1  
  
 end module pcrModule
