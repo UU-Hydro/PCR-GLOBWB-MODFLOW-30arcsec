@@ -1,14 +1,15 @@
 program maprcb
   ! modules
   use pcrModule
-  use utilsmod, only: primefactors, rcb, getdigits, writeasc, writeidf
+  use utilsmod, only: getdigits, writeasc, writeidf
+  use rcbmod, only: primefactors, rcb
 
   implicit none
   
   type(tMap), pointer :: map
   logical :: ok
   character(len=1024) :: f, s, fmt
-  integer :: np, iverb, maxlev, ilev, iproc, ncol, nrow, icol, irow, n, nr, nc
+  integer :: np, iverb, maxlev, ilev, iproc, ncol, nrow, icol, irow, n, nr, nc, maxnodes
   integer :: ic0 ,ic1, ir0, ir1, jc0 , jc1, jr0, jr1, lun, i
   integer(kind=8) :: m
   integer, dimension(:), allocatable :: ncut, proc_icolmin, proc_icolmax, proc_irowmin, proc_irowmax
@@ -18,6 +19,7 @@ program maprcb
   double precision :: xul, yul, xmin, xmax, ymin, ymax, cs, dxmin, dxmax, dymin, dymax
   logical, parameter :: lround = .true.
   character(len=1024), dimension(10) :: sa
+  integer, parameter :: maxnp = 1000
   
   call getarg(1,f)
   call getarg(2,s); read(s,*) np
@@ -48,8 +50,17 @@ program maprcb
   end do
   nodata = 0.0
   
-  allocate(ncut(np/2))
-  call primefactors(np, ncut, maxlev)
+  if (.false.) then
+    allocate(ncut(np/2))
+    call primefactors(np, ncut, maxlev)
+    maxnodes = 0
+  else
+    maxlev = 50
+    allocate(ncut(maxlev))
+    ncut = 2
+    maxnodes = nrow*ncol / np
+    np = maxnp
+  end if
   
   ilev   = 0
   iproc  = 0
@@ -59,7 +70,8 @@ program maprcb
   write(*,*) 'Calling RCB...'
   call rcb(loadptr, nodata, ncol, nrow, 1, ncol, 1, nrow, ilev, maxlev, &
            iproc, np, proc_icolmin, proc_icolmax, proc_irowmin, proc_irowmax, &
-           ncut)
+           ncut, maxnodes)
+  np = iproc
   write(*,*) 'Done RCB...'
   
   ! round coordinates to whole numbers
@@ -92,10 +104,11 @@ program maprcb
   m = np; n = getdigits(m)
 
   ! write information
-  write(fmt,'(2(a,i),a)') '(i',n,'.',n,')'
-  write(f,fmt) np
-  write(*,*) 'Writing '//trim(f)//'.txt...'
-  open(file=trim(f)//'.txt', newunit=lun, status='replace')
+  !write(fmt,'(2(a,i),a)') '(i',n,'.',n,')'
+  !write(f,fmt) np
+  !write(*,*) 'Writing '//trim(f)//'.txt...'
+  !open(file=trim(f)//'.txt', newunit=lun, status='replace')
+  open(file='part.txt', newunit=lun, status='replace')
   write(sa(1),*) np
   write(sa(2),*) ncol
   write(sa(3),*) nrow
@@ -140,5 +153,5 @@ program maprcb
       xmin, ymin, cs, 0.D0)
     deallocate(wrk)
   end do
-  
+
 end program

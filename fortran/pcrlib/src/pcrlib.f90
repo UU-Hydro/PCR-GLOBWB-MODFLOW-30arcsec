@@ -1,14 +1,30 @@
 module pcrModule
   ! modules
   use, intrinsic :: iso_fortran_env , only: error_unit, output_unit, &
-    i1b => int8, i2b => int16, i4b => int32, r4b => real32, r8b => real64
+    i1b => int8, i2b => int16, i4b => int32, i8b => int64, r4b => real32, r8b => real64
   use ieee_arithmetic 
   use utilsmod
   
   implicit none
   
   private
-  public :: i1b, i2b, i4b, r4b, r8b
+
+  public :: i1b, i2b, i4b, i8b, r4b, r8b
+  
+  integer(i1b), parameter :: jsw = 1
+  integer(i1b), parameter :: js  = 2
+  integer(i1b), parameter :: jse = 3
+  integer(i1b), parameter :: jw  = 4
+  integer(i1b), parameter :: jp  = 5
+  integer(i1b), parameter :: je  = 6
+  integer(i1b), parameter :: jnw = 7
+  integer(i1b), parameter :: jn  = 8
+  integer(i1b), parameter :: jne = 9
+  integer(i4b), dimension(2,9), parameter :: st = (/ -1,  1, 0,  1, 1,  1, &
+                                                     -1,  0, 0,  0, 1,  0, &
+                                                     -1, -1, 0, -1, 1, -1 /)
+  integer(i4b), dimension(9) :: jperm = (/ 9, 8, 7, 6, 5, 4, 3, 2, 1 /)
+  public :: jsw, js, jse, jw, jp, je, jnw, jn, jne, st, jperm 
 
   integer, parameter :: cr_int1  = 1 ! 4
   integer, parameter :: cr_int2  = 2 ! 21
@@ -110,11 +126,19 @@ module pcrModule
     procedure :: write_header => map_write_header
     procedure :: write_data   => map_write_data
     procedure :: set_nodata   => map_set_nodata
+    procedure :: correct_nodata  => map_correct_nodata
     procedure :: close        => map_close
     procedure :: clean        => map_clean
     procedure :: clean_data   => map_clean_data
     procedure :: idf_export   => map_idf_export
+    procedure :: get_i1ar     => map_get_i1ar
     procedure :: get_r4ar     => map_get_r4ar
+    generic   :: get_val      => map_geti1val, map_getr4val
+    procedure :: map_geti1val
+    procedure :: map_getr4val
+    generic   :: read_block   => map_readblock_i1 !, map_readblock_r4
+    procedure :: map_readblock_i1
+    !procedure :: map_readblock_r4
   end type tMap
   public :: tMap
   
@@ -351,6 +375,7 @@ contains
           call errmsg('Kind of MAP-file not supported.')
     end select 
     call this%set_nodata()
+    call this%correct_nodata()
       
   end subroutine map_read_data
 
@@ -396,12 +421,7 @@ contains
     ! -- dummy
     class(tMap) :: this
     ! -- local
-    integer(i4b) :: nc, nr, ic, ir
-    real(r4b) :: r4huge
-    real(r8b) :: r8huge
 ! ------------------------------------------------------------------------------
-    nc = this%header%nrCols; nr = this%header%nrRows
-    r4huge = huge(r4huge); r8huge = huge(r8huge)
     
     select case(this%header%cellrepr)
     case(cr_uint1)
@@ -412,16 +432,38 @@ contains
         this%i1mv = -128
       case(cr_int2)
         allocate(this%i2mv)
-        this%i2mv = 0
         this%i2mv = -huge(this%i2mv)-1
       case(cr_int4)
         allocate(this%i4mv)
-        this%i4mv = 0
         this%i4mv = -huge(this%i4mv)-1
       case(cr_real4)
         allocate(this%r4mv)
-        this%r4mv = 0
         this%r4mv = huge(this%r4mv)
+      case(cr_real8)
+        allocate(this%r8mv)
+        this%r8mv = huge(this%r8mv)
+    end select 
+   
+  end subroutine map_set_nodata
+  
+  subroutine map_correct_nodata(this)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+    ! -- dummy
+    class(tMap) :: this
+    ! -- local
+    integer(i4b) :: nc, nr, ic, ir
+    real(r4b) :: r4huge
+    real(r8b) :: r8huge
+! ------------------------------------------------------------------------------
+    nc = this%header%nrCols; nr = this%header%nrRows
+    r4huge = huge(r4huge); r8huge = huge(r8huge)
+    
+    select case(this%header%cellrepr)
+      case(cr_real4)
         do ir = 1, nr
           do ic = 1, nc
             if (ieee_is_nan(this%r4a(ic,ir))) then
@@ -437,9 +479,6 @@ contains
           end do
         end do
       case(cr_real8)
-        allocate(this%r8mv)
-        this%r8mv = 0
-        this%r8mv = huge(this%r8mv)
         do ir = 1, nr
           do ic = 1, nc
             if (ieee_is_nan(this%r8a(ic,ir))) then
@@ -456,7 +495,104 @@ contains
         end do
     end select 
    
-  end subroutine map_set_nodata
+  end subroutine map_correct_nodata
+  
+  subroutine map_get_i1ar(this, i1a, i1mv, i1min, i1max)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+    ! -- dummy
+    class(tMap) :: this
+    integer(i1b), dimension(:,:), allocatable, intent(out) :: i1a
+    integer(i1b), intent(out) :: i1mv, i1min, i1max
+    ! -- local
+    integer(i4b) :: nc, nr, ic, ir
+    !
+    integer(i1b) :: vi1
+    integer(i2b) :: vi2
+    integer(i4b) :: vi4
+    real(r4b)   :: vr4
+    real(r8b)   :: vr8
+! ------------------------------------------------------------------------------
+  
+    ! set nodata value
+    i1min = huge(1)
+    i1max = -i1min
+    
+    ! allocate
+    nc = this%header%nrCols; nr = this%header%nrRows
+    if (allocated(i1a)) deallocate(i1a)
+    allocate(i1a(nc,nr))
+    
+    ! set the array
+    select case(this%header%cellrepr)
+      case(cr_uint1,cr_int1)
+        i1mv = int(this%i1mv,i1b)
+        do ir = 1, nr
+          do ic = 1, nc
+            vi1 = this%i1a(ic,ir)
+            i1a(ic,ir) = int(vi1,i1b)
+            if (vi1 /= this%i1mv) then
+              i1min = min(i1min,int(vi1,i1b))
+              i1max = max(i1max,int(vi1,i1b))
+            end if
+          end do
+        end do
+      case(cr_int2)
+        i1mv = int(this%i2mv,i1b)
+        do ir = 1, nr
+          do ic = 1, nc
+            vi2 = this%i2a(ic,ir)
+            i1a(ic,ir) = int(vi2,i1b)
+            if (vi2 /= this%i2mv) then
+              i1min = min(i1min,int(vi2,i1b))
+              i1max = max(i1max,int(vi2,i1b))
+            end if
+          end do
+        end do
+      case(cr_int4)
+        i1mv = int(this%i4mv,i1b)
+        do ir = 1, nr
+          do ic = 1, nc
+            vi4 = this%i4a(ic,ir)
+            i1a(ic,ir) = int(vi4,i1b)
+            if (vi4 /= this%i4mv) then
+              i1min = min(i1min,int(vi4,i1b))
+              i1max = max(i1max,int(vi4,i1b))
+            end if
+          end do
+        end do
+      case(cr_real4)
+        i1mv = int(this%r4mv,i1b)
+        do ir = 1, nr
+          do ic = 1, nc
+            vr4 = this%r4a(ic,ir)
+            i1a(ic,ir) = int(vr4,i1b)
+            if (vr4 /= this%r4mv) then
+              i1min = min(i1min,int(vr4,i1b))
+              i1max = max(i1max,int(vr4,i1b))
+            end if
+          end do
+        end do
+      case(cr_real8)
+        i1mv = int(this%r8mv,i1b)
+        do ir = 1, nr
+          do ic = 1, nc
+            vr8 = this%r8a(ic,ir)
+            i1a(ic,ir) = int(vr8,i1b)
+            if (vr8 /= this%r8mv) then
+              i1min = min(i1min,int(vr8,i1b))
+              i1max = max(i1max,int(vr8,i1b))
+            end if
+          end do
+        end do
+      case default
+          call errmsg('Kind of MAP-file not supported.')
+    end select 
+    
+  end subroutine map_get_i1ar
   
   subroutine map_get_r4ar(this, r4a, r4mv, r4min, r4max)
 ! ******************************************************************************
@@ -479,8 +615,8 @@ contains
 ! ------------------------------------------------------------------------------
   
     ! set nodata value
-    r4min = 1e10
-    r4max = -1e10
+    r4min = huge(1.)
+    r4max = -r4min
     
     ! allocate
     nc = this%header%nrCols; nr = this%header%nrRows
@@ -489,8 +625,8 @@ contains
     
     ! set the array
     select case(this%header%cellrepr)
-      case(cr_uint1,cr_int1)
-        r4mv = int(this%i1mv,i1b)
+      case(cr_uint1, cr_int1)
+        r4mv = real(this%i1mv,r4b)
         do ir = 1, nr
           do ic = 1, nc
             vi1 = this%i1a(ic,ir)
@@ -502,7 +638,7 @@ contains
           end do
         end do
       case(cr_int2)
-        r4mv = int(this%i2mv,i2b)
+        r4mv = real(this%i2mv,r4b)
         do ir = 1, nr
           do ic = 1, nc
             vi2 = this%i2a(ic,ir)
@@ -514,7 +650,7 @@ contains
           end do
         end do
       case(cr_int4)
-        r4mv = int(this%i4mv,i4b)
+        r4mv = real(this%i4mv,r4b)
         do ir = 1, nr
           do ic = 1, nc
             vi4 = this%i4a(ic,ir)
@@ -538,7 +674,7 @@ contains
           end do
         end do
       case(cr_real8)
-        r4mv = real(this%r8mv,r8b)
+        r4mv = real(this%r8mv,r4b)
         do ir = 1, nr
           do ic = 1, nc
             vr8 = this%r8a(ic,ir)
@@ -670,6 +806,158 @@ contains
     call this%clean_data()
     
   end subroutine map_clean
+  
+  subroutine map_geti1val(this, icol, irow, i1val, i1mv)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+    ! -- modules
+    use ieee_arithmetic 
+    ! -- dummy
+    class(tMap) :: this
+    integer(i4b), intent(in) :: icol
+    integer(i4b), intent(in) :: irow
+    integer(i1b), intent(out) :: i1val
+    integer(i1b), intent(out) :: i1mv
+    ! -- local
+    integer(i1b) :: vi1
+    integer(i2b) :: vi2
+    integer(i4b) :: vi4
+    real(r4b)   :: vr4
+    real(r8b)   :: vr8
+    character(len=1) :: wrk
+    integer(i4b) :: p, n
+! ------------------------------------------------------------------------------
+    p = 256+1
+    n = (irow-1)*this%header%nrcols + icol - 1
+  
+    select case(this%header%cellrepr)
+      case(cr_uint1, cr_int1)
+        read(unit=this%iu,pos=p+n) wrk
+        vi1 = ichar(wrk)
+        i1val = int(vi1,i1b); i1mv = int(this%i1mv, i1b)
+      case(cr_int2)
+        read(unit=this%iu,pos=p+2*n) vi2
+        i1val = int(vi2,i1b); i1mv = int(this%i2mv, i1b)
+      case(cr_int4)
+        read(unit=this%iu,pos=p+4*n) vi4
+        i1val = int(vi4,i1b); i1mv = int(this%i4mv, i1b)
+      case(cr_real4)
+        read(unit=this%iu,pos=p+4*n) vr4
+        if (ieee_is_nan(vr4)) then
+          i1val = int(this%r4mv, i1b)
+        else
+          i1val = int(vr4,i1b)
+        end if
+        i1mv = int(this%r4mv, i1b)
+      case(cr_real8)
+        read(unit=this%iu,pos=p+8*n) vr8
+        if (ieee_is_nan(vr8)) then
+          i1val = int(this%r8mv,i1b)
+        else
+          i1val = int(vr8,i1b)
+        end if
+        i1mv = int(this%r8mv, i1b)
+      case default
+        call errmsg('Kind of MAP-file not supported.')
+      end select 
+
+  end subroutine map_geti1val
+  
+  subroutine map_getr4val(this, icol, irow, r4val, r4mv)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+    ! -- modules
+    ! -- dummy
+    class(tMap) :: this
+    integer(i4b), intent(in) :: icol
+    integer(i4b), intent(in) :: irow
+    real(r4b), intent(out) :: r4val
+    real(r4b), intent(out) :: r4mv
+    ! -- local
+    integer(i1b) :: vi1
+    integer(i2b) :: vi2
+    integer(i4b) :: vi4
+    real(r4b)   :: vr4
+    real(r8b)   :: vr8
+    character(len=1) :: wrk
+    integer(i4b) :: p, n
+! ------------------------------------------------------------------------------
+    p = 256+1
+    n = (irow-1)*this%header%nrcols + icol - 1
+  
+    select case(this%header%cellrepr)
+      case(cr_uint1, cr_int1)
+        read(unit=this%iu,pos=p+n) wrk
+        vi1 = ichar(wrk)
+        r4val = real(vi1,r4b)
+      case(cr_int2)
+        read(unit=this%iu,pos=p+2*n) vi2
+        r4val = real(vi2,r4b)
+      case(cr_int4)
+        read(unit=this%iu,pos=p+4*n) vi4
+        r4val = real(vi4,r4b)
+      case(cr_real4)
+        read(unit=this%iu,pos=p+4*n) vr4
+        if (ieee_is_nan(vr4)) then
+          r4val = this%r4mv
+        else
+          r4val = real(vr4,r4b)
+        end if
+      case(cr_real8)
+        read(unit=this%iu,pos=p+8*n) vr8
+        if (ieee_is_nan(vr8)) then
+          r4val = real(this%r8mv,r4b)
+        else
+          r4val = real(vr8,r4b)
+        end if
+      case default
+        call errmsg('Kind of MAP-file not supported.')
+      end select 
+
+  end subroutine map_getr4val
+  
+  subroutine map_readblock_i1(this, i1a, ir0, ir1, ic0, ic1, i1mv)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+    ! -- modules
+    ! -- dummy
+    class(tMap) :: this
+    integer(i4b), intent(in) :: ir0
+    integer(i4b), intent(in) :: ir1
+    integer(i4b), intent(in) :: ic0
+    integer(i4b), intent(in) :: ic1
+    integer(i1b), intent(in) :: i1mv
+    integer(i1b), dimension(:,:), allocatable, intent(out) :: i1a
+    ! -- local
+    integer(i1b) :: i1v, i1mv_dat
+    integer(i4b) :: nc, nr, ic, ir, jc, jr
+! ------------------------------------------------------------------------------
+    call this%set_nodata()
+    nr = ir1 - ir0 + 1
+    nc = ic1 - ic0 + 1
+    allocate(i1a(nc,nr))
+    do ir = ir0, ir1
+      do ic = ic0, ic1
+        jc = ic - ic0 + 1; jr = ir - ir0 + 1
+        call this%map_geti1val(ic,ir,i1v,i1mv_dat)
+        if (i1v == i1mv_dat) then
+          i1a(jc,jr) = i1mv
+        else
+          i1a(jc,jr) = i1v
+        end if
+      end do
+    end do
+  
+  end subroutine map_readblock_i1
   
 !  function getrval(this,irow,icol) result(rval)
 !! ******************************************************************************
