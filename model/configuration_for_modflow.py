@@ -22,7 +22,7 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import ConfigParser
+from six.moves.configparser import RawConfigParser as ConfigParser
 import optparse
 import os
 import sys
@@ -83,6 +83,9 @@ class Configuration(object):
         # the default option is offline coupling procedure
         self.online_coupling_between_pcrglobwb_and_modflow = False
 
+        # reportingOptions are taken from 'reportingForModflowOptions
+        if 'reportingForModflowOptions' in self.allSections: self.reportingOptions = self.reportingForModflowOptions
+
         if 'globalMergingAndModflowOptions' in self.allSections:
 
             if 'online_coupling_between_pcrglobwb_and_modflow' in self.globalMergingAndModflowOptions.keys() and\
@@ -113,9 +116,6 @@ class Configuration(object):
                'onlyNaturalWaterBodies' not in self.modflowParameterOptions.keys():
                 self.modflowParameterOptions['onlyNaturalWaterBodies'] = self.routingOptions['onlyNaturalWaterBodies']
 			
-            # reportingOptions are taken from 'reportingForModflowOptions
-            if 'reportingForModflowOptions' in self.allSections: self.reportingOptions = self.reportingForModflowOptions
-
     def set_configuration(self):
 
         # set all paths, clean output when requested
@@ -203,7 +203,7 @@ class Configuration(object):
 
     def parse_configuration_file(self, modelFileName):
 
-        config = ConfigParser.ConfigParser()
+        config = ConfigParser()
         config.optionxform = str
         config.read(modelFileName)
 
@@ -295,6 +295,6 @@ class Configuration(object):
             shutil.rmtree(self.tmp_modflow_dir)
         os.makedirs(self.tmp_modflow_dir)
         #
-        # go to the temporary directory for the modflow calulation (so that all calculation will be saved in that folder)  
-        os.chdir(self.tmp_modflow_dir)
+        # ~ # go to the temporary directory for the modflow calulation (so that all calculation will be saved in that folder)  
+        # ~ os.chdir(self.tmp_modflow_dir)
 

@@ -3,10 +3,10 @@
 #
 # PCR-GLOBWB (PCRaster Global Water Balance) Global Hydrological Model
 #
-# Copyright (C) 2016, Ludovicus P. H. (Rens) van Beek, Edwin H. Sutanudjaja, Yoshihide Wada,
-# Joyce H. C. Bosmans, Niels Drost, Inge E. M. de Graaf, Kor de Jong, Patricia Lopez Lopez,
-# Stefanie Pessenteiner, Oliver Schmitz, Menno W. Straatsma, Niko Wanders, Dominik Wisser,
-# and Marc F. P. Bierkens,
+# Copyright (C) 2016, Edwin H. Sutanudjaja, Rens van Beek, Niko Wanders, Yoshihide Wada, 
+# Joyce H. C. Bosmans, Niels Drost, Ruud J. van der Ent, Inge E. M. de Graaf, Jannis M. Hoch, 
+# Kor de Jong, Derek Karssenberg, Patricia López López, Stefanie Peßenteiner, Oliver Schmitz, 
+# Menno W. Straatsma, Ekkamol Vannametee, Dominik Wisser, and Marc F. P. Bierkens
 # Faculty of Geosciences, Utrecht University, Utrecht, The Netherlands
 #
 # This program is free software: you can redistribute it and/or modify
@@ -127,7 +127,7 @@ class DeterministicRunner(DynamicModel):
                 logger.info(msg)
                 cmd = 'python '+ self.configuration.path_of_this_module + "/merge_pcraster_maps.py " + str(self.modelTime.fulldate) + " " +\
                                                                                                        str(self.configuration.main_output_directory)+"/ maps 8 "+\
-                                                                                                       str("Global")
+                                                                                                       str(self.configuration.globalOptions['cloneAreas'])
                 vos.cmd_line(cmd, using_subprocess = False)
                 
                 # cleaning up unmerged files (not tested yet)
@@ -136,7 +136,7 @@ class DeterministicRunner(DynamicModel):
                 if clean_up_pcraster_maps:                                                                                    
                     files_to_be_removed = glob.glob(str(self.configuration.main_output_directory) + "/M*/maps/*" + str(self.modelTime.fulldate) + "*")
                     for f in files_to_be_removed: 
-                        print f
+                        print(f)
                         os.remove(f)
 
                 # update MODFLOW model (It will pick up current model time from the modelTime object)
@@ -152,7 +152,7 @@ class DeterministicRunner(DynamicModel):
             logger.info(msg)
             cmd = 'python '+ self.configuration.path_of_this_module + "/merge_pcraster_maps.py " + str(self.modelTime.fulldate) + " " +\
                                                                                                    str(self.configuration.main_output_directory)+"/ states 8 "+\
-                                                                                                   str("Global")
+                                                                                                   str(self.configuration.globalOptions['cloneAreas'])
             vos.cmd_line(cmd, using_subprocess = False)
             
             # cleaning up unmerged files (not tested yet)
@@ -161,7 +161,7 @@ class DeterministicRunner(DynamicModel):
             if clean_up_pcraster_maps:                                                                                    
                 files_to_be_removed = glob.glob(str(self.configuration.main_output_directory) + "/M*/states/*" + str(self.modelTime.fulldate) + "*")
                 for f in files_to_be_removed:
-                    print f
+                    print(f)
                     os.remove(f)
 
 
@@ -211,8 +211,17 @@ class DeterministicRunner(DynamicModel):
                                                                                             str(self.netcdf_format)  + " "  +\
                                                                                             str(self.zlib_option  )  + " "  +\
                                                                                             str(max_number_of_cores) + " "  +\
-                                                                                            str("Global")  + " "
-            
+                                                                                            str(self.configuration.globalOptions['cloneAreas'])  + " "
+            # - extent of merged maps
+            mapattr_of_merged_map = vos.getMapAttributesALL(self.configuration.globalMergingAndModflowOptions['cloneMap'])
+            cell_length_in_arc_second = round(mapattr_of_merged_map['cellsize'] * 3600.)        
+            latlon_box_and_cell_length_in_arc_second = str(round(mapattr_of_merged_map['xUL'])) + "," + \
+                                                       str(round(mapattr_of_merged_map['yUL'] - mapattr_of_merged_map['rows'] * mapattr_of_merged_map['cellsize']))  + "," + \
+                                                       str(round(mapattr_of_merged_map['xUL'] + mapattr_of_merged_map['cols'] * mapattr_of_merged_map['cellsize']))  + "," + \
+                                                       str(round(mapattr_of_merged_map['yUL']))  + " " + \
+                                                       str(cell_length_in_arc_second)
+            cmd = cmd + latlon_box_and_cell_length_in_arc_second
+
             msg = "Using the following command line: " + cmd
             logger.info(msg)
             
@@ -236,7 +245,7 @@ class DeterministicRunner(DynamicModel):
             if status == False: return status
             if status: self.count_check = 0            
                     
-        print status
+        print(status)
         
         return status
 

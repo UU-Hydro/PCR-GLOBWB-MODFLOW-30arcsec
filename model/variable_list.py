@@ -3,10 +3,10 @@
 #
 # PCR-GLOBWB (PCRaster Global Water Balance) Global Hydrological Model
 #
-# Copyright (C) 2016, Ludovicus P. H. (Rens) van Beek, Edwin H. Sutanudjaja, Yoshihide Wada,
-# Joyce H. C. Bosmans, Niels Drost, Inge E. M. de Graaf, Kor de Jong, Patricia Lopez Lopez,
-# Stefanie Pessenteiner, Oliver Schmitz, Menno W. Straatsma, Niko Wanders, Dominik Wisser,
-# and Marc F. P. Bierkens,
+# Copyright (C) 2016, Edwin H. Sutanudjaja, Rens van Beek, Niko Wanders, Yoshihide Wada, 
+# Joyce H. C. Bosmans, Niels Drost, Ruud J. van der Ent, Inge E. M. de Graaf, Jannis M. Hoch, 
+# Kor de Jong, Derek Karssenberg, Patricia López López, Stefanie Peßenteiner, Oliver Schmitz, 
+# Menno W. Straatsma, Ekkamol Vannametee, Dominik Wisser, and Marc F. P. Bierkens
 # Faculty of Geosciences, Utrecht University, Utrecht, The Netherlands
 #
 # This program is free software: you can redistribute it and/or modify
@@ -369,7 +369,7 @@ netcdf_monthly_total_unit[pcrglobwb_variable_name] = 'm.month-1'
 netcdf_yearly_total_unit[pcrglobwb_variable_name]  = 'm.year-1'
 netcdf_long_name[pcrglobwb_variable_name]  = None
 description[pcrglobwb_variable_name]       = None
-comment[pcrglobwb_variable_name]           = "negative values indicating (net) capillary rise from groundater store"
+comment[pcrglobwb_variable_name]           = "negative values indicating (net) capillary rise from groundater store ; not including infiltration from surface water bodies"
 latex_symbol[pcrglobwb_variable_name]      = None
 pcr_short_name[pcrglobwb_variable_name]    = "rch"
 
@@ -383,6 +383,18 @@ netcdf_long_name[pcrglobwb_variable_name]  = None
 description[pcrglobwb_variable_name]       = None
 comment[pcrglobwb_variable_name]           = "values (positive) indicating (net) capillary rise from groundater store; only positive values given to the field."
 latex_symbol[pcrglobwb_variable_name]      = None
+
+# totalGroundwaterRecharge                      
+pcrglobwb_variable_name = 'totalGroundwaterRecharge'
+netcdf_short_name[pcrglobwb_variable_name] = 'total_groundwater_recharge'
+netcdf_unit[pcrglobwb_variable_name]       = 'm.day-1'
+netcdf_monthly_total_unit[pcrglobwb_variable_name] = 'm.month-1' 
+netcdf_yearly_total_unit[pcrglobwb_variable_name]  = 'm.year-1'
+netcdf_long_name[pcrglobwb_variable_name]  = None
+description[pcrglobwb_variable_name]       = None
+comment[pcrglobwb_variable_name]           = "nncluding "
+latex_symbol[pcrglobwb_variable_name]      = None
+pcr_short_name[pcrglobwb_variable_name]    = None
 
 # irrGrossDemand                  
 pcrglobwb_variable_name = 'irrGrossDemand'
@@ -660,6 +672,17 @@ description[pcrglobwb_variable_name]       = None
 comment[pcrglobwb_variable_name]           = "All values must be equal to 1. Otherwise, water balance errors."
 latex_symbol[pcrglobwb_variable_name]      = None
 
+# fracDesalinatedWaterAllocation
+pcrglobwb_variable_name = 'desalinationAllocation'
+netcdf_short_name[pcrglobwb_variable_name] = 'desalinated_water_allocation'
+netcdf_unit[pcrglobwb_variable_name]       = 'm'
+netcdf_monthly_total_unit[pcrglobwb_variable_name] = 'm' 
+netcdf_yearly_total_unit[pcrglobwb_variable_name]  = 'm'
+netcdf_long_name[pcrglobwb_variable_name]  = None
+description[pcrglobwb_variable_name]       = None
+comment[pcrglobwb_variable_name]           = None
+latex_symbol[pcrglobwb_variable_name]      = None
+
 # waterBodyActEvaporation
 pcrglobwb_variable_name = 'waterBodyActEvaporation'
 netcdf_short_name[pcrglobwb_variable_name] = 'water_body_actual_evaporation'
@@ -696,6 +719,17 @@ latex_symbol[pcrglobwb_variable_name]      = None
 # totalEvaporation
 pcrglobwb_variable_name = 'totalEvaporation'
 netcdf_short_name[pcrglobwb_variable_name] = 'total_evaporation'
+netcdf_unit[pcrglobwb_variable_name]       = 'm.day-1'
+netcdf_monthly_total_unit[pcrglobwb_variable_name] = 'm.month-1' 
+netcdf_yearly_total_unit[pcrglobwb_variable_name]  = 'm.year-1'
+netcdf_long_name[pcrglobwb_variable_name]  = None
+description[pcrglobwb_variable_name]       = None
+comment[pcrglobwb_variable_name]           = 'Including from water bodies.'
+latex_symbol[pcrglobwb_variable_name]      = None
+
+# totalPotentialEvaporation
+pcrglobwb_variable_name = 'totalPotentialEvaporation'
+netcdf_short_name[pcrglobwb_variable_name] = 'total_potential_evaporation'
 netcdf_unit[pcrglobwb_variable_name]       = 'm.day-1'
 netcdf_monthly_total_unit[pcrglobwb_variable_name] = 'm.month-1' 
 netcdf_yearly_total_unit[pcrglobwb_variable_name]  = 'm.year-1'
@@ -1290,6 +1324,17 @@ latex_symbol[pcrglobwb_variable_name]      = None
 
 # precipitation_at_irrigation
 pcrglobwb_variable_name = 'precipitation_at_irrigation'
+netcdf_short_name[pcrglobwb_variable_name] = pcrglobwb_variable_name
+netcdf_unit[pcrglobwb_variable_name]       = 'm.day-1'
+netcdf_monthly_total_unit[pcrglobwb_variable_name] = 'm.month-1' 
+netcdf_yearly_total_unit[pcrglobwb_variable_name]  = 'm.year-1'
+netcdf_long_name[pcrglobwb_variable_name]  = None
+description[pcrglobwb_variable_name]       = None
+comment[pcrglobwb_variable_name]           = 'Flux values given are over the entire cell area (not only irrigation fraction).'
+latex_symbol[pcrglobwb_variable_name]      = None
+
+# potential_evaporation_from_irrigation
+pcrglobwb_variable_name = 'potential_evaporation_from_irrigation'
 netcdf_short_name[pcrglobwb_variable_name] = pcrglobwb_variable_name
 netcdf_unit[pcrglobwb_variable_name]       = 'm.day-1'
 netcdf_monthly_total_unit[pcrglobwb_variable_name] = 'm.month-1' 

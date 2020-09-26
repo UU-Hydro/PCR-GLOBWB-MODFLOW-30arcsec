@@ -3,10 +3,10 @@
 #
 # PCR-GLOBWB (PCRaster Global Water Balance) Global Hydrological Model
 #
-# Copyright (C) 2016, Ludovicus P. H. (Rens) van Beek, Edwin H. Sutanudjaja, Yoshihide Wada,
-# Joyce H. C. Bosmans, Niels Drost, Inge E. M. de Graaf, Kor de Jong, Patricia Lopez Lopez,
-# Stefanie Pessenteiner, Oliver Schmitz, Menno W. Straatsma, Niko Wanders, Dominik Wisser,
-# and Marc F. P. Bierkens,
+# Copyright (C) 2016, Edwin H. Sutanudjaja, Rens van Beek, Niko Wanders, Yoshihide Wada, 
+# Joyce H. C. Bosmans, Niels Drost, Ruud J. van der Ent, Inge E. M. de Graaf, Jannis M. Hoch, 
+# Kor de Jong, Derek Karssenberg, Patricia López López, Stefanie Peßenteiner, Oliver Schmitz, 
+# Menno W. Straatsma, Ekkamol Vannametee, Dominik Wisser, and Marc F. P. Bierkens
 # Faculty of Geosciences, Utrecht University, Utrecht, The Netherlands
 #
 # This program is free software: you can redistribute it and/or modify
@@ -48,7 +48,7 @@ class WaterBodies(object):
         self.iniItems = iniItems
                 
         # local drainage direction:
-        if isinstance(lddMap, types.NoneType):
+        if lddMap is None:
             self.lddMap = vos.readPCRmapClone(iniItems.routingOptions['lddMap'],
                                                   self.cloneMap,self.tmpDir,self.inputDir,True)
             self.lddMap = pcr.lddrepair(pcr.ldd(self.lddMap))
@@ -57,19 +57,19 @@ class WaterBodies(object):
             self.lddMap = lddMap
 
         # the following is needed for a modflowOfflineCoupling run
-        if 'modflowOfflineCoupling' in iniItems.globalOptions.keys() and iniItems.globalOptions['modflowOfflineCoupling'] == "True" and 'routingOptions' not in iniItems.allSections: 
+        if 'modflowOfflineCoupling' in list(iniItems.globalOptions.keys()) and iniItems.globalOptions['modflowOfflineCoupling'] == "True" and 'routingOptions' not in iniItems.allSections: 
             logger.info("The 'routingOptions' are not defined in the configuration ini file. We will adopt them from the 'modflowParameterOptions'.")
             iniItems.routingOptions = iniItems.modflowParameterOptions
 
 
         # option to activate water balance check
         self.debugWaterBalance = True
-        if 'debugWaterBalance' in iniItems.routingOptions.keys() and iniItems.routingOptions['debugWaterBalance'] == "False":
+        if 'debugWaterBalance' in list(iniItems.routingOptions.keys()) and iniItems.routingOptions['debugWaterBalance'] == "False":
             self.debugWaterBalance = False
         
         # option to perform a run with only natural lakes (without reservoirs)
         self.onlyNaturalWaterBodies = onlyNaturalWaterBodies
-        if "onlyNaturalWaterBodies" in iniItems.routingOptions.keys() and iniItems.routingOptions['onlyNaturalWaterBodies'] == "True":
+        if "onlyNaturalWaterBodies" in list(iniItems.routingOptions.keys()) and iniItems.routingOptions['onlyNaturalWaterBodies'] == "True":
             logger.info("Using only natural water bodies identified in the year 1900. All reservoirs in 1900 are assumed as lakes.")
             self.onlyNaturalWaterBodies  = True
             self.dateForNaturalCondition = "1900-01-01"                  # The run for a natural condition should access only this date.   
@@ -97,11 +97,11 @@ class WaterBodies(object):
         self.minResvrFrac = 0.10
         self.maxResvrFrac = 0.75
         # - from the ini file
-        if "minResvrFrac" in iniItems.routingOptions.keys():
+        if "minResvrFrac" in list(iniItems.routingOptions.keys()):
             minResvrFrac = iniItems.routingOptions['minResvrFrac']
             self.minResvrFrac = vos.readPCRmapClone(minResvrFrac,
                                                     self.cloneMap, self.tmpDir, self.inputDir)
-        if "maxResvrFrac" in iniItems.routingOptions.keys():
+        if "maxResvrFrac" in list(iniItems.routingOptions.keys()):
             maxResvrFrac = iniItems.routingOptions['maxResvrFrac']
             self.maxResvrFrac = vos.readPCRmapClone(maxResvrFrac,
                                                     self.cloneMap, self.tmpDir, self.inputDir)
@@ -354,8 +354,8 @@ class WaterBodies(object):
 
         avgInflow  = initial_condition['avgLakeReservoirInflowShort']  
         avgOutflow = initial_condition['avgLakeReservoirOutflowLong'] 
-        #
-        if not isinstance(initial_condition['waterBodyStorage'],types.NoneType):
+
+        if initial_condition['waterBodyStorage'] is not None:
             # read directly 
             waterBodyStorage = initial_condition['waterBodyStorage']
         else:
@@ -416,6 +416,10 @@ class WaterBodies(object):
                                    'WaterBodyStorage (unit: m)',\
                                   True,\
                                   currTimeStep.fulldate,threshold=5e-3)
+        
+        self.waterBodyBalance = (pcr.cover(self.inflow/self.waterBodyArea, 0.0) - pcr.cover(self.waterBodyOutflow/self.waterBodyArea,0.0)) -\
+                                (pcr.cover(self.waterBodyStorage/self.waterBodyArea,0.0) - pcr.cover(preStorage/self.waterBodyArea,0.0))
+                                  
 
     def moveFromChannelToWaterBody(self,\
                                    newStorageAtLakeAndReservoirs,\
@@ -460,7 +464,8 @@ class WaterBodies(object):
         lakeOutflow = self.getLakeOutflow(avgChannelDischarge,length_of_time_step)  
              
         # outflow in volume from water bodies with reservoir type (m3): 
-        if isinstance(downstreamDemand, types.NoneType): downstreamDemand = pcr.scalar(0.0)
+        if downstreamDemand is None:
+            downstreamDemand = pcr.scalar(0.0)
         reservoirOutflow = self.getReservoirOutflow(avgChannelDischarge,length_of_time_step,downstreamDemand)  
 
         # outgoing/release volume from lakes and/or reservoirs
@@ -524,7 +529,7 @@ class WaterBodies(object):
                      avgOutflow > 0.,\
                      avgOutflow,
                      pcr.max(avgChannelDischarge,self.avgInflow,0.001))            # This is needed when new lakes/reservoirs introduced (its avgOutflow is still zero).
-        avgOutflow = pcr.areamaximum(avgOutflow,self.waterBodyIds)             	
+        avgOutflow = pcr.areamaximum(avgOutflow,self.waterBodyIds)              
         #
         bankfullWidth = pcr.cover(\
                         pcr.scalar(4.8) * \
@@ -571,7 +576,7 @@ class WaterBodies(object):
         avgOutflow = pcr.ifthenelse(\
                      avgOutflow > 0.,\
                      avgOutflow, pcr.downstream(self.lddMap, avgOutflow))
-        avgOutflow = pcr.areamaximum(avgOutflow,self.waterBodyIds)             	
+        avgOutflow = pcr.areamaximum(avgOutflow,self.waterBodyIds)              
 
         # calculate resvOutflow (m2/s) (based on reservoir storage and avgDischarge): 
         # - using reductionFactor in such a way that:
