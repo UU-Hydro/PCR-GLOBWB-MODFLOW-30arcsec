@@ -90,14 +90,16 @@ class ModflowCoupling(object):
         # time stamp used as part of the file name:
         if timeStamp == "Default": timeStamp = str(self._modelTime.fulldate) 
         
-        for variable, map in groundWaterState.iteritems():
+        #~ for variable, map in groundWaterState.iteritems():
+        for variable, map in list(groundWaterState.items()):
             vos.writePCRmapToDir(\
              map,\
              str(variable)+"_"+
              timeStamp+".map",\
              outputDirectory)
 
-        for variable, map in groundWaterState.iteritems():
+        #~ for variable, map in groundWaterState.iteritems():
+        for variable, map in list(groundWaterState.items()):
             vos.writePCRmapToDir(\
              pcr.ifthen(self.landmask, map),\
              str(variable)+"_"+
@@ -113,14 +115,16 @@ class ModflowCoupling(object):
         # time stamp used as part of the file name:
         if timeStamp == "Default": timeStamp = str(self._modelTime.fulldate) 
         
-        for variable, map in groundWaterDepth.iteritems():
+        #~ for variable, map in groundWaterDepth.iteritems():
+        for variable, map in list(groundWaterDepth.items()):
             vos.writePCRmapToDir(\
              map,\
              str(variable)+"_"+
              timeStamp+".map",\
              outputDirectory)
 
-        for variable, map in groundWaterDepth.iteritems():
+        #~ for variable, map in groundWaterDepth.iteritems():
+        for variable, map in list(groundWaterDepth.items()):
             vos.writePCRmapToDir(\
              pcr.ifthen(self.landmask, map),\
              str(variable)+"_"+
@@ -134,7 +138,8 @@ class ModflowCoupling(object):
         # time stamp used as part of the file name:
         if timeStamp == "Default": timeStamp = str(self._modelTime.fulldate) 
         
-        for variable, map in variables.iteritems():
+        #~ for variable, map in variables.iteritems():
+        for variable, map in list(variables.items()):
             vos.writePCRmapToDir(\
              map,\
              str(variable)+"_"+

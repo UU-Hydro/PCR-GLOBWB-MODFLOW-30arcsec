@@ -202,7 +202,7 @@ class Groundwater(object):
                                   cloneMapFileName = self.cloneMap)
         except:
             self.recessionCoeff = None
-            msg = "The 'recessionCoeff' cannot be read from the file: "+groundwaterPropertiesNC
+            msg = "The 'recessionCoeff' cannot be read from the file: " + iniItems.groundwaterOptions["groundwaterPropertiesNC"]
             logger.warning(msg)
 
         # assign the reccession coefficient based on the given pcraster file
@@ -236,7 +236,7 @@ class Groundwater(object):
                                                                     self.cloneMap,self.tmpDir,self.inputDir)
 
             # calculate recessionCoeff (unit; day-1)
-            self.recessionCoeff = (math.pi**2.) * aquiferThicknessForRecessionCoeff / \
+            self.recessionCoeff = (math.pi**2.) * aquiferThicknessForRecessionCoeff * self.kSatAquifer/ \
                                   (4.*self.specificYield*(aquiferWidth**2.))
 
             #~ pcr.aguila(self.recessionCoeff)
@@ -258,15 +258,19 @@ class Groundwater(object):
         # assign surface water bed conductivity (unit: m.day-1)
         # - the default value is equal to kSatAquifer
         self.riverBedConductivity = self.kSatAquifer
-        if iniItems.groundwaterOptions['riverBedConductivity'] != "Default":
+        if 'riverBedConductivity' in list(iniItems.groundwaterOptions.keys()) and \
+                                          iniItems.groundwaterOptions['riverBedConductivity'] != "Default":
             self.riverBedConductivity = vos.readPCRmapClone(iniItems.groundwaterOptions['riverBedConductivity'], self.cloneMap, self.tmpDir, self.inputDir)
             self.riverBedConductivity = pcr.ifthen(self.riverBedConductivity > 0.0, self.riverBedConductivity)
             self.riverBedConductivity = pcr.cover(self.riverBedConductivity, pcr.mapminimum(self.riverBedConductivity))
+        else:
+            msg  = 'This run assumes riverBedConductivity = kSatAquifer.'
+            logger.warning(msg)
         #~ pcr.aguila(self.riverBedConductivity)
 
 
         # maximum surface water bed conductivity (unit: m.day-1)
-        if 'maximumRiverBedConductivity' not in iniItems.groundwaterOptions.keys():
+        if 'maximumRiverBedConductivity' not in list(iniItems.groundwaterOptions.keys()):
             msg  = 'The option "maximumRiverBedConductivity" is not defined in the "groundwaterOptions" of the configuration file. '
             msg += 'This run assumes "0.1" (m/day) for this option.'
             logger.warning(msg)
@@ -282,12 +286,22 @@ class Groundwater(object):
         
         
         # assign surface water bed thickness (unit: m)
+        if 'riverBedThickness' not in list(iniItems.groundwaterOptions.keys()):
+            msg  = 'The option "riverBedThickness" is not defined in the "groundwaterOptions" of the configuration file. '
+            msg += 'This run assumes "0.1" (meter) for this option.'
+            logger.warning(msg)
+            iniItems.groundwaterOptions['riverBedThickness'] = "0.1"
         self.riverBedThickness = vos.readPCRmapClone(iniItems.groundwaterOptions['riverBedThickness'], self.cloneMap, self.tmpDir, self.inputDir)
         self.riverBedThickness = pcr.ifthen(self.riverBedThickness > 0.0, self.riverBedThickness)
         self.riverBedThickness = pcr.cover(self.riverBedThickness, pcr.mapminimum(self.riverBedThickness))
         
 
         # assign minimum value surface water bed resistance (unit: day)
+        if 'minimumBedResistance' not in list(iniItems.groundwaterOptions.keys()):
+            msg  = 'The option "minimumBedResistance" is not defined in the "groundwaterOptions" of the configuration file. '
+            msg += 'This run assumes "1.0" (day) for this option.'
+            logger.warning(msg)
+            self.iniItems.groundwaterOptions['minimumBedResistance'] = "1.0"
         minimumBedResistance = vos.readPCRmapClone(iniItems.groundwaterOptions['minimumBedResistance'], self.cloneMap, self.tmpDir, self.inputDir)
         minimumBedResistance = pcr.ifthen(minimumBedResistance > 0.0, minimumBedResistance)
         minimumBedResistance = pcr.cover(minimumBedResistance, pcr.mapminimum(minimumBedResistance))
@@ -389,7 +403,8 @@ class Groundwater(object):
 
         #####################################################################################################################################################
         # estimate of fossil groundwater capacity (based on the aquifer thickness and specific yield)
-        if iniItems.groundwaterOptions['limitFossilGroundWaterAbstraction'] == "True" and self.limitAbstraction == False:
+        if 'limitFossilGroundWaterAbstraction' in list(iniItems.groundwaterOptions.keys()) and\
+           iniItems.groundwaterOptions['limitFossilGroundWaterAbstraction'] == "True" and self.limitAbstraction == False:
 
             logger.info('Fossil groundwater abstractions are allowed with LIMIT.')
 

@@ -3,10 +3,10 @@
 #
 # PCR-GLOBWB (PCRaster Global Water Balance) Global Hydrological Model
 #
-# Copyright (C) 2016, Ludovicus P. H. (Rens) van Beek, Edwin H. Sutanudjaja, Yoshihide Wada,
-# Joyce H. C. Bosmans, Niels Drost, Inge E. M. de Graaf, Kor de Jong, Patricia Lopez Lopez,
-# Stefanie Pessenteiner, Oliver Schmitz, Menno W. Straatsma, Niko Wanders, Dominik Wisser,
-# and Marc F. P. Bierkens,
+# Copyright (C) 2016, Edwin H. Sutanudjaja, Rens van Beek, Niko Wanders, Yoshihide Wada, 
+# Joyce H. C. Bosmans, Niels Drost, Ruud J. van der Ent, Inge E. M. de Graaf, Jannis M. Hoch, 
+# Kor de Jong, Derek Karssenberg, Patricia López López, Stefanie Peßenteiner, Oliver Schmitz, 
+# Menno W. Straatsma, Ekkamol Vannametee, Dominik Wisser, and Marc F. P. Bierkens
 # Faculty of Geosciences, Utrecht University, Utrecht, The Netherlands
 #
 # This program is free software: you can redistribute it and/or modify
@@ -80,10 +80,23 @@ def main():
     if len(sys.argv) > 2: 
         if sys.argv[2] == "debug": debug_mode = True
     
+    # default: using the output_dir as given in the ini file
+    no_modification_to_output_dir = True
+    
+    # use the output directory as given in the system argument
+    if len(sys.argv) > 3 and sys.argv[3] == "--output_dir": 
+        no_modification_to_output_dir = False
+        output_directory = sys.argv[4]
+
     # object to handle configuration/ini file
     configuration = Configuration(iniFileName = iniFileName, \
-                                  debug_mode = debug_mode)      
-
+                                  debug_mode = debug_mode, \
+                                  no_modification = no_modification_to_output_dir)      
+    if no_modification_to_output_dir == False:
+        configuration.main_output_directory = output_directory
+        configuration.globalOptions['outputDir'] = output_directory
+        configuration.set_configuration()
+    
     # timeStep info: year, month, day, doy, hour, etc
     currTimeStep = ModelTime() 
     

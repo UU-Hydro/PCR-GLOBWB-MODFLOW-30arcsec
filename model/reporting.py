@@ -3,10 +3,10 @@
 #
 # PCR-GLOBWB (PCRaster Global Water Balance) Global Hydrological Model
 #
-# Copyright (C) 2016, Ludovicus P. H. (Rens) van Beek, Edwin H. Sutanudjaja, Yoshihide Wada,
-# Joyce H. C. Bosmans, Niels Drost, Inge E. M. de Graaf, Kor de Jong, Patricia Lopez Lopez,
-# Stefanie Pessenteiner, Oliver Schmitz, Menno W. Straatsma, Niko Wanders, Dominik Wisser,
-# and Marc F. P. Bierkens,
+# Copyright (C) 2016, Edwin H. Sutanudjaja, Rens van Beek, Niko Wanders, Yoshihide Wada, 
+# Joyce H. C. Bosmans, Niels Drost, Ruud J. van der Ent, Inge E. M. de Graaf, Jannis M. Hoch, 
+# Kor de Jong, Derek Karssenberg, Patricia López López, Stefanie Peßenteiner, Oliver Schmitz, 
+# Menno W. Straatsma, Ekkamol Vannametee, Dominik Wisser, and Marc F. P. Bierkens
 # Faculty of Geosciences, Utrecht University, Utrecht, The Netherlands
 #
 # This program is free software: you can redistribute it and/or modify
@@ -44,8 +44,6 @@ import pcraster as pcr
 
 from ncConverter import *
 
-from types import NoneType
-
 import variable_list as varDicts
 
 class Reporting(object):
@@ -73,7 +71,7 @@ class Reporting(object):
 
         # object for reporting:
         #RvB 23/02/2017: specific attributes included to allow for multiple netcdfAttributes
-        if 'netcdfAttributesOptions' in vars(self.configuration).keys():
+        if 'netcdfAttributesOptions' in list(vars(self.configuration).keys()):
             logger.info("Passing specific netcdf attributes to the output files created")
             specificAttributeDictionary= self.configuration.netcdfAttributesOptions
         else:
@@ -100,7 +98,7 @@ class Reporting(object):
                 long_name  = varDicts.netcdf_long_name[var]
                 if long_name == None: long_name = short_name
                 standard_name= short_name
-                if var in varDicts.netcdf_standard_name.keys():
+                if var in list(varDicts.netcdf_standard_name.keys()):
                     standard_name= varDicts.netcdf_standard_name[var]
                 
                 # creating netCDF files:
@@ -129,7 +127,7 @@ class Reporting(object):
                 long_name  = varDicts.netcdf_long_name[var]
                 if long_name == None: long_name = short_name
                 standard_name= short_name
-                if var in varDicts.netcdf_standard_name.keys():
+                if var in list(varDicts.netcdf_standard_name.keys()):
                     standard_name= varDicts.netcdf_standard_name[var]
                 
                 # creating netCDF files:
@@ -161,7 +159,7 @@ class Reporting(object):
                 long_name  = varDicts.netcdf_long_name[var]
                 if long_name == None: long_name = short_name
                 standard_name= short_name
-                if var in varDicts.netcdf_standard_name.keys():
+                if var in list(varDicts.netcdf_standard_name.keys()):
                     standard_name= varDicts.netcdf_standard_name[var]
                 
                 # creating netCDF files:
@@ -188,7 +186,7 @@ class Reporting(object):
                 long_name  = varDicts.netcdf_long_name[var]
                 if long_name == None: long_name = short_name
                 standard_name= short_name
-                if var in varDicts.netcdf_standard_name.keys():
+                if var in list(varDicts.netcdf_standard_name.keys()):
                     standard_name= varDicts.netcdf_standard_name[var]
                 
                 # creating netCDF files:
@@ -214,7 +212,7 @@ class Reporting(object):
                 long_name  = varDicts.netcdf_long_name[var]
                 if long_name == None: long_name = short_name
                 standard_name= short_name
-                if var in varDicts.netcdf_standard_name.keys():
+                if var in list(varDicts.netcdf_standard_name.keys()):
                     standard_name= varDicts.netcdf_standard_name[var]
                 
                 # creating netCDF files:
@@ -245,7 +243,7 @@ class Reporting(object):
                 long_name  = varDicts.netcdf_long_name[var]
                 if long_name == None: long_name = short_name
                 standard_name= short_name
-                if var in varDicts.netcdf_standard_name.keys():
+                if var in list(varDicts.netcdf_standard_name.keys()):
                     standard_name= varDicts.netcdf_standard_name[var]
                 
                 # creating netCDF files:
@@ -277,7 +275,7 @@ class Reporting(object):
                 long_name  = varDicts.netcdf_long_name[var]
                 if long_name == None: long_name = short_name
                 standard_name= short_name
-                if var in varDicts.netcdf_standard_name.keys():
+                if var in list(varDicts.netcdf_standard_name.keys()):
                     standard_name= varDicts.netcdf_standard_name[var]
                 
                 # creating netCDF files:
@@ -303,7 +301,7 @@ class Reporting(object):
                 long_name  = varDicts.netcdf_long_name[var]
                 if long_name == None: long_name = short_name
                 standard_name= short_name
-                if var in varDicts.netcdf_standard_name.keys():
+                if var in list(varDicts.netcdf_standard_name.keys()):
                     standard_name= varDicts.netcdf_standard_name[var]
                 
                 # creating netCDF files:
@@ -329,7 +327,7 @@ class Reporting(object):
                 long_name  = varDicts.netcdf_long_name[var]
                 if long_name == None: long_name = short_name
                 standard_name= short_name
-                if var in varDicts.netcdf_standard_name.keys():
+                if var in list(varDicts.netcdf_standard_name.keys()):
                     standard_name= varDicts.netcdf_standard_name[var]
                 
                 # creating netCDF files:
@@ -393,8 +391,8 @@ class Reporting(object):
 
     def report_vegetation_phenology_for_debugging(self):
 
-        # CF_SHORTSTACK = maps\cover_fraction/cv_s;	 # fractional vegetation cover (-) per vegetation type
-        # CF_TALLSTACK  = maps\cover_fraction/cv_t;			
+        # CF_SHORTSTACK = maps\cover_fraction/cv_s;  # fractional vegetation cover (-) per vegetation type
+        # CF_TALLSTACK  = maps\cover_fraction/cv_t;         
         
         # prepare directory
         if self._modelTime.timeStepPCR == 1: 
@@ -455,23 +453,23 @@ class Reporting(object):
 
     def report_static_maps_for_debugging(self):
 
-        # LANDMASK = $1\maps\catclone.map;				                   # clone map representing landmask of earth surface
-        # CELLAREA = $1\maps\cellarea30.map;				               # surface (m2) of cell covered by total land surface
+        # LANDMASK = $1\maps\catclone.map;                                 # clone map representing landmask of earth surface
+        # CELLAREA = $1\maps\cellarea30.map;                               # surface (m2) of cell covered by total land surface
 
         pcr.report(self._model.routing.landmask, self.configuration.mapsDir+"/catclone.map") 
         pcr.report(self._model.routing.cellArea, self.configuration.mapsDir+"/cellarea30.map") 
 
 
-        # LSLOPE   = $1\maps\globalbcat.map;			                   # slope length (m)
-        # TANSLOPE = $1\maps\globalgradslope.map;	                       # gradient of slope (m/m)
-        # B_ORO    = $1\maps\globalboro.map;			                   # shape coefficient related to orography
+        # LSLOPE   = $1\maps\globalbcat.map;                               # slope length (m)
+        # TANSLOPE = $1\maps\globalgradslope.map;                          # gradient of slope (m/m)
+        # B_ORO    = $1\maps\globalboro.map;                               # shape coefficient related to orography
 
         pcr.report(self._model.landSurface.soil_topo_parameters['default'].slopeLength  , self.configuration.mapsDir+"/globalbcat.map") 
         pcr.report(self._model.landSurface.soil_topo_parameters['default'].tanslope     , self.configuration.mapsDir+"/globalgradslope.map") 
         pcr.report(self._model.landSurface.soil_topo_parameters['default'].orographyBeta, self.configuration.mapsDir+"/globalboro.map") 
 
 
-        # LDD      = maps\lddsound_30min.map;			                   # local drainage direction map
+        # LDD      = maps\lddsound_30min.map;                              # local drainage direction map
 
         pcr.report(self._model.routing.lddMap, self.configuration.mapsDir+"/lddsound_30min.map") 
 
@@ -504,32 +502,32 @@ class Reporting(object):
         
         # COVERTYPE = [
         #   SHORT = sv,
-        #   TALL  = tv];							# array of cover type: 1) short, 2) tall
-        # COVERTABLE = maps\param_permafrost.tbl;	# table with parameterization per cover type
+        #   TALL  = tv];                            # array of cover type: 1) short, 2) tall
+        # COVERTABLE = maps\param_permafrost.tbl;   # table with parameterization per cover type
         
-        # VEGFRAC[COVERTYPE] = index(COVERTABLE);	# subdivision in cover type
+        # VEGFRAC[COVERTYPE] = index(COVERTABLE);   # subdivision in cover type
         version_one_cover_type = {}
         version_one_cover_type['grassland'] = "short"
         version_one_cover_type['forest']    = "tall" 
 
 
-        # VEGFRAC 	sv	maps\vegf_short.map
-        # VEGFRAC 	tv	maps\vegf_tall.map
+        # VEGFRAC   sv  maps\vegf_short.map
+        # VEGFRAC   tv  maps\vegf_tall.map
 
         for coverType in ['forest','grassland']:
             pcr.report(self._model.landSurface.landCoverObj[coverType].fracVegCover, self.configuration.mapsDir+"/vegf_"+version_one_cover_type[coverType]+".map") 
 
 
-        # THETASAT1 	sv	maps\fao30_ths30.map					  # THETASAT1 	tv	maps\fao30_ths30.map
-        # THETASAT2 	sv	maps\fao30_ths100.map                     # THETASAT2 	tv	maps\fao30_ths100.map
-        # THETARES1 	sv	maps\fao30_thr30.map                      # THETARES1 	tv	maps\fao30_thr30.map
-        # THETARES2 	sv	maps\fao30_thr100.map                     # THETARES2 	tv	maps\fao30_thr100.map
-        # KS1 			sv	maps\fao30_ks30.map                       # KS1 		tv	maps\fao30_ks30.map
-        # KS2 			sv	maps\fao30_ks100.map                      # KS2 		tv	maps\fao30_ks100.map
-        # PSI_A1 		sv	maps\fao30_psis30.map                     # PSI_A1 		tv	maps\fao30_psis30.map
-        # PSI_A2 		sv	maps\fao30_psis100.map                    # PSI_A2 		tv	maps\fao30_psis100.map
-        # BCH1 			sv	maps\fao30_beta30.map                     # BCH1 		tv	maps\fao30_beta30.map
-        # BCH2 			sv	maps\fao30_beta100.map                    # BCH2 		tv	maps\fao30_beta100.map
+        # THETASAT1     sv  maps\fao30_ths30.map                      # THETASAT1   tv  maps\fao30_ths30.map
+        # THETASAT2     sv  maps\fao30_ths100.map                     # THETASAT2   tv  maps\fao30_ths100.map
+        # THETARES1     sv  maps\fao30_thr30.map                      # THETARES1   tv  maps\fao30_thr30.map
+        # THETARES2     sv  maps\fao30_thr100.map                     # THETARES2   tv  maps\fao30_thr100.map
+        # KS1           sv  maps\fao30_ks30.map                       # KS1         tv  maps\fao30_ks30.map
+        # KS2           sv  maps\fao30_ks100.map                      # KS2         tv  maps\fao30_ks100.map
+        # PSI_A1        sv  maps\fao30_psis30.map                     # PSI_A1      tv  maps\fao30_psis30.map
+        # PSI_A2        sv  maps\fao30_psis100.map                    # PSI_A2      tv  maps\fao30_psis100.map
+        # BCH1          sv  maps\fao30_beta30.map                     # BCH1        tv  maps\fao30_beta30.map
+        # BCH2          sv  maps\fao30_beta100.map                    # BCH2        tv  maps\fao30_beta100.map
 
         pcr.report(self._model.landSurface.soil_topo_parameters['default'].satVolMoistContUpp, self.configuration.mapsDir+"/fao30_ths30.map")
         pcr.report(self._model.landSurface.soil_topo_parameters['default'].satVolMoistContLow, self.configuration.mapsDir+"/fao30_ths100.map")
@@ -543,30 +541,30 @@ class Reporting(object):
         pcr.report(self._model.landSurface.soil_topo_parameters['default'].kSatLow           , self.configuration.mapsDir+"/fao30_ks100.map")
 
 
-        # Z1			sv	maps\fao30_z1_permafrost.map              # Z1			tv	maps\fao30_z1_permafrost.map
-        # Z2			sv	maps\fao30_z2_permafrost.map              # Z2			tv	maps\fao30_z2_permafrost.map
-        # SC1			sv	maps\fao30_sc1_permafrost.map             # SC1			tv	maps\fao30_sc1_permafrost.map
-        # SC2			sv	maps\fao30_sc2_permafrost.map             # SC2			tv	maps\fao30_sc2_permafrost.map
+        # Z1            sv  maps\fao30_z1_permafrost.map              # Z1          tv  maps\fao30_z1_permafrost.map
+        # Z2            sv  maps\fao30_z2_permafrost.map              # Z2          tv  maps\fao30_z2_permafrost.map
+        # SC1           sv  maps\fao30_sc1_permafrost.map             # SC1         tv  maps\fao30_sc1_permafrost.map
+        # SC2           sv  maps\fao30_sc2_permafrost.map             # SC2         tv  maps\fao30_sc2_permafrost.map
 
         pcr.report(self._model.landSurface.soil_topo_parameters['default'].thickUpp               , self.configuration.mapsDir+"/fao30_z1_permafrost.map")
         pcr.report(self._model.landSurface.soil_topo_parameters['default'].thickLow               , self.configuration.mapsDir+"/fao30_z2_permafrost.map")
         pcr.report(self._model.landSurface.soil_topo_parameters['default'].storCapUpp             , self.configuration.mapsDir+"/fao30_sc1_permafrost.map")
         pcr.report(self._model.landSurface.soil_topo_parameters['default'].storCapLow             , self.configuration.mapsDir+"/fao30_sc2_permafrost.map")
 
-        # WMAX			sv	maps\fao30_sc_permafrost.map              # WMAX		tv	maps\fao30_sc_permafrost.map
+        # WMAX          sv  maps\fao30_sc_permafrost.map              # WMAX        tv  maps\fao30_sc_permafrost.map
 
         pcr.report(self._model.landSurface.soil_topo_parameters['default'].rootZoneWaterStorageCap, self.configuration.mapsDir+"/fao30_sc_permafrost.map")
 
 
-        # P2_IMP		sv	maps\fao30_p2imp_permafrost.map           # P2_IMP		tv	maps\fao30_p2imp_permafrost.map
+        # P2_IMP        sv  maps\fao30_p2imp_permafrost.map           # P2_IMP      tv  maps\fao30_p2imp_permafrost.map
 
         pcr.report(self._model.landSurface.soil_topo_parameters['default'].percolationImp             , self.configuration.mapsDir+"/fao30_p2imp_permafrost.map")
 
 
-        # MINFRAC		sv 	maps\minf_short.map                       # MINFRAC		tv 	maps\minf_tall.map
-        # MAXFRAC		sv	maps\maxf_short.map                       # MAXFRAC		tv	maps\maxf_tall.map
-        # RFRAC1		sv	maps\rfrac1_short.map                     # RFRAC1		tv	maps\rfrac1_tall.map
-        # RFRAC2		sv  maps\rfrac2_short.map                     # RFRAC2		tv 	maps\rfrac2_tall.map
+        # MINFRAC       sv  maps\minf_short.map                       # MINFRAC     tv  maps\minf_tall.map
+        # MAXFRAC       sv  maps\maxf_short.map                       # MAXFRAC     tv  maps\maxf_tall.map
+        # RFRAC1        sv  maps\rfrac1_short.map                     # RFRAC1      tv  maps\rfrac1_tall.map
+        # RFRAC2        sv  maps\rfrac2_short.map                     # RFRAC2      tv  maps\rfrac2_tall.map
         
         for coverType in ['forest','grassland']:
             pcr.report(self._model.landSurface.landCoverObj[coverType].minSoilDepthFrac, self.configuration.mapsDir+"/minf_"+version_one_cover_type[coverType]+".map") 
@@ -575,8 +573,8 @@ class Reporting(object):
             pcr.report(self._model.landSurface.landCoverObj[coverType].rootFraction2   , self.configuration.mapsDir+"/rfrac2_"+version_one_cover_type[coverType]+".map") 
 
         
-        # KQ3            = maps\globalalpha.map;	# recession coefficient for store 3 (day-1): drainage
-        # SPECYIELD3     = maps\specificyield.map;	# specific yield for aquifer
+        # KQ3            = maps\globalalpha.map;    # recession coefficient for store 3 (day-1): drainage
+        # SPECYIELD3     = maps\specificyield.map;  # specific yield for aquifer
 
         pcr.report(self._model.groundwater.recessionCoeff, self.configuration.mapsDir+"/globalalpha.map")
         pcr.report(self._model.groundwater.specificYield , self.configuration.mapsDir+"/specificyield.map")
@@ -652,6 +650,9 @@ class Reporting(object):
                                         self._model.landSurface.totalPotET + self._model.routing.waterBodyPotEvap,\
                                         vos.smallNumber)
 
+        # total potential evaporation (m). from land and water fractions
+        self.totalPotentialEvaporation = self._model.landSurface.totalPotET + self._model.routing.waterBodyPotEvap
+        
         # runoff (m) from land surface - not including local changes in water bodies
         self.runoff = self._model.routing.runoff
         
@@ -665,7 +666,7 @@ class Reporting(object):
         
         # fraction of surface water bodies.
         self.dynamicFracWat = self._model.routing.dynamicFracWat
-		
+        
         if self._model.landSurface.numberOfSoilLayers == 3:
             self.storUpp000005  = self._model.landSurface.storUpp000005
             self.storUpp005030  = self._model.landSurface.storUpp005030
@@ -795,10 +796,11 @@ class Reporting(object):
         
         # Some examples to report variables from certain land cover types:
         # - unit: m/day - values are average over the entire cell area
-        self.precipitation_at_irrigation    = pcr.ifthen(self._model.routing.landmask, pcr.scalar(0.0))
-        self.netLqWaterToSoil_at_irrigation = pcr.ifthen(self._model.routing.landmask, pcr.scalar(0.0))
-        self.evaporation_from_irrigation    = pcr.ifthen(self._model.routing.landmask, pcr.scalar(0.0))
-        self.transpiration_from_irrigation  = pcr.ifthen(self._model.routing.landmask, pcr.scalar(0.0))
+        self.precipitation_at_irrigation           = pcr.ifthen(self._model.routing.landmask, pcr.scalar(0.0))
+        self.netLqWaterToSoil_at_irrigation        = pcr.ifthen(self._model.routing.landmask, pcr.scalar(0.0))
+        self.evaporation_from_irrigation           = pcr.ifthen(self._model.routing.landmask, pcr.scalar(0.0))
+        self.transpiration_from_irrigation         = pcr.ifthen(self._model.routing.landmask, pcr.scalar(0.0))
+        self.potential_evaporation_from_irrigation = pcr.ifthen(self._model.routing.landmask, pcr.scalar(0.0))
         if self._model.landSurface.includeIrrigation:
             self.precipitation_at_irrigation    = self._model.meteo.precipitation * \
                                                   self._model.landSurface.landCoverObj['irrPaddy'].fracVegCover + \
@@ -816,6 +818,10 @@ class Reporting(object):
                                                   self._model.landSurface.landCoverObj['irrPaddy'].fracVegCover + \
                                                   self._model.landSurface.landCoverObj['irrNonPaddy'].actTranspiTotal * \
                                                   self._model.landSurface.landCoverObj['irrNonPaddy'].fracVegCover        
+            self.potential_evaporation_from_irrigation = self._model.landSurface.landCoverObj['irrPaddy'].totalPotET * \
+                                                         self._model.landSurface.landCoverObj['irrPaddy'].fracVegCover + \
+                                                         self._model.landSurface.landCoverObj['irrNonPaddy'].totalPotET * \
+                                                         self._model.landSurface.landCoverObj['irrNonPaddy'].fracVegCover        
 
         # Total groundwater abstraction (m) (assuming otherWaterSourceAbstraction as fossil groundwater abstraction
         self.totalGroundwaterAbstraction = self.nonFossilGroundwaterAbstraction +\
@@ -858,9 +864,9 @@ class Reporting(object):
         if "accuNetGroundwaterDischarge" in self.variables_for_report:
             self.accuNetGroundwaterDischarge = pcr.catchmenttotal(self.netGroundwaterDischarge * self._model.routing.cellArea, self._model.routing.lddMap) / vos.secondsPerDay()
 
-		#-----------------------------------------------------------------------
-		# NOTE (RvB, 12/07): the following has been changed to get the actual flood volume and depth;
-		# because the waterBodyIDs get covered by zeroes, values for all areas are returned as zero
+        #-----------------------------------------------------------------------
+        # NOTE (RvB, 12/07): the following has been changed to get the actual flood volume and depth;
+        # because the waterBodyIDs get covered by zeroes, values for all areas are returned as zero
         #
         # flood innundation depth (unit: m) above the floodplain
         #~ if self._model.routing.floodPlain:\
@@ -875,18 +881,35 @@ class Reporting(object):
                       #~ pcr.max(0.0, self._model.routing.channelStorage - self._model.routing.channelStorageCapacity)))
         #              
         # flood innundation depth (unit: m) above the floodplain
+        self.floodDepth = pcr.ifthen(self._model.routing.landmask, pcr.scalar(0.0))
         if self._model.routing.floodPlain:
            self.floodDepth = pcr.ifthen(self._model.routing.landmask, \
                       pcr.ifthenelse(pcr.cover(self._model.routing.WaterBodies.waterBodyIds,0) == 0,\
-					            self._model.routing.floodDepth, 0.0))
-		#				
+                                self._model.routing.floodDepth, 0.0))
+        #               
         # flood volume (unit: m3): excess above the channel storage capacity
+        self.floodVolume = pcr.ifthen(self._model.routing.landmask, pcr.scalar(0.0))
         if self._model.routing.floodPlain:
            self.floodVolume = pcr.ifthen(self._model.routing.landmask, \
                       pcr.ifthenelse(pcr.cover(self._model.routing.WaterBodies.waterBodyIds,0) == 0,\
-						          pcr.max(0.0,self._model.routing.channelStorage-self._model.routing.channelStorageCapacity), 0.0))
-		#-----------------------------------------------------------------------
+                                  pcr.max(0.0,self._model.routing.channelStorage-self._model.routing.channelStorageCapacity), 0.0))
+        #-----------------------------------------------------------------------
         
+
+        # channel storage (unit: m3)
+        self.channelStorage = pcr.ifthen(self._model.routing.landmask, \
+                              pcr.cover(self._model.routing.channelStorage, 0.0))
+        # - NOTE: For this version, the channelStorage does not include floodVolume.
+        
+        # riverine flood inundation volume (unit: m3)
+        if self._model.routing.floodPlain:
+            self.floodVolume = pcr.ifthen(
+                self._model.routing.landmask,
+                pcr.cover(self._model.routing.floodInundationVolume, 0.0),
+            )
+        
+
+
         # water withdrawal for irrigation sectors
         self.irrPaddyWaterWithdrawal    = pcr.ifthen(self._model.routing.landmask, self._model.landSurface.irrGrossDemandPaddy)
         self.irrNonPaddyWaterWithdrawal = pcr.ifthen(self._model.routing.landmask, self._model.landSurface.irrGrossDemandNonPaddy)
@@ -968,6 +991,9 @@ class Reporting(object):
             
             self.accuGroundwaterVolumeEstimate = pcr.catchmenttotal(self.groundwaterVolumeEstimate, self._model.routing.lddMap)
             
+
+        # desalinated water (m) that is allocated to meet water demand
+        self.desalinationAllocation = pcr.ifthen(self._model.routing.landmask, self._model.landSurface.desalinationAllocation)
 
 
     def report(self):
