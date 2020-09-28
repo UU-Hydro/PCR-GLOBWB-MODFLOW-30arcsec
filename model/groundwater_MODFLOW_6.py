@@ -45,11 +45,11 @@ from ncConverter import *
 
 class GroundwaterModflow(object):
 
-    def getYearMonth(currTimeStep): #JV
-       if currTimeStep is None:
-           return ""
-       else:
-           return "_" + str(currTimeStep.yearmonth)
+    def getYearMonth(self, currTimeStep): #JV
+        if currTimeStep is None:
+            return ""
+        else:
+            return "_" + str(currTimeStep.yearmonth)
 
     def getState(self):
         result = {}
