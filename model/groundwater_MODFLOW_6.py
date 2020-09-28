@@ -48,7 +48,7 @@ class GroundwaterModflow(object):
     def getYearMonth(currTimeStep): #JV
        if currTimeStep is None:
            return ""
-       else
+       else:
            return "_" + str(currTimeStep.yearmonth)
 
     def getState(self):
