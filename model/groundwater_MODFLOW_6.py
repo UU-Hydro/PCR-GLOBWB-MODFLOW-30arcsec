@@ -2018,7 +2018,7 @@ class GroundwaterModflow(object):
         self.pcr_modflow = None
 
         # calculate some variables that will be accessed from PCR-GLOBWB (for online coupling purpose)
-        self.calculate_values_for_pcrglobwb()
+        #self.calculate_values_for_pcrglobwb() #JV
 
     def calculate_values_for_pcrglobwb(self):
 
