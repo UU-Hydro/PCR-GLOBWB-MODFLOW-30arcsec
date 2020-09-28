@@ -45,6 +45,12 @@ from ncConverter import *
 
 class GroundwaterModflow(object):
 
+    def getYearMonth(currTimeStep): #JV
+       if currTimeStep is None:
+           return ""
+       else
+           return "_" + str(currTimeStep.yearmonth)
+
     def getState(self):
         result = {}
 
@@ -1671,9 +1677,9 @@ class GroundwaterModflow(object):
             var_name = 'groundwaterHeadLayer'+str(i)
             initial_head = pcr.scalar(groundwaterHead[var_name])
             if i == 1: #JV
-                pcr.report(initial_head, self.iniItems.mapsDir + "/" + "initial_head_lowermost_layer_"+str(currTimeStep.fulldate)+".map") #JV
+                pcr.report(initial_head, self.iniItems.mapsDir + "/" + "initial_head_lowermost_layer" + self.getYearMonth(currTimeStep) + ".map") #JV
             if i == 2: #JV
-                pcr.report(initial_head, self.iniItems.mapsDir + "/" + "initial_head_uppermost_layer_"+str(currTimeStep.fulldate)+".map") #JV
+                pcr.report(initial_head, self.iniItems.mapsDir + "/" + "initial_head_uppermost_layer" + self.getYearMonth(currTimeStep) + ".map") #JV
             self.pcr_modflow.setInitialHead(initial_head, i)
 
         # read input files (for the steady-state condition, we use pcraster maps):
@@ -2415,9 +2421,9 @@ class GroundwaterModflow(object):
         # set the RIV package only to the uppermost layer
         if set_the_modflow_river_package:
             logger.info('Set the RIVER package.')
-            pcr.report(surface_water_elevation,          self.iniItems.mapsDir + "/" + "surface_water_elevation_"+str(currTimeStep.fulldate)+".map") #JV
-            pcr.report(surface_water_bed_elevation_used, self.iniItems.mapsDir + "/" + "surface_water_bed_elevation_used_"+str(currTimeStep.fulldate)+".map") #JV
-            pcr.report(bed_conductance_used,             self.iniItems.mapsDir + "/" + "bed_conductance_used_"+str(currTimeStep.fulldate)+".map") #JV
+            pcr.report(surface_water_elevation,          self.iniItems.mapsDir + "/" + "surface_water_elevation" + self.getYearMonth(currTimeStep) + ".map") #JV
+            pcr.report(surface_water_bed_elevation_used, self.iniItems.mapsDir + "/" + "surface_water_bed_elevation_used" + self.getYearMonth(currTimeStep) + ".map") #JV
+            pcr.report(bed_conductance_used,             self.iniItems.mapsDir + "/" + "bed_conductance_used" + self.getYearMonth(currTimeStep) + ".map") #JV
             self.pcr_modflow.setRiver(surface_water_elevation, surface_water_bed_elevation_used, bed_conductance_used, self.number_of_layers)
         else:
             return surface_water_elevation, surface_water_bed_elevation_used, bed_conductance_used
@@ -2433,11 +2439,10 @@ class GroundwaterModflow(object):
 
 
 
-    #JV:
+    #JV
     def set_recharge_package(self, currTimeStep, \
-                             gwRecharge, gwAbstraction = 0.0, \ 
-                             gwAbstractionReturnFlow = 0.0):            # Note: We ignored the latter as MODFLOW should capture this part as well.
-								                                        #       We also moved the abstraction to the WELL package 
+                             gwRecharge, gwAbstraction = 0.0, \
+                             gwAbstractionReturnFlow = 0.0)
 
         logger.info("Set the recharge package.")
 
@@ -2474,7 +2479,7 @@ class GroundwaterModflow(object):
         net_RCH    = pcr.cover(pcr.ifthenelse(pcr.abs(net_RCH) < 1e-20, 0.0, net_RCH), 0.0)
 
         # put the recharge to the top grid/layer
-        pcr.report(net_RCH, self.iniItems.mapsDir + "/" + "net_RCH_"+str(currTimeStep.fulldate)+".map") #JV
+        pcr.report(net_RCH, self.iniItems.mapsDir + "/" + "net_RCH" + self.getYearMonth(currTimeStep) + ".map") #JV
         self.pcr_modflow.setRecharge(net_RCH, 1)
 
         #~ # if we want to put RCH in the lower layer
@@ -2554,9 +2559,9 @@ class GroundwaterModflow(object):
         abstraction_layer_2 = abstraction_layer_2 * self.cellAreaMap * pcr.scalar(-1.0)
 
         # set the well package
-        pcr.report(abstraction_layer_1, self.iniItems.mapsDir + "/" + "abstraction_lowermost_layer_"+str(currTimeStep.fulldate)+".map") #JV
+        pcr.report(abstraction_layer_1, self.iniItems.mapsDir + "/" + "abstraction_lowermost_layer" + self.getYearMonth(currTimeStep) + ".map") #JV
         self.pcr_modflow.setWell(abstraction_layer_1, 1)
-        pcr.report(abstraction_layer_2, self.iniItems.mapsDir + "/" + "abstraction_uppermost_layer_"+str(currTimeStep.fulldate)+".map") #JV
+        pcr.report(abstraction_layer_2, self.iniItems.mapsDir + "/" + "abstraction_uppermost_layer" + self.getYearMonth(currTimeStep) + ".map") #JV
         self.pcr_modflow.setWell(abstraction_layer_2, 2)
 
     def set_drain_package(self, currTimeStep): #JV
@@ -2594,11 +2599,11 @@ class GroundwaterModflow(object):
 
         # a new idea 9 Nov 2018:
         drain_elevation_lowermost_layer = pcr.max(drain_elevation, self.bottom_layer_1)
-        pcr.report(drain_elevation_lowermost_layer, self.iniItems.mapsDir + "/" + "drain_elevation_lowermost_layer_"+str(currTimeStep.fulldate)+".map") #JV
+        pcr.report(drain_elevation_lowermost_layer, self.iniItems.mapsDir + "/" + "drain_elevation_lowermost_layer" + self.getYearMonth(currTimeStep) + ".map") #JV
         pcr.report(drain_conductance, self.iniItems.mapsDir + "/" + "drain_conductance.map") #JV
         self.pcr_modflow.setDrain(drain_elevation_lowermost_layer, drain_conductance, 1)
         drain_elevation_uppermost_layer = pcr.max(drain_elevation, self.bottom_layer_2)
-        pcr.report(drain_elevation_uppermost_layer, self.iniItems.mapsDir + "/" + "drain_elevation_uppermost_layer_"+str(currTimeStep.fulldate)+".map") #JV
+        pcr.report(drain_elevation_uppermost_layer, self.iniItems.mapsDir + "/" + "drain_elevation_uppermost_layer" + self.getYearMonth(currTimeStep) + ".map") #JV
         self.pcr_modflow.setDrain(drain_elevation_uppermost_layer, drain_conductance, 2)
 
 

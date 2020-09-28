@@ -121,8 +121,11 @@ class ModelTime(object):
 
     @property
     def fulldate(self):
-        return '%04i-%02i-%02i' %(self._currTime.year, self._currTime.month, self._currTime.day)
-        # return self._fulldate
+        return self._fulldate
+
+    @property
+    def yearmonth(self):
+        return '%04i%02i' %(self._currTime.year, self._currTime.month)
 
     def update(self,timeStepPCR):
         self._timeStepPCR = timeStepPCR
