@@ -85,7 +85,7 @@ class DeterministicRunner(DynamicModel):
             # update MODFLOW model (It will pick up current model time from the modelTime object)
             self.model.update()
             # reporting is only done at the end of the month
-            self.reporting.report()
+            # self.reporting.report() #JV
 
 def main():
 
