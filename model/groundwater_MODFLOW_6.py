@@ -2450,6 +2450,10 @@ class GroundwaterModflow(object):
         # + recharge/capillary rise (unit: m/day) from PCR-GLOBWB
         # - groundwater abstraction (unit: m/day) from PCR-GLOBWB
         # + return flow of groundwater abstraction (unit: m/day) from PCR-GLOBWB
+        pcr.cover(gwRecharge, 0.0) #JV
+        pcr.cover(gwAbstraction, 0.0) #JV
+        pcr.cover(gwAbstractionReturnFlow, 0.0) #JV
+
         net_recharge = gwRecharge - gwAbstraction + \
                        gwAbstractionReturnFlow
 
