@@ -107,6 +107,8 @@ class GroundwaterModflow(object):
              self.using_varying_DELR_DELC = True
              self.estimate_of_cell_horizontal_size_in_meter = vos.readPCRmapClone(iniItems.modflowParameterOptions['estimate_of_cell_horizontal_size_in_meter'], self.cloneMap, self.tmpDir, self.inputDir)
              self.estimate_of_cell_vertical_size_in_meter   = vos.readPCRmapClone(iniItems.modflowParameterOptions['estimate_of_cell_vertical_size_in_meter'],   self.cloneMap, self.tmpDir, self.inputDir)
+             pcr.report(self.estimate_of_cell_horizontal_size_in_meter, self.iniItems.mapsDir + "/" + "estimate_of_cell_horizontal_size_in_meter.map") #JV
+             pcr.report(self.estimate_of_cell_vertical_size_in_meter, self.iniItems.mapsDir + "/" + "estimate_of_cell_vertical_size_in_meter.map") #JV
 
         # using constant and equal DELR and DELC in meter
         self.using_constant_equal_DELR_and_DELC_in_meter = False
@@ -2450,10 +2452,6 @@ class GroundwaterModflow(object):
         # + recharge/capillary rise (unit: m/day) from PCR-GLOBWB
         # - groundwater abstraction (unit: m/day) from PCR-GLOBWB
         # + return flow of groundwater abstraction (unit: m/day) from PCR-GLOBWB
-        pcr.cover(gwRecharge, 0.0) #JV
-        pcr.cover(gwAbstraction, 0.0) #JV
-        pcr.cover(gwAbstractionReturnFlow, 0.0) #JV
-
         net_recharge = gwRecharge - gwAbstraction + \
                        gwAbstractionReturnFlow
 
