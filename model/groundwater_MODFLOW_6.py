@@ -2442,8 +2442,8 @@ class GroundwaterModflow(object):
 
 
     #JV
-    def set_recharge_package(self, currTimeStep, \
-                             gwRecharge, gwAbstraction = 0.0, \
+    def set_recharge_package(self, gwRecharge, currTimeStep, \
+                             gwAbstraction = 0.0, \
                              gwAbstractionReturnFlow = 0.0):
 
         logger.info("Set the recharge package.")
