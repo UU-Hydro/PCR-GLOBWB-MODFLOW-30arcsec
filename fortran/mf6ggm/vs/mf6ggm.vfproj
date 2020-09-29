@@ -25,8 +25,8 @@
 				<Tool Name="VFPostBuildEventTool"/>
 				<Tool Name="VFManifestTool" SuppressStartupBanner="true"/></Configuration>
 		<Configuration Name="Debug|x64">
-				<Tool Name="VFFortranCompilerTool" SuppressStartupBanner="true" DebugInformationFormat="debugEnabled" Optimization="optimizeDisabled" BufferedIO="true" WarnInterfaces="true" Traceback="true" BoundsCheck="true" StackFrameCheck="true" RuntimeLibrary="rtMultiThreadedDebugDLL"/>
-				<Tool Name="VFLinkerTool" LinkIncremental="linkIncrementalNo" SuppressStartupBanner="true" GenerateDebugInformation="true" SubSystem="subSystemConsole"/>
+				<Tool Name="VFFortranCompilerTool" SuppressStartupBanner="true" DebugInformationFormat="debugEnabled" Optimization="optimizeDisabled" BufferedIO="true" Preprocess="preprocessYes" PreprocessorDefinitions="IFORT" WarnInterfaces="true" Traceback="true" BoundsCheck="true" StackFrameCheck="true" RuntimeLibrary="rtMultiThreadedDebugDLL"/>
+				<Tool Name="VFLinkerTool" LinkIncremental="linkIncrementalNo" SuppressStartupBanner="true" AdditionalLibraryDirectories="..\..\metis-5.1.0\lib_vs2017\" GenerateDebugInformation="true" SubSystem="subSystemConsole" StackReserveSize="100000000" StackCommitSize="100000000" AdditionalDependencies="metis.lib"/>
 				<Tool Name="VFResourceCompilerTool"/>
 				<Tool Name="VFMidlTool" SuppressStartupBanner="true" TargetEnvironment="midlTargetAMD64"/>
 				<Tool Name="VFCustomBuildTool"/>
@@ -35,8 +35,8 @@
 				<Tool Name="VFPostBuildEventTool"/>
 				<Tool Name="VFManifestTool" SuppressStartupBanner="true"/></Configuration>
 		<Configuration Name="Release|x64">
-				<Tool Name="VFFortranCompilerTool" SuppressStartupBanner="true" BufferedIO="true" RuntimeLibrary="rtMultiThreadedDLL"/>
-				<Tool Name="VFLinkerTool" LinkIncremental="linkIncrementalNo" SuppressStartupBanner="true" SubSystem="subSystemConsole"/>
+				<Tool Name="VFFortranCompilerTool" SuppressStartupBanner="true" BufferedIO="true" Preprocess="preprocessYes" PreprocessorDefinitions="IFORT" RuntimeLibrary="rtMultiThreadedDLL"/>
+				<Tool Name="VFLinkerTool" LinkIncremental="linkIncrementalNo" SuppressStartupBanner="true" AdditionalLibraryDirectories="..\..\metis-5.1.0\lib_vs2017\" SubSystem="subSystemConsole" StackReserveSize="100000000" StackCommitSize="100000000" AdditionalDependencies="metis.lib"/>
 				<Tool Name="VFResourceCompilerTool"/>
 				<Tool Name="VFMidlTool" SuppressStartupBanner="true" TargetEnvironment="midlTargetAMD64"/>
 				<Tool Name="VFCustomBuildTool"/>
@@ -48,16 +48,21 @@
 		<Filter Name="Header Files" Filter="fi;fd;h;inc"/>
 		<Filter Name="Resource Files" Filter="rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe"/>
 		<Filter Name="Source Files" Filter="f90;for;f;fpp;ftn;def;odl;idl">
-		<Filter Name="iMOD library">
-		<File RelativePath="..\..\imodlib\src\imod_idf_lib.f90"/>
-		<File RelativePath="..\..\imodlib\src\imod_idf_mod.f90"/>
-		<File RelativePath="..\..\imodlib\src\imod_idf_par.f90"/>
-		<File RelativePath="..\..\imodlib\src\imod_utl.f90"/>
-		<File RelativePath="..\..\imodlib\src\utl.f90">
+		<Filter Name="iMOD 5.1 library">
+		<File RelativePath="..\..\imodlib_5_1\src\imod_idf_lib.f90"/>
+		<File RelativePath="..\..\imodlib_5_1\src\imod_idf_mod.f90"/>
+		<File RelativePath="..\..\imodlib_5_1\src\imod_idf_par.f90"/>
+		<File RelativePath="..\..\imodlib_5_1\src\imod_utl.f90"/>
+		<File RelativePath="..\..\imodlib_5_1\src\utl.f90">
 			<FileConfiguration Name="Release|x64">
-				<Tool Name="VFFortranCompilerTool" Preprocess="preprocessYes" PreprocessorDefinitions="IFORT" WarnInterfaces="false"/></FileConfiguration>
+				<Tool Name="VFFortranCompilerTool" WarnInterfaces="false"/></FileConfiguration>
 			<FileConfiguration Name="Debug|x64">
-				<Tool Name="VFFortranCompilerTool" Preprocess="preprocessYes" PreprocessorDefinitions="IFORT" WarnInterfaces="false"/></FileConfiguration></File></Filter>
+				<Tool Name="VFFortranCompilerTool" WarnInterfaces="false"/></FileConfiguration></File></Filter>
+		<Filter Name="METIS library">
+		<File RelativePath="..\..\metis-5.1.0\src\metis_enum_5.1.0.f90"/>
+		<File RelativePath="..\..\metis-5.1.0\src\metis_module.f90"/></Filter>
+		<Filter Name="Geom Library">
+		<File RelativePath="..\..\geomlib\src\geometry.f90"/></Filter>
 		<Filter Name="PCRaster library">
 		<File RelativePath="..\..\pcrlib\src\pcrlib.f90"/></Filter>
 		<Filter Name="Utility library">
