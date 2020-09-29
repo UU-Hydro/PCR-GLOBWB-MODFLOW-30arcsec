@@ -1098,6 +1098,8 @@ class GroundwaterModflow(object):
         #~ pcr.aguila(horizontal_conductivity_layer_2)
         #~ pcr.aguila(vertical_conductivity_layer_2)
         #~ raw_input("Press Enter to continue...")
+        pcr.report(horizontal_conductivity_layer_2, self.iniItems.mapsDir + "/" + "horizontal_conductivity_uppermost_layer.map")
+        pcr.report(vertical_conductivity_layer_2, self.iniItems.mapsDir + "/" + "vertical_conductivity_uppermost_layer.map")
         if "aquiferLayerSecondaryStorageCoefficient" in self.iniItems.modflowParameterOptions.keys() and\
             self.iniItems.modflowParameterOptions['aquiferLayerSecondaryStorageCoefficient'] not in ["None", "False"]:
             msg = "Using the layer type (LAYCON) 2 for the aquifer layer."
