@@ -140,8 +140,9 @@ module pcrModule
     procedure :: idf_export   => map_idf_export
     procedure :: get_i1ar     => map_get_i1ar
     procedure :: get_r4ar     => map_get_r4ar
-    generic   :: get_val      => map_geti1val, map_getr4val
+    generic   :: get_val      => map_geti1val, map_geti4val, map_getr4val
     procedure :: map_geti1val
+    procedure :: map_geti4val
     procedure :: map_getr4val
     generic   :: read_block   => map_readblock_i1 !, map_readblock_r4
     procedure :: map_readblock_i1
@@ -975,7 +976,7 @@ contains
     ! -- local
 ! ------------------------------------------------------------------------------
     ! close the file
-    write(*,*) 'Cleaning map-file data structures...'
+    !write(*,*) 'Cleaning map-file data structures...'
     if (associated(this%i1a))    deallocate(this%i1a)
     if (associated(this%i1a))    deallocate(this%i1a)
     if (associated(this%i2a))    deallocate(this%i2a)
@@ -996,7 +997,7 @@ contains
     ! -- local
 ! ------------------------------------------------------------------------------
     ! close the file
-    write(*,*) 'Cleaning map-file data structures...'
+    !write(*,*) 'Cleaning map-file data structures...'
     call this%close()
     if (associated(this%f))      deallocate(this%f)
     if (associated(this%iu))     deallocate(this%iu)
@@ -1031,7 +1032,8 @@ contains
     real(r4b)   :: vr4
     real(r8b)   :: vr8
     character(len=1) :: wrk
-    integer(i4b) :: p, n
+!    integer(i4b) :: p, n
+    integer(i8b) :: p, n
 ! ------------------------------------------------------------------------------
     p = 256+1
     n = (irow-1)*this%header%nrcols + icol - 1
@@ -1066,9 +1068,70 @@ contains
       case default
         call errmsg('Kind of MAP-file not supported.')
       end select 
-
+    !
+    return
   end subroutine map_geti1val
+  !
+  subroutine map_geti4val(this, icol, irow, i4val, i4mv)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+    ! -- modules
+    ! -- dummy
+    class(tMap) :: this
+    integer(i4b), intent(in) :: icol
+    integer(i4b), intent(in) :: irow
+    integer(i4b), intent(out) :: i4val
+    integer(i4b), intent(out) :: i4mv
+    ! -- local
+    integer(i1b) :: vi1
+    integer(i2b) :: vi2
+    integer(i4b) :: vi4
+    real(r4b)   :: vr4
+    real(r8b)   :: vr8
+    character(len=1) :: wrk
+!    integer(i4b) :: p, n
+    integer(i8b) :: p, n
+! ------------------------------------------------------------------------------
+    p = 256+1
+    n = (irow-1)*this%header%nrcols + icol - 1
   
+    select case(this%header%cellrepr)
+      case(cr_uint1, cr_int1)
+        read(unit=this%iu,pos=p+n) wrk
+        vi1 = ichar(wrk)
+        i4val = int(vi1,i4b)
+      case(cr_int2)
+        read(unit=this%iu,pos=p+2*n) vi2
+        i4val = int(vi2,i4b)
+      case(cr_int4)
+        read(unit=this%iu,pos=p+4*n) vi4
+        i4val = int(vi4,i4b)
+      case(cr_real4)
+        read(unit=this%iu,pos=p+4*n) vr4
+        if (ieee_is_nan(vr4)) then
+          i4val = int(this%r4mv,i4b)
+        else
+          i4val = int(vr4,i4b)
+        end if
+        !i4mv = int(this%r4mv, i4b)
+      case(cr_real8)
+        read(unit=this%iu,pos=p+8*n) vr8
+        if (ieee_is_nan(vr8)) then
+          i4val = int(this%r8mv,i4b)
+        else
+          i4val = int(vr8,i4b)
+        end if
+        !i4mv = int(this%r8mv, i4b)
+      case default
+        call errmsg('Kind of MAP-file not supported.')
+      end select 
+    !
+    return
+  end subroutine map_geti4val
+  !
   subroutine map_getr4val(this, icol, irow, r4val, r4mv)
 ! ******************************************************************************
 ! ******************************************************************************
@@ -1089,7 +1152,8 @@ contains
     real(r4b)   :: vr4
     real(r8b)   :: vr8
     character(len=1) :: wrk
-    integer(i4b) :: p, n
+!    integer(i4b) :: p, n
+    integer(i8b) :: p, n
 ! ------------------------------------------------------------------------------
     p = 256+1
     n = (irow-1)*this%header%nrcols + icol - 1
