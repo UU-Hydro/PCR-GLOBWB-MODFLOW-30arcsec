@@ -5,7 +5,7 @@ program datamap
   use imod_idf
   use utilsmod, only: mxslen, i1b, i2b, i4b, r4b, r8b, DZERO, DONE, &
     readidf_block, writeidf, tBB, errmsg, quicksort_d, addboundary, open_file, &
-    chkexist
+    chkexist, readgen, tPol, logmsg, ta
   !
   implicit none
   !
@@ -37,7 +37,9 @@ program datamap
     integer(i4b)                          :: n = 0 ! number of nodes
     integer(i4b)                          :: w = 0 ! weight
     integer(i4b), dimension(:,:), pointer :: my_gicir => null()
+    integer(i4b), dimension(:),   pointer :: my_nlay  => null()
     integer(i4b), dimension(:,:), pointer :: nb_gicir => null()
+    integer(i4b), dimension(:),   pointer :: nb_nlay  => null()
   end type tIntf
   !
   type tCat
@@ -64,18 +66,20 @@ program datamap
   integer(i4b) :: cfn_unique_i
   !
   ! --- local
-  type(idfobj) :: idf
+  type(idfobj) :: idf, idf2
   type(tBB), pointer :: bb => null()
   type(tIntf), pointer :: intf => null()
   type(treg), dimension(:), pointer :: regwk => null()
+  type(tPol), dimension(:), allocatable :: pol
   !
   character(len=mxslen) :: f, out_pref, s, tile_pref
-  logical :: ldone, lfound, lskip
+  logical :: ldone, lfound, lskip, linitpol, lin
+  integer(i1b), dimension(:,:), allocatable :: landmask
   integer(i1b), dimension(:,:), allocatable :: nlay
   integer(i2b), dimension(:,:), allocatable :: itile
-  integer(i4b) :: p, ofs, iread
-  integer(i4b) :: gir0, gir1, gic0, gic1
-  integer(i4b) :: ir, ic, jr, jc, kr, kc, nbr, m, n, iact, nja, mja, nreg, nlnd, nsea, ncell
+  integer(i4b) :: p, ofs, iread, ios
+  integer(i4b) :: gir0, gir1, gic0, gic1, idum
+  integer(i4b) :: ir, ic, jr, jc, kr, kc, nbr, m, n, na, iact, nja, mja, nreg, nlnd, nsea, ncell
   integer(i4b) :: i, j, k, ist, nc, nr, nb, ir0, ir1, ic0, ic1, mxgid, mxlid
   integer(i4b) :: jc1, jr1, jc2, jr2, ntile, gnrow, gncol
   integer(i4b) :: id, id1, id2, iu, nct, nrt
@@ -85,8 +89,9 @@ program datamap
   integer(i4b), dimension(:,:), allocatable :: i4wk2d
   integer(i4b), dimension(:), allocatable :: g2l, l2g, cnt, ia, gja, lja, reg, regncat
   integer(i4b), dimension(:,:), pointer :: xid
+  integer(i4b), dimension(:,:), pointer :: xid2
   real(r4b) :: r4val
-  real(r8b) :: gxmin, gymin, gcs
+  real(r8b) :: gxmin, gymin, gcs, x, y
   real(r4b), dimension(:,:), pointer :: r4wk2d
   real(r8b), dimension(:), allocatable :: regncell, r8wk1d
 ! ------------------------------------------------------------------------------
@@ -95,23 +100,36 @@ program datamap
   !gir0 = 1; gir1 = 9000; gic0 = 1; gic1 = 16000
   !gir0 = 1; gir1 = 9000; gic0 = 6500; gic1 = 16000 !USA
   !gir0 = 10000; gir1 = 16300; gic0 = 33000; gic1 = 42000 !AUS
+  !gir0 = 2820; gir1 = 3210; gic0 = 18650; gic1 = 19985 !ICE
+  !gir0 = 12230; gir1 = 13880; gic0 = 26780; gic1 = 27660 !MADA
   
   ! count the arguments
-  n = nargs() - 1
-  if (n > 5) then
-    if (n /= 9) then
-      call errmsg('Invalid command line arguments.')
-    end if
+  
+  na = nargs() - 1
+  !1             2                     3                       4                                                5                                         6
+  !.\map_ireland ..\hydrosheds\cat.idf ..\hydrosheds\d_top.idf ..\hydrosheds\make_clonemap\128\tile\rcb_128.txt ..\hydrosheds\make_clonemap\128\tile\rcb_ ireland.gen
+  !1             2                     3                       4                                                5                                         6     7     8     9
+  !.\map_ireland ..\hydrosheds\cat.idf ..\hydrosheds\d_top.idf ..\hydrosheds\make_clonemap\128\tile\rcb_128.txt ..\hydrosheds\make_clonemap\128\tile\rcb_ 12230 13880 26780 27660
+  linitpol = .false.
+  iread = 1
+  if (na > 5) then
     iread = 0
-    call getarg(6,s); read(s,*) gir0
-    call getarg(7,s); read(s,*) gir1
-    call getarg(8,s); read(s,*) gic0
-    call getarg(9,s); read(s,*) gic1
-    write(*,'(a,4(i5.5,a))') &
-      '*** Processing for global bounding box (gir0,gir1,gic0,gic1) = (', &
-    gir0,',',gir1,',',gic0,',',gic1,')...'
-  else
-    iread = 1
+    call getarg(6,f)
+    read(f,*,iostat=ios) idum
+    if (ios /= 0) then
+      call logmsg('Reading '//trim(f)//'...')
+      pol = readgen(f)
+      linitpol = .true.
+    end if
+    if (.not.linitpol) then
+      call getarg(6,s); read(s,*) gir0
+      call getarg(7,s); read(s,*) gir1
+      call getarg(8,s); read(s,*) gic0
+      call getarg(9,s); read(s,*) gic1
+      write(*,'(a,4(i5.5,a))') &
+        '*** Processing for global bounding box (gir0,gir1,gic0,gic1) = (', &
+      gir0,',',gir1,',',gic0,',',gic1,')...'
+    end if
   end if
   !
   call getarg(1,out_pref)
@@ -119,6 +137,17 @@ program datamap
   if (iread == 1) write(*,'(a)') 'Reading entire '//trim(f)//'...'
   if (.not.idfread(idf, f, iread)) then
     call errmsg('Could not read '//trim(f))
+  end if
+  gnrow = idf%nrow; gncol = idf%ncol; gxmin = idf%xmin; gymin = idf%ymin; gcs = idf%dx
+  !
+  if (linitpol) then
+    gir0 = gnrow+1; gir1 = 0; gic0 = gncol+1; gic1 = 0
+    do i  = 1, size(pol)
+      ic = (pol(i)%xmin-gxmin)/gcs;           gic0 = min(gic0, ic)
+      ic = (pol(i)%xmax-gxmin)/gcs;           gic1 = max(gic1, ic)
+      ir = (gymin+gnrow*gcs-pol(i)%ymax)/gcs; gir0 = min(gir0, ir)
+      ir = gnrow-(pol(i)%ymin-gymin)/gcs;     gir1 = max(gir1, ir)
+    end do
   end if
   !
   if (iread == 0) then
@@ -134,12 +163,116 @@ program datamap
       end do
     end do
   end if
-  gnrow = idf%nrow; gncol = idf%ncol; gxmin = idf%xmin; gymin = idf%ymin; gcs = idf%dx
+  !
+  ! set the land mask
+  allocate(landmask(nc,nr))
+  do ir = 1, nr
+    do ic = 1, nc
+      if (xid(ic,ir) /= 0) then
+        landmask(ic,ir) = 1
+      else
+        landmask(ic,ir) = 0
+      end if
+    end do
+  end do
+  !
+  ! remove catchment outside of polygon(s)
+  if (linitpol .and. (na == 6)) then
+    do ir = 1, nr
+      do ic = 1, nc
+        if (xid(ic,ir) /= 0) then
+          jr = gir0 + ir - 1; jc = gic0 + ic - 1
+          x = gxmin + jc*gcs - 0.5*gcs
+          y = gymin+gnrow*gcs - jr*gcs + 0.5*gcs
+          do i = 1, size(pol)
+            call polygon_contains_point_2d ( pol(i)%n, pol(i)%xy, (/x,y/), lin)
+            if (.not.lin) then
+              xid(ic,ir) = -abs(xid(ic,ir))
+            end if
+          end do
+        end if
+      end do
+    end do
+    n = maxval(abs(xid))
+    allocate(i4wk1d1(n))
+    do i = 1, n
+      i4wk1d1(i) = 0
+    end do
+    do ir = 1, nr
+      do ic = 1, nc
+        id = xid(ic,ir)
+        if (id < 0) i4wk1d1(abs(id)) = 1
+      end do
+    end do
+    do ir = 1, nr
+      do ic = 1, nc
+        id = abs(xid(ic,ir))
+        if (id > 0) then
+          if (i4wk1d1(id) == 1) xid(ic,ir) = 0
+        end if
+      end do
+    end do
+    deallocate(i4wk1d1)
+  end if
+  !
+  if (linitpol .and. (na > 6)) then
+    call getarg(7,f)
+    if (.not.idfread(idf2, f, 0)) then
+      call errmsg('Could not read '//trim(f))
+    end if
+    call getarg(8,f); read(f,*) n
+    allocate(i4wk1d1(n))
+    do i = 1, n
+      call getarg(8+i,f); read(f,*) i4wk1d1(i)
+    end do
+    call readidf_block(idf2, gir0, gir1, gic0, gic1, xid2)
+    do ir = 1, nr
+      do ic = 1, nc
+        if (xid(ic,ir) /= 0) then
+          lfound = .false.
+          do i = 1, n
+            if (xid2(ic,ir) == i4wk1d1(i)) then
+              lfound = .true.
+            end if
+          end do
+          if (.not.lfound) then
+            xid(ic,ir) = -xid(ic,ir)
+          end if
+        end if  
+      end do
+    end do
+    call idfdeallocatex(idf2)
+    deallocate(i4wk1d1)
+    n = maxval(abs(xid))
+    allocate(i4wk1d1(n))
+    do i = 1, n
+      i4wk1d1(i) = 0
+    end do
+    do ir = 1, nr
+      do ic = 1, nc
+        id = xid(ic,ir)
+        if (id > 0) i4wk1d1(abs(id)) = 1
+      end do
+    end do
+    do ir = 1, nr
+      do ic = 1, nc
+        id = abs(xid(ic,ir))
+        if (id > 0) then
+          if (i4wk1d1(id) == 1) then
+            xid(ic,ir) = abs(xid(ic,ir))
+          else
+            xid(ic,ir) = 0
+          end if
+        end if
+      end do
+    end do
+    deallocate(i4wk1d1)
+  end if
   !
   if (.false.) then
-  call writeidf('tmp.idf', xid, nc, nr, &
-    gxmin + (gic0-1)*gcs, gymin + (gnrow-gir1)*idf%dx, &
-    gcs, 0.D0)
+    call writeidf('tmp.idf', xid, nc, nr, &
+      gxmin + (gic0-1)*gcs, gymin + (gnrow-gir1)*idf%dx, &
+      gcs, 0.D0)
   end if
   !
   call idfdeallocatex(idf)
@@ -182,6 +315,21 @@ program datamap
   !
   ! label the sea cells
   call addboundary(xid, nc, nr)
+  do ir = 1, nr
+    do ic = 1, nc
+      if (xid(ic,ir) < 0) then !labeled as CHD
+        if (landmask(ic,ir) == 1) then !land
+          xid(ic,ir) = 0
+        end if
+      end if
+    end do
+  end do
+  if (.true.) then
+    call writeidf('tmp.idf', xid, nc, nr, &
+      gxmin + (gic0-1)*gcs, gymin + (gnrow-gir1)*idf%dx, &
+      gcs, 0.D0)
+    stop
+  end if
   !
   mxgid = maxval(xid)
   !
@@ -327,6 +475,7 @@ program datamap
             end if
           end do
           allocate(intf%my_gicir(2,intf%n), intf%nb_gicir(2,intf%n))
+          allocate(intf%my_nlay(intf%n),    intf%nb_nlay(intf%n))
           intf%n = 0
           do k = 1, nbr
             if (i4wk2d(1,k) == id) then
@@ -336,6 +485,8 @@ program datamap
               intf%w = intf%w + int(max(nlay(jc1,jr1),nlay(jc2,jr2)),i4b)
               intf%my_gicir(1,intf%n) = jc1+gic0-1; intf%my_gicir(2,intf%n) = jr1+gir0-1
               intf%nb_gicir(1,intf%n) = jc2+gic0-1; intf%nb_gicir(2,intf%n) = jr2+gir0-1
+              intf%my_nlay(intf%n) = nlay(jc1,jr1)
+              intf%nb_nlay(intf%n) = nlay(jc2,jr2)
             end if
           end do
         end do
@@ -419,8 +570,9 @@ program datamap
   deallocate(i4wk1d1, i4wk1d2)
   !
   write(*,'(a,f10.2)') 'Total # active cells (M):', real(ncell)/1000000.
-  write(*,*) 'Top 10 regions:'
-  do i = 1, 10
+  n = min(nreg,10)
+  write(*,*) 'Top '//ta((/n/))//' regions:'
+  do i = 1, min(nreg,10)
     write(*,'(i2.2,a,f7.2,a,i6,a,f6.2,a)') i, &
       ' - # cells (M):', real(regncell(i))/1000000., &
       '; # catchments:', regncat(i), &
@@ -503,9 +655,6 @@ program datamap
   ! set pointers to nodes in map.nodes.bin
   p = 1
   do i = 1, mxlid
-    !if (i == 236181) then
-    !  write(*,*) 'break'
-    !end if
     j = i4wk1d1(i) + 4; nlnd = i4wk1d2(j)
     j = i4wk1d1(i) + 5; nsea = i4wk1d2(j)
     n = (i4wk1d1(i+1) - i4wk1d1(i) - 7)/4
@@ -518,6 +667,9 @@ program datamap
   ! set pointers to nodes in map.intfnodes.bin
   p = 1
   do i = 1, mxlid
+    if (l2g(i) ==1676128) then
+      write(*,*) 'Debug'
+    end if
     n = (i4wk1d1(i+1) - i4wk1d1(i) - 7)/4
     do j = i4wk1d1(i) + 7 + 3*n + 1, i4wk1d1(i+1) - 1
       i4wk1d2(j) = p
@@ -694,30 +846,35 @@ program datamap
   !
   ! ---------------
   ! write the interfaces
-  n = 0
+  m = 0
   do i = 1, mxlid
     do j = 1, cat(i)%nnb
-      n = n + cat(i)%intf(j)%n
+      m = m + cat(i)%intf(j)%n
     end do
   end do
   if (allocated(i4wk2d)) deallocate(i4wk2d)
-  allocate(i4wk2d(4,n))
-  n = 0
+  allocate(i4wk2d(6,m))
+  m = 0
   do i = 1, mxlid
     do j = 1, cat(i)%nnb
       intf => cat(i)%intf(j)
+      !if ((l2g(i) == 1676128).and.(intf%nb_gid == 1676916)) then
+      !  write(*,*) '@@ Debug'
+      !end if
       do k = 1, intf%n
-        n = n + 1
-        i4wk2d(1,n) = intf%my_gicir(1,k)
-        i4wk2d(2,n) = intf%my_gicir(2,k)
-        i4wk2d(3,n) = intf%nb_gicir(1,k)
-        i4wk2d(4,n) = intf%nb_gicir(2,k)
+        m = m + 1
+        i4wk2d(1,m) = intf%my_gicir(1,k)
+        i4wk2d(2,m) = intf%my_gicir(2,k)
+        i4wk2d(3,m) = intf%my_nlay(k)
+        i4wk2d(4,m) = intf%nb_gicir(1,k)
+        i4wk2d(5,m) = intf%nb_gicir(2,k)
+        i4wk2d(6,m) = intf%nb_nlay(k)
       end do
     end do
   end do
   f = trim(out_pref)//'.intfnodes.bin'
   call open_file(f, iu, 'w', .true.)
-  write(iu)((i4wk2d(j,i),j=1,4),i=1,n)
+  write(iu)((i4wk2d(j,i),j=1,6),i=1,m)
   close(iu)
   
 end program
