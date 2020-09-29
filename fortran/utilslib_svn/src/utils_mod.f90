@@ -17,6 +17,7 @@ module utilsmod
   character(len=1), parameter :: comment = '#'
 
   integer(i4b), parameter :: IZERO = 0
+  real(r4b), parameter :: RZERO = 0.0
   real(r8b), parameter :: DZERO = 0.D0
   real(r8b), parameter :: DONE  = 1.D0
 
@@ -207,8 +208,6 @@ module utilsmod
     ! -- locals
     integer(i4b) :: idum
     character(len=100) :: s
-
-
 ! ------------------------------------------------------------------------------
     call cfn_mjd2datehms(jd,date,idum,idum,idum)
     write(s,*) date
@@ -223,8 +222,6 @@ module utilsmod
 ! ******************************************************************************
     ! -- arguments
     real(r8b), intent(inout) :: jd
-
-
     ! -- locals
     integer(i4b) :: date, y, m, d
 ! ------------------------------------------------------------------------------
@@ -237,9 +234,32 @@ module utilsmod
       m = m + 1
     end if
     jd = get_jd(y, m, d)
-
+    return
   end subroutine jd_next_month
-
+!  
+  function get_month_days_s(date) result(nd)
+! ******************************************************************************
+    ! -- arguments
+    character(len=mxslen), intent(in) :: date
+    integer(i4b) :: nd
+    ! -- locals
+    real(r8b) :: jd
+    ! -- functions
+    integer(i4b) :: y, m, d, ios
+! ------------------------------------------------------------------------------
+    !
+    read(date(1:4),*,iostat=ios) y
+    read(date(5:6),*,iostat=ios) m
+    read(date(7:8),*,iostat=ios) d
+    if (ios /= 0) then
+      d = 1
+    end if
+    jd = get_jd(y, m, d)
+    nd = get_month_days(jd)
+    !
+    return
+  end function get_month_days_s
+  !
   function get_month_days(jd) result(nd)
 ! ******************************************************************************
     ! -- arguments
@@ -258,13 +278,14 @@ module utilsmod
     else
       date2 = y*10000+(m+1)*100+1
     end if
-
+    !
     call cfn_datehms2mjd(date1,0,0,0,jd1)
     call cfn_datehms2mjd(date2,0,0,0,jd2)
     djd = cfn_jd_delta(jd2,jd1)
-
+    !
     nd = nint(djd)
-
+    !
+    return
   end function get_month_days
 
   function readgen(f) result(p)
@@ -321,6 +342,7 @@ module utilsmod
     !
     close(iu)
     !
+    return
   end function readgen
 
   subroutine filtergen_i1(p, i1a, xmin, ymin, cs, i1mv)
@@ -411,19 +433,35 @@ module utilsmod
     s_out = trim(adjustl(s_in))
   end function tas
 
-  function ta_i4(arr) result(s)
+  function ta_i4(arr, ndig) result(s)
 ! ******************************************************************************
     ! -- arguments
     integer(i4b), dimension(:), intent(in) :: arr
     character(len=:), allocatable :: s
+    integer(i4b), intent(in), optional :: ndig
     ! -- locals
+    logical :: lfmt
     integer(i4b) :: i
-    character(len=mxslen) :: w
+    character(len=mxslen) :: w, fmt
 ! ------------------------------------------------------------------------------
-    write(w,*) arr(1)
+    if (present(ndig)) then
+      lfmt = .true.
+      write(fmt,'(a,i2,a,i2,a)') '(i',ndig,'.',ndig,')'
+    else
+      lfmt = .false.
+    end if
+    if (lfmt) then
+      write(w,fmt) arr(1)
+    else
+      write(w,*) arr(1)
+    end if
     s = trim(adjustl(w))
     do i = 2, size(arr)
-      write(w,*) arr(i)
+      if (lfmt) then
+        write(w,fmt) arr(i)
+      else
+        write(w,*) arr(i)
+      end if
       s = s//' '//trim(adjustl(w))
     end do
   end function ta_i4
@@ -483,8 +521,24 @@ module utilsmod
         s(i:i) = tgt_slash
       end if
     end do
-
+    !
+    return
   end subroutine swap_slash
+  !
+  function get_slash() result(slash)
+! ******************************************************************************
+    ! -- arguments
+    character(len=1) :: slash
+    ! -- locals
+! ------------------------------------------------------------------------------
+    if (os == 1) then ! windows
+      slash = win_slash
+    else ! linux
+      slash = lin_slash
+    end if
+    !
+    return
+  end function get_slash  
 
   subroutine get_rel_up(f, n)
 ! ******************************************************************************
@@ -496,37 +550,139 @@ module utilsmod
     character(len=1) :: slash
 ! ------------------------------------------------------------------------------
     call swap_slash(f)
-    if (os == 1) then ! windows
-      slash = win_slash
-    else
-      slash = lin_slash
-    end if
+    slash = get_slash()
     do i = 1, n
       j = index(f, slash)
       if (j < 0) then
-        call errmsg('Could not determine realtive path')
+        call errmsg('Could not determine relative path')
       end if
       f = f(j+1:)
     end do
     f = '.'//slash//trim(f)
   end subroutine get_rel_up
 
-  subroutine create_dir(d)
+  subroutine create_dir(d, lverb_in)
 ! ******************************************************************************
     ! -- arguments
     character(len=*), intent(inout) :: d
+    logical, intent(in), optional :: lverb_in
     ! -- locals
+    logical :: ldirexist, lverb
+    integer(i4b) :: ios
 ! ------------------------------------------------------------------------------
+    if (present(lverb_in)) then
+      lverb = lverb_in
+    else
+      lverb = .false.
+    end if
+    !
     call swap_slash(d)
+    inquire(directory=d, exist=ldirexist, iostat=ios)
+    if (ios.ne.0) ldirexist=.false.
+    if (ldirexist) then
+      if (.not.lverb) then
+        call logmsg('Directory '//trim(d)//' already already exists.')
+      end if
+      return
+    end if
+    !
+    if (.not.lverb) then
+      call logmsg('Creating directory '//trim(d)//'.')
+    end if
     if (os == 1) then !windows
       call system('mkdir '//trim(d))
     end if
     if (os == 2) then !linux
       call system('mkdir -p '//trim(d))
     end if
-
+    !
+    return
   end subroutine create_dir
-
+  !
+  subroutine change_work_dir(d, lverb_in)
+! ******************************************************************************
+    ! -- arguments
+    character(len=*), intent(inout) :: d
+    logical, intent(in), optional :: lverb_in
+    ! -- locals
+    character(len=mxslen) :: cd
+    logical :: lverb, ldirexist
+    integer(i4b) :: ios
+! ------------------------------------------------------------------------------
+    if (present(lverb_in)) then
+      lverb = lverb_in
+    else
+      lverb = .false.
+    end if
+    !
+    call swap_slash(d)
+    inquire(directory=d, exist=ldirexist, iostat=ios)
+    if (ios.ne.0) ldirexist=.false.
+    if (.not.ldirexist) then
+      call errmsg('Directory '//trim(d)//' does not exist.')
+    end if
+    !
+    if (.not.lverb) then
+      call get_work_dir(cd)
+      call logmsg('Changing working directory '//trim(cd)//' -> '//trim(d)//'.')
+    end if
+    call chdir(d)
+    !
+    return
+  end subroutine change_work_dir
+  !
+  subroutine get_work_dir(d)
+! ******************************************************************************
+    ! -- arguments
+    character(len=*), intent(inout) :: d
+! ------------------------------------------------------------------------------
+    call getcwd(d)
+    !
+    return
+  end subroutine get_work_dir
+  !
+  subroutine get_abs_path(f)
+! ******************************************************************************
+    ! -- arguments
+    character(len=*), intent(inout) :: f
+    ! -- locals
+    character(len=1) :: slash
+    character(len=mxslen) :: d, s
+    integer(i4b) :: i, j, n
+! ------------------------------------------------------------------------------
+    !
+    call swap_slash(f)
+    if (f(1:1) /= '.') return
+    !
+    call get_work_dir(d)
+    !
+    s = f
+    !
+    slash = get_slash()
+    !
+    n = 0
+    if (s(1:3) == '..'//slash) then
+      n = 1; s = s(4:)
+      do while (s(1:3) == '..'//slash)
+        n = n + 1; s = s(4:)
+      end do
+    end if
+    !
+    if (n == 0) then 
+      f = trim(d)//trim(s(3:))
+    else
+      do i = 1, n
+        j = index(d, slash, back=.true.)
+        if (j <= 0) then
+          call errmsg('get_abs_path: '//trim(f)//'.')
+        end if
+        d = d(1:j-1)
+      end do
+      f = trim(d)//slash//trim(s)
+    end if
+    return
+  end subroutine
+  !
   subroutine open_file(f, iu, act_in, lbin_in)
 ! ******************************************************************************
     ! -- arguments
@@ -716,22 +872,42 @@ module utilsmod
     character(len=mxslen), dimension(:), allocatable :: words
     character(len=1), optional, intent(in) :: token
     ! -- locals
-    integer(i4b) :: ios, i, j, n, iact
+    integer(i4b) :: ios, i, j, n, iact, i0, i1
     character(len=1) :: tokenLocal
-    character(len=mxslen) :: s1, s2
+    character(len=1), parameter :: quote = '"'
+    character(len=mxslen) :: s, s1, s2
     integer(I4B), parameter :: maxwords = 100
     integer(I4B), dimension(maxwords) :: ind
+    logical :: lquote
 ! ------------------------------------------------------------------------------
+    !
+    s = s_in
+    !
     tokenLocal = ' '
     if (present(token)) then
       tokenLocal = token
     endif
     !
+    ! first check for quotes
+    lquote = .false.
+    i0 = index(s_in,quote)
+    if (i0 > 0) then
+      i1 = index(s,quote,back=.true.)
+      if ((i1 > 0).and.(i0 /= i1)) lquote = .true.
+    end if
+    if (lquote) then
+      do i = i0, i1
+        if (s(i:i) == tokenLocal) s(i:i) = quote
+      end do
+    end if
+    !
     i = index(s_in,comment)
     if (i > 0) then
-      s1 = trim(s_in(1:i))
+      !s1 = trim(s_in(1:i))
+      s1 = trim(s(1:i))
     else
-      s1 = trim(s_in)
+      !s1 = trim(s_in)
+      s1 = trim(s)
     endif
     s1 = adjustl(s1)
     if (len_trim(s1) == n) then
@@ -761,8 +937,18 @@ module utilsmod
     do i = 1, n
       read(s1(ind(i):ind(i+1)-1),'(a)') s2
       j = index(trim(s2), tokenLocal, back=.true.)+1
-      words(i) = s2(j:)
+!      words(i) = s2(j:)
+      s2 = s2(j:)
+      if (lquote) then
+        do j = 1, len_trim(s2)
+          if (s2(j:j) == quote) s2(j:j) = ' '
+          s2 = adjustl(s2)
+        end do
+      end if
+      words(i) = s2
     end do
+    !
+    return
   end function getwords
 
   subroutine writetofile_i4(lun, arr, pre, post)
@@ -2845,4 +3031,19 @@ end subroutine addboundary_r
 
   end function change_case
 
+  function count_i1a(a, v) result(n)
+! ******************************************************************************
+    ! -- arguments
+    integer(i1b), dimension(:), intent(in) :: a
+    integer(i1b), intent(in) :: v 
+    integer(i4b) :: n
+    ! -- locals
+    integer(i4b) :: i
+! ------------------------------------------------------------------------------
+    n = 0
+    do i = 1, size(a)
+      if (a(i) == v) n = n + 1
+    end do
+  end function count_i1a
+  
 end module utilsmod
