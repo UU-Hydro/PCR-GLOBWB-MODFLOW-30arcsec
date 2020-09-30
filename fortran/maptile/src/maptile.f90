@@ -18,7 +18,7 @@ program maprcb
   real, dimension(:,:), allocatable :: loadptr, wrk
   double precision :: xul, yul, xmin, xmax, ymin, ymax, cs, dxmin, dxmax, dymin, dymax
   logical, parameter :: lround = .true.
-  character(len=1024), dimension(10) :: sa
+  character(len=1024), dimension(100) :: sa
   integer, parameter :: maxnp = 1000
   integer, dimension(:), allocatable :: iadd
   
@@ -144,10 +144,10 @@ program maprcb
       !write(sa(2),*) irow
       ic0 = proc_icolmin(iproc); ic1 = proc_icolmax(iproc)
       ir0 = proc_irowmin(iproc); ir1 = proc_irowmax(iproc)
-      write(sa(3),*) ic0
-      write(sa(4),*) ic1
-      write(sa(5),*) ir0
-      write(sa(6),*) ir1
+      write(sa(1),*) ic0
+      write(sa(2),*) ic1
+      write(sa(3),*) ir0
+      write(sa(4),*) ir1
       !
       ! local bounding box
       n = 0
@@ -162,13 +162,17 @@ program maprcb
           end if
         end do
       end do
-      write(sa(7),*) n
-      write(sa(8),*) jc0
-      write(sa(9),*) jc1
-      write(sa(10),*) jr0
-      write(sa(11),*) jr1
+      !write(sa(7),*) n
+      !write(sa(8),*) jc0
+      !write(sa(9),*) jc1
+      !write(sa(10),*) jr0
+      !write(sa(11),*) jr1
       !write(lun,'(10(a,1x),a)')(trim(adjustl(sa(i))),i=1,11)
-      write(lun,'(8(a,1x),a)')(trim(adjustl(sa(i))),i=3,11)
+      write(sa(5),*) proc_dicolmin(iproc)
+      write(sa(6),*) proc_dicolmax(iproc)
+      write(sa(7),*) proc_dirowmin(iproc)
+      write(sa(8),*) proc_dirowmax(iproc)
+      write(lun,'(7(a,1x),a)')(trim(adjustl(sa(i))),i=1,8)
     end do
   end do
   close(lun)

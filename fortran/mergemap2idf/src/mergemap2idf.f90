@@ -41,13 +41,14 @@ program mergemap2idf
   allocate(map)
   do iact = 1, 2
     do ip = 1, np
+    !do ip = 47, 48
       call get_map_fname(f, fp, ip, np)
       inquire(file=f,exist=lex)
       if (.not.lex) then
         write(*,*) 'Skipping '//trim(f)//'...'
         cycle
       end if
-      ok = map%read_header(f)
+      ok = map%init(f)
       call map%read_data()
       call map%get_r4ar(lx, lmv, lmin, lmax)
       if ((ip == 1) .and. (iact == 1)) then
@@ -117,7 +118,7 @@ program mergemap2idf
     end do
   end do !iact
   !
-  call writeidf(fo, gx, nc, nr, gxll, gyll, gcs, gmv)
+  call writeidf(fo, gx, nc, nr, dble(gxll), dble(gyll), dble(gcs), dble(gmv))
   
 end program
   

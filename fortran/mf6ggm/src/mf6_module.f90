@@ -754,6 +754,9 @@ module mf6_module
         do ic = 1, nc
           jc = ic + ic0 - 1; jr = ir + ir0 - 1
           i = int(itile(ic,ir),i4b)
+          if (i < 0) then
+            i = -i
+          end if
           if (i > 0) then
             r4v = dat%distmap%getval(jc, jr, i)
             arr(ic,ir) = r4v
@@ -1803,7 +1806,16 @@ module mf6_module
       ms = 'm'//ta((/this%mod_id(i)/),5); write(iu,'(a)') trim(ms)
     end do
     close(iu)
-    
+    !
+    ! cgc.solmodels.asc
+    f = trim(this%solname)//'.cgc.solmodels.asc'
+    call open_file(f, iu, 'w')
+    do i = 1, this%nmod
+      ms = 'm'//ta((/this%mod_id(i)/),5)
+      write(iu,'(a)') trim(ms)//' '//ta((/i/))
+    end do
+    close(iu)
+    !
     ! solmodels.asc.wrp
     f = trim(this%solname)//'.solmodels.wrp.asc'
     call open_file(f, iu, 'w')
@@ -1814,6 +1826,15 @@ module mf6_module
     write(iu,'(   a)') 'END MODELS'
     close(iu)
     !
+    ! cgc.solmodels.asc.wrp
+    f = trim(this%solname)//'.cgc.solmodels.wrp.asc'
+    call open_file(f, iu, 'w')
+    write(iu,'(   a)') 'BEGIN MODELS'
+    s = '..\run_input\'//trim(this%solname)//'.cgc.solmodels.asc'
+    call swap_slash(s)
+    write(iu,'(2x,a)') 'OPEN/CLOSE '//trim(s)
+    write(iu,'(   a)') 'END MODELS'
+    close(iu)
     return
   end subroutine mf6_sol_write_wrap
   
@@ -1925,8 +1946,13 @@ module mf6_module
         write(iu,'(   a)') 'END EXCHANGES'
         write(iu,'(a)')
         write(iu,'(   a)') 'BEGIN SOLUTIONGROUP 1'
-        write(iu,'(2x,a)') 'IMS6 '//trim(d)//trim(this%solname)//'.ims FILEIN '//trim(d)// &
-          trim(this%solname)//'.solmodels.wrp.asc'
+        if (this%lmm) then
+          write(iu,'(2x,a)') 'IMS6_CGC '//trim(d)//trim(this%solname)//'.ims FILEIN '//trim(d)// &
+            trim(this%solname)//'.cgc.solmodels.wrp.asc'
+        else
+          write(iu,'(2x,a)') 'IMS6 '//trim(d)//trim(this%solname)//'.ims FILEIN '//trim(d)// &
+            trim(this%solname)//'.solmodels.wrp.asc'
+        end if
         write(iu,'(   a)') 'END SOLUTIONGROUP'
         close(iu)
         !
@@ -2333,6 +2359,7 @@ module mf6_module
         itile = int(reg%itile(ic,ir),i4b)
         if (itile == 0) then
           if (associated(dat%distmap%r4def)) then
+            call logmsg("WARNING: default value is taken!")
             r4val = dat%distmap%r4def
             if (dat%distmap%larea) then
               r4val = r4val * cam2(ir)/(gcs*gcs)
@@ -2341,6 +2368,9 @@ module mf6_module
             r4val = RZERO
           end if
         else
+          if (itile < 0) then
+            itile = -itile
+          end if
           r4val = dat%distmap%getval(gic, gir, itile)
         end if
     end select
@@ -2371,12 +2401,13 @@ module mf6_module
     integer(i4b) :: n, nt, i, j, ireg, ir, ic, jr, jc, ib, itile, ilay, nlay
     integer(i4b) :: arrsiz
     real(r4b) :: r4val
-    logical :: lfirst, ltile, toponly, found
+    logical :: lfirst, ltile, toponly, found, ldefault
     type(tData), pointer :: dat => null()
     type(idfobj), pointer :: idf
 ! ------------------------------------------------------------------------------
     lfirst = .true.
     ltile = .true.
+    ldefault = .false.
     !
     if (present(ib_in)) then
       ib = ib_in
@@ -2487,6 +2518,7 @@ module mf6_module
                 itile = int(reg%itile(jc,jr),i4b)
                 if (itile == 0) then
                   if (associated(dat%distmap%r4def)) then
+                    ldefault = .true.
                     r4val = dat%distmap%r4def
                     if (dat%distmap%larea) then
                       r4val = r4val * cam2(ir)/(gcs*gcs)
@@ -2496,6 +2528,9 @@ module mf6_module
                     ltile = .false.
                   end if
                 else
+                  if (itile < 0) then
+                    itile = -itile
+                  end if
                   r4val = dat%distmap%getval(ic, ir, itile)
                 end if
             end select
@@ -2512,6 +2547,9 @@ module mf6_module
     !
     if (.not.ltile) then
       call logmsg('WARNING, for some points the tile was not found!')
+    end if
+    if (ldefault) then
+      call logmsg('WARNING, for some points default values were taken!')
     end if
     !
     return
@@ -3656,9 +3694,9 @@ module mf6_module
       write(iu,'(a)')
       write(iu,'(   a)') 'BEGIN PERIOD 1'
       ! set the external boundary to zero (sea-level) ***WORKAROUND***
-      do i = 1, size(r8wrk)
-        r8wrk(i) = DZERO
-      end do
+      !do i = 1, size(r8wrk)
+      !  r8wrk(i) = DZERO
+      !end do
       f = trim(pb)//'.chd'; call this%write_list(iu, 2, f, i1wrk, r8wrk, lbin)
       write(iu,'(   a)') 'END PERIOD'
       close(iu)

@@ -320,15 +320,16 @@ program datamap
       if (xid(ic,ir) < 0) then !labeled as CHD
         if (landmask(ic,ir) == 1) then !land
           xid(ic,ir) = 0
+        else
+          landmask(ic,ir) = 2 !sea
         end if
       end if
     end do
   end do
-  if (.true.) then
+  if (.false.) then
     call writeidf('tmp.idf', xid, nc, nr, &
       gxmin + (gic0-1)*gcs, gymin + (gnrow-gir1)*idf%dx, &
       gcs, 0.D0)
-    stop
   end if
   !
   mxgid = maxval(xid)
@@ -667,9 +668,6 @@ program datamap
   ! set pointers to nodes in map.intfnodes.bin
   p = 1
   do i = 1, mxlid
-    if (l2g(i) ==1676128) then
-      write(*,*) 'Debug'
-    end if
     n = (i4wk1d1(i+1) - i4wk1d1(i) - 7)/4
     do j = i4wk1d1(i) + 7 + 3*n + 1, i4wk1d1(i+1) - 1
       i4wk1d2(j) = p
@@ -733,9 +731,12 @@ program datamap
   close(iu)
   !
   ! prepare for the tiles
+  if (allocated(i4wk2d)) deallocate(i4wk2d)
+  allocate(i4wk2d(nc,nr))
   allocate(itile(nc,nr))
   do ir = 1, nr
     do ic = 1, nc
+      i4wk2d(ic,ir) = 0
       itile(ic,ir) = 0
     end do
   end do  
@@ -743,6 +744,7 @@ program datamap
   call open_file(f, iu, 'r')
   read(iu,*) ntile
   call getarg(5, tile_pref)
+  !
   do i = 1, ntile
     read(iu,*) ic0, ic1, ir0, ir1
     !
@@ -757,7 +759,8 @@ program datamap
     end if
     !
     nct = ic1-ic0+1; nrt = ir1-ir0+1
-    write(f,'(a,i3.3,a)') trim(tile_pref), i, '.idf'; call chkexist(f)
+    write(f,'(a,2(i3.3,a))') trim(tile_pref), i, '-', ntile, '.idf'; 
+    call chkexist(f)
     write(*,'(a)') 'Reading '//trim(f)//'...'
     if (.not.idfread(idf, f, 1)) then
       call errmsg('Could not read '//trim(f))
@@ -768,22 +771,46 @@ program datamap
       call errmsg('Invalid tile.')
     end if
     !
+    ! add the sea boundary
+    call addboundary(idf%x, idf%ncol, idf%nrow, idf%nodata)
+    !
     do ir = 1, idf%nrow
       do ic = 1, idf%ncol
-        if (idf%x(ic,ir) /= idf%nodata) then
-          jc = ic0 + ic - 1; jr = ir0 + ir - 1 ! global
-          kc = jc - gic0 + 1; kr = jr - gir0 + 1
-          if ((kc >= 1).and.(kc <= nc).and.(kr >= 1).and.(kr <= nr)) then
+        jc = ic0 + ic - 1; jr = ir0 + ir - 1 ! global
+        kc = jc - gic0 + 1; kr = jr - gir0 + 1
+        if ((kc >= 1).and.(kc <= nc).and.(kr >= 1).and.(kr <= nr)) then
+          r4val = idf%x(ic,ir)
+          if ((r4val /= idf%nodata) .and.(r4val > 0.)) then
             itile(kc,kr) = i
+          end if
+          if (landmask(kc,kr) == 2) then
+            if ((r4val /= idf%nodata) .and.(r4val < 0.).and.(i4wk2d(kc,kr) <= 0.)) then
+              i4wk2d(kc,kr) = i
+            else
+              i4wk2d(kc,kr) = -i
+            end if
           end if
         end if
       end do
     end do
+    !
     if (.not.idfallocatex(idf)) then
       call errmsg('Could not deallocate idf.')
     end if
   end do
   close(iu)
+  !
+  do ir = 1, nr
+    do ic = 1, nc
+      if (i4wk2d(ic,ir) /= 0) then
+        itile(ic,ir) = -abs(i4wk2d(ic,ir))
+      end if
+      if ((landmask(ic,ir) == 2).and.(itile(ic,ir) == 0)) then
+        call errmsg("Some sea-cells do not have an associated tile.")
+      end if
+    end do
+  end do
+  !
   if (.false.) then
     call writeidf('tile.idf', itile, nc, nr, &
       gxmin+(gic0-1)*gcs, gymin+(gnrow-gir1)*gcs, gcs, 0.D0)
@@ -813,7 +840,7 @@ program datamap
           jc = ic + gic0 - 1; jr = ir + gir0 - 1
           i4wk2d(1,n) = jc; i4wk2d(2,n) = jr ! global node number
           i1wk1d(n) = nlay(ic,ir)
-          i2wk1d(n) = itile(ic,ir)
+          i2wk1d(n) = itile(ic,ir)  !tile
           if (id < 0) then
             i4wk2d(1,n) = -i4wk2d(1,n)
           end if

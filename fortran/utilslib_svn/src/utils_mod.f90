@@ -71,8 +71,9 @@ module utilsmod
   interface addboundary
     module procedure :: addboundary_i
     module procedure :: addboundary_r
+    module procedure :: addboundary_d
   end interface
-  private :: addboundary_i, addboundary_r
+  private :: addboundary_i, addboundary_r, addboundary_d
 
   interface calc_unique
     module procedure :: calc_unique_i
@@ -2054,6 +2055,56 @@ subroutine addboundary_i(wrk, ncol, nrow)
   !end do
 
 end subroutine addboundary_i
+
+subroutine addboundary_d(wrk, ncol, nrow, nodata)
+! ******************************************************************************
+  integer, intent(in) :: ncol, nrow
+  double precision, dimension(ncol,nrow), intent(inout) :: wrk
+  double precision, intent(in) :: nodata
+
+  integer :: icol, irow, jp
+
+  write(*,*) 'ADDING CONSTANT HEAD BOUNDARY!'
+  do irow = 1, nrow
+    do icol = 1, ncol
+      jp = int(wrk(icol,irow))
+      if (jp > 0) then
+        ! N
+        if (irow > 1) then
+          if (wrk(icol,irow-1) == nodata) then
+            wrk(icol,irow-1) = -dble(jp)
+          end if
+        end if
+        ! S
+        if (irow < nrow) then
+          if (wrk(icol,irow+1) == nodata) then
+            wrk(icol,irow+1) = -dble(jp)
+          end if
+        end if
+        ! W
+        if (icol > 1) then
+          if (wrk(icol-1,irow) == nodata) then
+            wrk(icol-1,irow) = -dble(jp)
+          end if
+        end if
+        ! E
+        if (icol < ncol) then
+          if (wrk(icol+1,irow) == nodata) then
+            wrk(icol+1,irow) = -dble(jp)
+          end if
+        end if
+      end if
+    end do
+  end do
+
+  !do irow = 1, nrow
+  !  do icol = 1, ncol
+  !    jp = wrk(icol,irow)
+  !    wrk(icol,irow) = abs(jp)
+  !  end do
+  !end do
+
+end subroutine addboundary_d
 
 subroutine addboundary_r(wrk, nodata)
 ! ******************************************************************************
