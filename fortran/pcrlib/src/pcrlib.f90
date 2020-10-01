@@ -200,8 +200,6 @@ contains
     logical :: ok
     ! -- local
     integer(i4b) :: verb
-    real(r8b) :: xll, yll
-    real(i4b) :: ncol, nrow
     logical :: lok
 ! ------------------------------------------------------------------------------
     if (present(verb_in)) then
@@ -244,7 +242,6 @@ contains
     !
     logical :: ok
     ! -- local
-    real(r8b) :: xll, yll
     integer(i4b) :: ncol, nrow
     type(tMapHdr), pointer :: hdr
 ! ------------------------------------------------------------------------------
@@ -384,7 +381,6 @@ contains
     integer(kind=c_int16_t) :: uint2
     integer(kind=c_int32_t) :: uint4
     
-    integer :: i, iinc
     real, parameter :: nodata = -9999. ! should be exactly the same as in rdrsmodule !
     type(tMapHdr), pointer :: hdr
 ! ------------------------------------------------------------------------------
@@ -551,7 +547,6 @@ contains
     class(tMap) :: this
     ! -- local
     integer(i4b) :: nc, nr, ic, ir, p
-    character(len=1), dimension(:,:), allocatable :: wrk
 ! ------------------------------------------------------------------------------
     nc = this%header%nrCols; nr = this%header%nrRows
     p = 256+1

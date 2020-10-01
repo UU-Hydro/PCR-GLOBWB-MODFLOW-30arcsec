@@ -578,7 +578,7 @@ contains
     class(tMetis) :: this
     ! -- local
     real(r8b), dimension(:), allocatable :: load
-    integer(i4b) :: i, ip, nr, nc, ir, ic, n
+    integer(i4b) :: i, ip
 ! ------------------------------------------------------------------------------
     !
     if (.not.associated(this%totload)) allocate(this%totload)

@@ -270,7 +270,7 @@ module utilsmod
     real(r8b), intent(in) :: jd
     integer(i4b) :: nd
     ! -- locals
-    integer(i4b) :: date1, date2, idum
+    integer(i4b) :: date1, date2
     real(r8b) :: jd1, jd2, djd
     ! -- functions
     integer(i4b) :: y, m, d
@@ -876,7 +876,7 @@ module utilsmod
     character(len=mxslen), dimension(:), allocatable :: words
     character(len=1), optional, intent(in) :: token
     ! -- locals
-    integer(i4b) :: ios, i, j, n, iact, i0, i1
+    integer(i4b) :: i, j, n, i0, i1
     character(len=1) :: tokenLocal
     character(len=1), parameter :: quote = '"'
     character(len=mxslen) :: s, s1, s2
@@ -1156,8 +1156,7 @@ module utilsmod
     integer, dimension(ncol,nrow), intent(in) :: x
     real, intent(in) :: xll, yll, cs, nodata
     ! -- locals
-    integer :: lun, icol, irow, imin, imax, nd, ndmin, ndmax
-    character(len=100) :: fmtstr
+    integer :: lun, icol, irow
 ! ------------------------------------------------------------------------------
 
     write(*,'(1x,a,1x,2a)') 'Writing',trim(f),'...'
@@ -1178,8 +1177,7 @@ module utilsmod
     real, dimension(ncol,nrow), intent(in) :: x
     double precision, intent(in) :: xll, yll, cs, nodata
     ! -- locals
-    integer :: lun, icol, irow, imin, imax, nd, ndmin, ndmax
-    character(len=100) :: fmtstr
+    integer :: lun, icol, irow
 ! ------------------------------------------------------------------------------
 
     write(*,'(1x,a,1x,2a)') 'Writing',trim(f),'...'
@@ -1404,8 +1402,7 @@ module utilsmod
     double precision, dimension(ncol,nrow), intent(in) :: x
     double precision, intent(in) :: xll, yll, cs, nodata
     ! -- locals
-    integer :: lun, icol, irow, imin, imax, nd, ndmin, ndmax
-    character(len=100) :: fmtstr
+    integer :: lun, icol, irow
 ! ------------------------------------------------------------------------------
 
     write(*,'(1x,a,1x,2a)') 'Writing',trim(f),'...'
@@ -1534,7 +1531,7 @@ module utilsmod
     integer(i4b), dimension(:,:), pointer, intent(inout) :: arr
     integer(i4b), intent(in), optional :: nodata_in
     ! --- local
-    integer(i4b) :: nc, nr, lun, ic, ir, jc, jr
+    integer(i4b) :: nc, nr, ic, ir, jc, jr
     integer(i4b) :: nodata
     real(r4b) :: rval
 ! ------------------------------------------------------------------------------
@@ -1576,7 +1573,7 @@ module utilsmod
     real(r4b), dimension(:,:), pointer, intent(inout) :: arr
     real(r4b), intent(in), optional :: nodata_in
     ! --- local
-    integer(i4b) :: nc, nr, lun, ic, ir, jc, jr
+    integer(i4b) :: nc, nr, ic, ir, jc, jr
     real(r4b) :: nodata
     real(r4b) :: rval
 ! ------------------------------------------------------------------------------
@@ -1618,7 +1615,7 @@ module utilsmod
     real(r8b), dimension(:,:), pointer, intent(inout) :: arr
     real(r8b), intent(in), optional :: nodata_in
     ! --- local
-    integer(i4b) :: nc, nr, lun, ic, ir, jc, jr
+    integer(i4b) :: nc, nr, ic, ir, jc, jr
     real(r8b) :: nodata
     real(r4b) :: rval
 ! ------------------------------------------------------------------------------
@@ -1663,8 +1660,7 @@ module utilsmod
     integer, intent(in), optional :: in_ir0, in_ir1, in_ic0, in_ic1, in_idebug
     ! --- local
     integer :: idebug, ir0, ir1, ic0, ic1
-    character(len=1) :: cdum
-    integer :: lun, rddata, icol, irow, jcol, jrow
+    integer :: rddata, icol, irow, jcol, jrow
     type(idfobj) :: idf
 ! ------------------------------------------------------------------------------
     idebug = 0
@@ -1746,8 +1742,7 @@ module utilsmod
     real, intent(out) :: xll, yll, cs, nodata
     integer, intent(in), optional :: idebug
     ! --- local
-    character(len=1) :: cdum
-    integer :: lun, icol, irow, ideb
+    integer :: icol, irow, ideb
     type(idfobj) :: idf
 ! ------------------------------------------------------------------------------
     ideb = 0
@@ -1806,8 +1801,7 @@ module utilsmod
     double precision, intent(out) :: xll, yll, cs, nodata
     integer, intent(in), optional :: idebug
     ! --- local
-    character(len=1) :: cdum
-    integer :: lun, icol, irow, ideb
+    integer :: icol, irow, ideb
     type(idfobj) :: idf
 ! ------------------------------------------------------------------------------
 
@@ -2177,12 +2171,12 @@ end subroutine addboundary_r
     integer, parameter ::jp = 1, jn = 2, js = 3, jw = 4, je = 5
     integer, parameter ::jnw = 6, jne = 7, jsw = 8, jse = 9
     integer, parameter :: nsten = jse
-    integer, dimension(2,nsten) :: s1, s2
+    integer, dimension(2,nsten) :: s1
 
     integer, parameter :: nnmax = 100
     integer :: nst, ic, ir, jc, jr, ncol, nrow, n1, n2, i, j, k, iact, n, m
     integer :: ics, irs, ict, irt, is, it, jt, ic0, ic1, ir0, ir1, itmin, imin
-    integer :: lncol, lnrow, ictmin, irtmin, nc, nr
+    integer :: ictmin, irtmin, nc, nr
     integer, dimension(:,:), allocatable :: lst1, lst2, wrk
     double precision, dimension(:), allocatable :: ds
     integer, dimension(:), allocatable :: dsi
@@ -2586,12 +2580,12 @@ end subroutine addboundary_r
     integer, parameter ::jp = 1, jn = 2, js = 3, jw = 4, je = 5
     integer, parameter ::jnw = 6, jne = 7, jsw = 8, jse = 9
     integer, parameter :: nsten = jse
-    integer, dimension(2,nsten) :: s1, s2
+    integer, dimension(2,nsten) :: s1
 
     integer, parameter :: nnmax = 100
     integer :: nst, ic, ir, jc, jr, ncol, nrow, n1, n2, i, j, k, iact, n, m
     integer :: ics, irs, ict, irt, is, it, jt, ic0, ic1, ir0, ir1, itmin, imin
-    integer :: lncol, lnrow, ictmin, irtmin, nc, nr
+    integer :: ictmin, irtmin, nc, nr
     integer, dimension(:,:), allocatable :: lst1, lst2, wrk
     double precision, dimension(:), allocatable :: ds
     integer, dimension(:), allocatable :: dsi
