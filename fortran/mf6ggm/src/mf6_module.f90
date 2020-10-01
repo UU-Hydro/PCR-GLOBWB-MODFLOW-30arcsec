@@ -2255,6 +2255,7 @@ module mf6_module
       call open_file(f, iu, 'w')
       write(iu,'(   a)') 'BEGIN OPTIONS'
       f = trim(resultslstdir)//'\'//trim(this%modelname)//'.'//trim(ctim)//trim(pr(inam,irun))//'.lst'
+      call swap_slash(f)
       write(iu,'(2x,a)') 'LIST '//trim(f)
       write(iu,'(   a)') 'END OPTIONS'
       write(iu,'(a)')
