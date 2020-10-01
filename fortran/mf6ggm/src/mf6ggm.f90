@@ -3,7 +3,7 @@ program mf6ggm
   use pcrModule, only: tMap
   use utilsmod, only: i1b, i2b, i4b, i8b, r4b, r8b, mxslen, open_file, chkexist, errmsg, &
     quicksort_d, label_node, tBB, DZERO, writeidf, create_dir, swap_slash, count_i1a, &
-    change_work_dir, get_work_dir, ta
+    change_work_dir, get_work_dir, ta, fileexist
   use metis_module, only: tMetis, tolimbal
   use mf6_module, only:  tMf6_sol, tMf6_mod, tReg, raw, tDistMap, tExchange, ntile, tilebb, &
     gncol, gnrow, gnlay, gxmin, gymin, gcs, cam2 !debug
@@ -71,17 +71,16 @@ program mf6ggm
   type(tSol), dimension(:), pointer :: sol => null()
   type(tMetis), pointer :: m => null()
   type(tMetis), dimension(:), pointer :: solmet => null()
-  type(tMod), pointer :: md => null(), md2 => null()
+  type(tMod), pointer :: md => null()
   type(tMf6_mod), pointer :: mmd => null(), mmd2 => null()
-  type(tBB), dimension(:), pointer :: regbb => null()
   type(tBB), pointer :: bb => null(), mbb => null()
   type(tReg), pointer :: r => null()
   type(tModReg), pointer :: mr => null()
   type(tCatIntf), pointer :: intf => null()
   type(tCatNodIntf), pointer :: nodintf => null()
   type(tExchange), pointer :: xch => null(), xch2 => null()
+  type(tMap), pointer :: map => null()
   !
-  integer(i1b), dimension(:),     allocatable :: i1wk1d
   integer(i4b), dimension(:),     allocatable :: i4wk1d, i4wk1d2
   integer(i4b), dimension(:,:),   allocatable :: i4wk2d
   integer(i4b), dimension(:,:,:), allocatable :: i4wk3d
@@ -89,14 +88,13 @@ program mf6ggm
   real(r4b),    dimension(:,:,:), allocatable :: r4wk3d
   real(r8b),    dimension(:),     allocatable :: r8wk1d
   !
-  character(len=mxslen) :: f, d, cd, out_dir, map_pref, mod_inp
-  character(len=mxslen) :: str
-  logical :: lsm, lfound, lwmod, lwsol
+  character(len=mxslen) :: f, d, out_dir, map_pref, mod_inp
+  logical :: lwmod, lwsol, lok
   integer(i1b) :: nlay
   integer(i2b) :: itile
   integer(i4b) :: iu, ju, nsol, nsol_mm, nsol_sm, i, j, k, kk, k0, k1, n, nn, nb, n_reg, nja_reg
-  integer(i4b) :: solncat, solmxlid, mxlid, nja_cat, m_reg, iact, icat, ncell, i4v, i4mv
-  integer(i4b) :: lid, gid, lid1, gid1, lid2, nja, p, pp, p0, w, wtot, nmod, np, ipart, jpart, isol, ireg
+  integer(i4b) :: solncat, solmxlid, mxlid, nja_cat, m_reg, iact, ncell, i4v, i4mv
+  integer(i4b) :: lid, gid, lid1, gid1, lid2, nja, p, pp, p0, w, wtot, nmod, ipart, isol, ireg
   integer(i4b) :: il0, il1, ir0, ir1, ic0, ic1, nlay0, nlay1
   integer(i4b) :: mxncol, mxnrow, nc, nr, ic, ir, il, jc, jr, kc, kr, ixch, jxch
   integer(i4b) :: gir0, gir1, gic0, gic1, pnod, ptil, pnlay, nodsign, modid, nintf, modid0, modid1
@@ -105,13 +103,6 @@ program mf6ggm
   integer(i4b), dimension(:), allocatable :: mapping
   real(r8b) :: xmin, ymin
   real(r8b), dimension(:), allocatable :: ncell_reg
-  !
-  ! -- local
-  type(tMap), pointer :: map => null()
-  type(tDistMap), pointer :: distmap => null()
-  logical :: lok
-  real(r4b) :: r4v
-!  type(tModIntf), pointer :: intf => null()
 ! ------------------------------------------------------------------------------
   !
   lwmod = .true.
@@ -133,8 +124,8 @@ program mf6ggm
   call open_file(f, iu, 'r')
   read(iu,*) gncol, gnrow, gnlay, gxmin, gymin, gcs
   read(iu,*) f
-  allocate(cam2(gnrow))
   if (.false.) then !map file
+    allocate(cam2(gnrow))
     allocate(map)
     lok = map%init(f)
     ic = 1
@@ -150,9 +141,12 @@ program mf6ggm
     write(ju)(cam2(ir),ir=1,gnrow)
     close(ju)
   else
-    call open_file(f, ju, 'r', .true.)
-    read(ju)(cam2(ir),ir=1,gnrow)
-    close(ju)
+    if (fileexist(f)) then
+      allocate(cam2(gnrow))
+      call open_file(f, ju, 'r', .true.)
+      read(ju)(cam2(ir),ir=1,gnrow)
+      close(ju)
+    end if
   end if
   read(iu,'(a)') out_dir
   call create_dir(out_dir, .true.)
@@ -854,8 +848,8 @@ program mf6ggm
         mr => md%reg(ireg) !debug
         r => mmd%reg(ireg); bb => r%bb
         allocate(r%itile(bb%ncol,bb%nrow))
-        allocate(r%nodmap2(bb%ncol,bb%nrow,gnlay))
-        allocate(r%bndmap2(bb%ncol,bb%nrow,gnlay))
+        allocate(r%nodmap(bb%ncol,bb%nrow,gnlay))
+        allocate(r%bndmap(bb%ncol,bb%nrow,gnlay))
         do ir = 1, bb%nrow
           do ic = 1, bb%ncol
             r%itile(ic,ir) = 0
@@ -864,8 +858,8 @@ program mf6ggm
         do il = 1, gnlay
           do ir = 1, bb%nrow
             do ic = 1, bb%ncol
-              r%nodmap2(ic,ir,il) = 0
-              r%bndmap2(ic,ir,il) = 0
+              r%nodmap(ic,ir,il) = 0
+              r%bndmap(ic,ir,il) = 0
             end do
           end do
         end do
@@ -900,10 +894,10 @@ program mf6ggm
           end if
           !nodsign = catgid(lid) !DEBUG
           if (nlay == 2) then
-            r%nodmap2(jc,jr,1) = nodsign
-            r%nodmap2(jc,jr,2) = nodsign
+            r%nodmap(jc,jr,1) = nodsign
+            r%nodmap(jc,jr,2) = nodsign
           else if (nlay == 1) then
-            r%nodmap2(jc,jr,2) = nodsign
+            r%nodmap(jc,jr,2) = nodsign
           else
             call errmsg('Invalid number of layers read.')
           end if
@@ -913,10 +907,10 @@ program mf6ggm
       end do ! END loop over catchments
       !
       ! reorder the nodes
-      allocate(mmd%layer_nodes2(gnlay)); mmd%layer_nodes2 = 0
+      allocate(mmd%layer_nodes(gnlay)); mmd%layer_nodes = 0
       do ireg = 1, md%nreg
         r => mmd%reg(ireg)
-        allocate(r%layer_nodes2(gnlay)); r%layer_nodes2 = 0
+        allocate(r%layer_nodes(gnlay)); r%layer_nodes = 0
       end do
       n = 0
       do il = 1, gnlay
@@ -925,20 +919,20 @@ program mf6ggm
           r => mmd%reg(ireg); bb => r%bb
           do ir = 1, bb%nrow
             do ic = 1, bb%ncol
-              i4v = r%nodmap2(ic,ir,il)
+              i4v = r%nodmap(ic,ir,il)
               if (i4v /= 0) then
-                r%layer_nodes2(il) = r%layer_nodes2(il) + 1
+                r%layer_nodes(il) = r%layer_nodes(il) + 1
                 n = n + 1; nn = nn + 1
                 if (i4v > 0) then
-                  r%nodmap2(ic,ir,il) = n
+                  r%nodmap(ic,ir,il) = n
                 else
-                  r%nodmap2(ic,ir,il) = -n
+                  r%nodmap(ic,ir,il) = -n
                 end if
               end if
             end do
           end do ! icol
         end do ! irow
-        mmd%layer_nodes2(il) = nn
+        mmd%layer_nodes(il) = nn
       end do ! ilay
       !
       ! check if all vertical nodes are constant head
@@ -954,7 +948,7 @@ program mf6ggm
           end do
           do ir = 1, bb%nrow
             do ic = 1, bb%ncol
-              i4v = r%nodmap2(ic,ir,il)
+              i4v = r%nodmap(ic,ir,il)
               if (i4v /= 0) then
                 if ((i4wk2d(ic,ir) == 0).and.(i4v < 0)) then
                   i4wk2d(ic,ir) = 1 
@@ -979,7 +973,7 @@ program mf6ggm
             do il = 1, gnlay
               write(f,'(2a,i3.3,a,i1,a)') trim(mmd%modelname), &
                 '_r', ireg, '_l', il, '.idf'
-              call writeidf(f, r%nodmap2(:,:,il), bb%ncol, bb%nrow, &
+              call writeidf(f, r%nodmap(:,:,il), bb%ncol, bb%nrow, &
                 dble(xmin), dble(ymin), dble(gcs), DZERO)
             end do
           end do
@@ -999,7 +993,7 @@ program mf6ggm
             call errmsg('Program error: ic/ir for M1 out of bound.')
           end if
           il = xch%gicirilm1(3,i)
-          n = abs(r%nodmap2(ic,ir,il))
+          n = abs(r%nodmap(ic,ir,il))
           if (n == 0) then
             call errmsg('Program error: no node number found for M1.')
           end if
@@ -1019,7 +1013,7 @@ program mf6ggm
                 call errmsg('Program error: ic/ir out of bound.')
               end if
               il = xch2%gicirilm2(3,i)
-              n = abs(r%nodmap2(ic,ir,il))
+              n = abs(r%nodmap(ic,ir,il))
               if (n == 0) then
                 call errmsg('Program error: node not found.')
               end if
@@ -1038,14 +1032,14 @@ program mf6ggm
           jc = ic - bb%ic0 + 1; jr = ir - bb%ir0 + 1
           ! check 1
           if ((jc < 1).or.(jc > bb%ncol).or.(jr < 1).or.(jr > bb%nrow)) then
-            call errmsg('Program error: jc/jr out of bound for bndmap2.')
+            call errmsg('Program error: jc/jr out of bound for bndmap.')
           end if
-          n = r%nodmap2(jc,jr,il); nn = xch%cellidm1(i)
+          n = r%nodmap(jc,jr,il); nn = xch%cellidm1(i)
           ! check 2
           if (abs(n) /= nn) then
-            call errmsg('Program error: non-matching node number for bndmap2')
+            call errmsg('Program error: non-matching node number for bndmap')
           end if
-          r%bndmap2(jc,jr,il) = n
+          r%bndmap(jc,jr,il) = n
         end do
       end do
       !
@@ -1159,8 +1153,8 @@ program mf6ggm
           do ic = 1, bb%ncol
             jr = ir + bb%ir0  - 1; jc = ic + bb%ic0 - 1
             kr = jr - mbb%ir0 + 1; kc = jc - mbb%ic0 + 1
-            r4wk3d(kc,kr,1) = real(r%nodmap2(ic,ir,1),r4b)
-            r4wk3d(kc,kr,2) = real(r%nodmap2(ic,ir,2),r4b)
+            r4wk3d(kc,kr,1) = real(r%nodmap(ic,ir,1),r4b)
+            r4wk3d(kc,kr,2) = real(r%nodmap(ic,ir,2),r4b)
           end do
         end do
       end do

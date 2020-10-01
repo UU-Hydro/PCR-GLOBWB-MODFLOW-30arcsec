@@ -182,6 +182,8 @@ module utilsmod
         call label_node(ia, ja, id2, i4wk1d, ireg)
       end if
     end do
+    !
+    return
   end subroutine label_node
 
   function get_jd(y, m, d) result(jd)
@@ -198,7 +200,8 @@ module utilsmod
 ! ------------------------------------------------------------------------------
     date = y*10000+m*100+d
     call cfn_datehms2mjd(date,0,0,0,jd)
-
+    !
+    return
   end function get_jd
 
  subroutine get_ymd_from_jd(jd, date, y, m, d)
@@ -219,7 +222,8 @@ module utilsmod
     read(s(1:4),*) y
     read(s(5:6),*) m
     read(s(7:8),*) d
-
+    !
+    return
   end subroutine get_ymd_from_jd
 
   subroutine jd_next_month(jd)
@@ -238,6 +242,7 @@ module utilsmod
       m = m + 1
     end if
     jd = get_jd(y, m, d)
+    !
     return
   end subroutine jd_next_month
 !  
@@ -390,6 +395,8 @@ module utilsmod
         end do
       end do
     end do
+    !
+    return
   end subroutine filtergen_i1
 
   subroutine writebin_i(f, x, nodata)
@@ -424,7 +431,8 @@ module utilsmod
       end do
     end do
     close(iu)
-
+    !
+    return
   end subroutine writebin_i
 
   function tas(s_in) result(s_out)
@@ -435,6 +443,8 @@ module utilsmod
     ! -- locals
 ! ------------------------------------------------------------------------------
     s_out = trim(adjustl(s_in))
+    !
+    return
   end function tas
 
   function ta_i4(arr, ndig) result(s)
@@ -468,6 +478,8 @@ module utilsmod
       end if
       s = s//' '//trim(adjustl(w))
     end do
+    !
+    return
   end function ta_i4
 
   function ta_r4(arr) result(s)
@@ -485,6 +497,8 @@ module utilsmod
       write(w,*) arr(i)
       s = s//' '//trim(adjustl(w))
     end do
+    !
+    return
   end function ta_r4
 
   function ta_r8(arr) result(s)
@@ -502,6 +516,8 @@ module utilsmod
       write(w,*) arr(i)
       s = s//' '//trim(adjustl(w))
     end do
+    !
+    return
   end function ta_r8
 
   subroutine swap_slash(s)
@@ -563,6 +579,8 @@ module utilsmod
       f = f(j+1:)
     end do
     f = '.'//slash//trim(f)
+    !
+    return
   end subroutine get_rel_up
 
   subroutine create_dir(d, lverb_in)
@@ -684,6 +702,7 @@ module utilsmod
       end do
       f = trim(d)//slash//trim(s)
     end if
+    !
     return
   end subroutine
   !
@@ -743,6 +762,8 @@ module utilsmod
     else
       call errmsg('Subroutine openfile called with invalid option')
     end if
+    !
+    return
   end subroutine open_file
 
   subroutine checkdim(nc1, nr1, nc2, nr2)
@@ -756,6 +777,8 @@ module utilsmod
     if (nr1 /= nr2) then
       call errmsg('Inconsistent number of rows.')
     end if
+    !
+    return
   end subroutine checkdim
 
   function readline(iu, so) result(ios)
@@ -780,7 +803,8 @@ module utilsmod
         exit
       end if
     end do
-
+    !
+    return
   end function readline
 
   function createtoken() result(t)
@@ -789,6 +813,8 @@ module utilsmod
     character(len=1) :: t
 ! ------------------------------------------------------------------------------
     t = '?'
+    !
+    return
   end function createtoken
 
   function counttoken(s, t) result(n)
@@ -812,6 +838,8 @@ module utilsmod
         n = n + 1
       endif
     enddo
+    !
+    return
   end function counttoken
 
   subroutine replacetoken(s, t, i)
@@ -832,6 +860,8 @@ module utilsmod
     write(is,fmt) i
     is = adjustl(is)
     s(i1:i2) = is(1:n)
+    !
+    return
   end subroutine
 
   subroutine getminmax(key, sep, token, imin, imax)
@@ -867,6 +897,7 @@ module utilsmod
       end if
     end do
     !
+    return
   end subroutine getminmax
 
   function getwords(s_in, token) result(words)
@@ -989,6 +1020,8 @@ module utilsmod
         trim(adjustl(post))
     end if
     flush(lun)
+    !
+    return
   end subroutine writetofile_i4
 
    subroutine writetofile_r4(lun, arr, pre, post)
@@ -1025,6 +1058,8 @@ module utilsmod
         trim(adjustl(post))
     end if
     flush(lun)
+    !
+    return
   end subroutine writetofile_r4
 
    subroutine writetofile_r8(lun, arr, pre, post)
@@ -1061,6 +1096,8 @@ module utilsmod
         trim(adjustl(post))
     end if
     flush(lun)
+    !
+    return
   end subroutine writetofile_r8
 
   subroutine setuniweight(ncol, nrow, rwrk, nodata, iwrk)
@@ -1086,6 +1123,8 @@ module utilsmod
         end if
       end do
     end do
+    !
+    return
   end subroutine setuniweight
 
   function getlun() result(lun)
@@ -1095,14 +1134,25 @@ module utilsmod
     ! -- locals
     logical :: lex
 ! ------------------------------------------------------------------------------
-
     do lun=20, 5000
       inquire(unit=lun,opened=lex)
       if(.not.lex)exit
     end do
-
+    !
+    return
   end function getlun
 
+  function fileexist(fname) result(lex)
+! ******************************************************************************
+    ! -- arguments
+    character(len=*), intent(in) :: fname
+    logical :: lex
+! ------------------------------------------------------------------------------
+    inquire(file=fname,exist=lex)
+    !
+    return
+  end function fileexist
+  
   subroutine chkexist(fname)
 ! ******************************************************************************
     ! -- arguments
@@ -1110,11 +1160,12 @@ module utilsmod
     ! -- locals
     logical :: lex
 ! ------------------------------------------------------------------------------
-
     inquire(file=fname,exist=lex)
     if (.not.lex) then
       call errmsg('cannot find '//trim(fname))
     end if
+    !
+    return
   end subroutine chkexist
 
   function getdigits(n) result(ndig)
@@ -1128,6 +1179,8 @@ module utilsmod
     if (abs(n) > 100) ndig = 3
     if (abs(n) > 1000) ndig = 4
     if (n < 0) ndig = ndig + 1
+    !
+    return
   end function
 
   subroutine writeascheader(lun, ncol, nrow, xll, yll, cs, nodata)
@@ -1146,6 +1199,7 @@ module utilsmod
     write(s,*) cs; write(lun,'(a)') 'cellsize '//trim(adjustl(s))
     write(s,*) nodata; write(lun,'(a)') 'nodata_value '//trim(adjustl(s))
     !
+    return
   end subroutine writeascheader
 
   subroutine writeasc_i_r(f, x, ncol, nrow, xll, yll, cs, nodata)
@@ -1166,7 +1220,8 @@ module utilsmod
       dble(nodata))
     write(lun,*)((x(icol,irow),icol=1,ncol),irow=1,nrow)
     close(lun)
-
+    !
+    return
   end subroutine writeasc_i_r
 
   subroutine writeasc_r_d(f, x, ncol, nrow, xll, yll, cs, nodata)
@@ -1186,67 +1241,9 @@ module utilsmod
     call writeascheader(lun, ncol, nrow, xll, yll, cs, nodata)
     write(lun,*)((x(icol,irow),icol=1,ncol),irow=1,nrow)
     close(lun)
-
+    !
+    return
   end subroutine writeasc_r_d
-
-!  subroutine writeidf_i_r(f, ix, ncol, nrow, xll, yll, cs, nodata)
-!! ******************************************************************************
-!    use imod_idf
-!    ! -- arguments
-!    character(len=*), intent(in) :: f
-!    integer, intent(in) :: ncol, nrow
-!    integer, dimension(ncol,nrow), intent(in) :: ix
-!    real, intent(in) :: xll, yll, cs, nodata
-!    ! -- locals
-!    integer :: icol, irow
-!    real, dimension(:,:), allocatable :: x
-!! ------------------------------------------------------------------------------
-!    allocate(x(ncol,nrow))
-!    do irow = 1, nrow
-!      do icol = 1, ncol
-!        x(icol,irow) = real(ix(icol,irow))
-!      end do
-!    end do
-!    call writeidf_r_d(f, x, ncol, nrow, dble(xll), dble(yll), dble(cs),         &
-!      dble(nodata))
-!    deallocate(x)
-!  end subroutine writeidf_i_r
-
-!  subroutine writeidf_r_r(f, x, ncol, nrow, xll, yll, cs, nodata)
-!! ******************************************************************************
-!    use imod_idf
-!    ! -- arguments
-!    character(len=*), intent(in) :: f
-!    integer, intent(in) :: ncol, nrow
-!    real, dimension(ncol,nrow), intent(in) :: x
-!    real, intent(in) :: xll, yll, cs, nodata
-!    ! -- locals
-!! ------------------------------------------------------------------------------
-!    call imod_utl_printtext('Writing '//trim(f),0)
-!    if (.not.idfwrite_wrapper(ncol, nrow, x, (/cs/), (/cs/),                    &
-!      real(xll), real(yll), real(nodata),'',f)) then
-!      call imod_utl_printtext('Could not write '//trim(f),2)
-!    end if
-!
-!  end subroutine writeidf_r_r
-
-!  subroutine writeidf_r_d(f, x, ncol, nrow, xll, yll, cs, nodata)
-!! ******************************************************************************
-!    use imod_idf
-!    ! -- arguments
-!    character(len=*), intent(in) :: f
-!    integer, intent(in) :: ncol, nrow
-!    real, dimension(ncol,nrow), intent(in) :: x
-!    double precision, intent(in) :: xll, yll, cs, nodata
-!    ! -- locals
-!! ------------------------------------------------------------------------------
-!    call imod_utl_printtext('Writing '//trim(f),0)
-!    if (.not.idfwrite_wrapper(ncol, nrow, x, (/real(cs)/), (/real(cs)/),        &
-!      real(xll), real(yll), real(nodata),'',f)) then
-!      call imod_utl_printtext('Could not write '//trim(f),2)
-!    end if
-!
-!  end subroutine writeidf_r_d
 
   subroutine writeidf_i1_r8(f, x, ncol, nrow, xll, yll, cs, nodata)
 ! ******************************************************************************
@@ -1272,6 +1269,8 @@ module utilsmod
       call imod_utl_printtext('Could not write '//trim(f),2)
     end if
     deallocate(wrk)
+    !
+    return
   end subroutine writeidf_i1_r8
 
   subroutine writeidf_i2_r8(f, x, ncol, nrow, xll, yll, cs, nodata)
@@ -1298,6 +1297,8 @@ module utilsmod
       call imod_utl_printtext('Could not write '//trim(f),2)
     end if
     deallocate(wrk)
+    !
+    return
   end subroutine writeidf_i2_r8
 
   subroutine writeidf_i4_r8(f, x, ncol, nrow, xll, yll, cs, nodata)
@@ -1324,6 +1325,8 @@ module utilsmod
       call imod_utl_printtext('Could not write '//trim(f),2)
     end if
     deallocate(wrk)
+    !
+    return
   end subroutine writeidf_i4_r8
 
   subroutine writeidf_i8_r8(f, x, ncol, nrow, xll, yll, cs, nodata)
@@ -1350,6 +1353,8 @@ module utilsmod
       call imod_utl_printtext('Could not write '//trim(f),2)
     end if
     deallocate(wrk)
+    !
+    return
   end subroutine writeidf_i8_r8
 
   subroutine writeidf_r4_r8(f, x, ncol, nrow, xll, yll, cs, nodata)
@@ -1376,6 +1381,8 @@ module utilsmod
       call imod_utl_printtext('Could not write '//trim(f),2)
     end if
     deallocate(wrk)
+    !
+    return
   end subroutine writeidf_r4_r8
 
   subroutine writeidf_r8_r8(f, x, ncol, nrow, xll, yll, cs, nodata)
@@ -1392,6 +1399,8 @@ module utilsmod
     if (.not.idfwrite_wrapper(ncol, nrow, x, (/cs/), (/cs/), xll, yll, nodata, '', f, 8)) then
       call imod_utl_printtext('Could not write '//trim(f),2)
     end if
+    !
+    return
   end subroutine writeidf_r8_r8
 
   subroutine writeasc_d_d(f, x, ncol, nrow, xll, yll, cs, nodata)
@@ -1411,7 +1420,8 @@ module utilsmod
     call writeascheader(lun, ncol, nrow, xll, yll, cs, nodata)
     write(lun,*)((x(icol,irow),icol=1,ncol),irow=1,nrow)
     close(lun)
-
+    !
+    return
   end subroutine writeasc_d_d
 
   subroutine readasc_r_d(f, x, ncol, nrow, xll, yll, cs, nodata, idebug)
@@ -1457,7 +1467,8 @@ module utilsmod
     end if
     read(lun,*)((x(icol,irow),icol=1,ncol),irow=1,nrow)
     close(lun)
-
+    !
+    return
   end subroutine readasc_r_d
 
   subroutine readasc_r_r(f, x, ncol, nrow, xll, yll, cs, nodata, idebug)
@@ -1492,7 +1503,8 @@ module utilsmod
     allocate(x(ncol,nrow))
     read(lun,*)((x(icol,irow),icol=1,ncol),irow=1,nrow)
     close(lun)
-
+    !
+    return
   end subroutine readasc_r_r
 
   function readidf_val(idf, icol, irow) result (rval)
@@ -1519,6 +1531,8 @@ module utilsmod
     irec=irec+  ((irow-1)*idf%ncol)+icol
     !
     read(idf%iu,rec=irec) rval
+    !
+    return
   end function readidf_val
 
   subroutine readidf_block_i4(idf, ir0, ir1, ic0, ic1, arr, nodata_in)
@@ -1560,7 +1574,8 @@ module utilsmod
       end do
     end do
     call logmsg('Done reading i4 block')
-
+    !
+    return
   end subroutine readidf_block_i4
 
   subroutine readidf_block_r4(idf, ir0, ir1, ic0, ic1, arr, nodata_in)
@@ -1602,7 +1617,8 @@ module utilsmod
       end do
     end do
     call logmsg('Done reading r4 block')
-
+    !
+    return
   end subroutine readidf_block_r4
 
   subroutine readidf_block_r8(idf, ir0, ir1, ic0, ic1, arr, nodata_in)
@@ -1644,7 +1660,8 @@ module utilsmod
       end do
     end do
     call logmsg('Done reading r8 block')
-
+    !
+    return
   end subroutine readidf_block_r8
 
   subroutine readidf_i_r(f, x, ncol, nrow, xll, yll, cs, nodata, &
@@ -1728,7 +1745,8 @@ module utilsmod
     end do
     nodata = 0.
     call idfdeallocatex(idf)
-
+    !
+    return
   end subroutine readidf_i_r
 
   subroutine readidf_r_r(f, x, ncol, nrow, xll, yll, cs, nodata, idebug)
@@ -1787,7 +1805,8 @@ module utilsmod
       nodata = 0.d0
     end if
     call idfdeallocatex(idf)
-
+    !
+    return
   end subroutine readidf_r_r
 
   subroutine readidf_r_d(f, x, ncol, nrow, xll, yll, cs, nodata, idebug)
@@ -1847,7 +1866,8 @@ module utilsmod
       nodata = 0.d0
     end if
     call idfdeallocatex(idf)
-
+    !
+    return
   end subroutine readidf_r_d
 
   subroutine errmsg(msg)
@@ -1865,6 +1885,8 @@ module utilsmod
     character(len=*), intent(in) :: msg
 ! ------------------------------------------------------------------------------
     write(*,'(a)') trim(msg)
+    !
+    return
   end subroutine logmsg
 
 ! $Id: quicksort.f90 558 2015-03-25 13:44:47Z larsnerger $
@@ -1968,6 +1990,7 @@ if (nA > 1) then
   end if
 end if
 
+return
 end subroutine quicksort_d
 
 
@@ -2001,7 +2024,7 @@ subroutine InsertionSort_d(a,idx_a,na)
      a(j+1) = temp
      idx_a(j+1) = idx_tmp
   end do
-
+  return
 end subroutine InsertionSort_d
 
 subroutine addboundary_i(wrk, ncol, nrow)
@@ -2050,7 +2073,8 @@ subroutine addboundary_i(wrk, ncol, nrow)
   !    wrk(icol,irow) = abs(jp)
   !  end do
   !end do
-
+  !
+  return
 end subroutine addboundary_i
 
 subroutine addboundary_d(wrk, ncol, nrow, nodata)
@@ -2100,7 +2124,8 @@ subroutine addboundary_d(wrk, ncol, nrow, nodata)
   !    wrk(icol,irow) = abs(jp)
   !  end do
   !end do
-
+  !
+  return
 end subroutine addboundary_d
 
 subroutine addboundary_r(wrk, nodata)
@@ -2153,7 +2178,8 @@ subroutine addboundary_r(wrk, nodata)
   !    wrk(icol,irow) = abs(jp)
   !  end do
   !end do
-
+  !
+  return
 end subroutine addboundary_r
 
   subroutine calc_unique_i(p, ps, pu, unp, id, nbnd, xll, yll, cs, lbnd_in)
@@ -2562,7 +2588,8 @@ end subroutine addboundary_r
         end do
       end if
     end do
-
+    !
+    return
   end subroutine calc_unique_i
 
   subroutine calc_unique_r(p, ps, pu, unp, id, nbnd, xll, yll, cs, lbnd_in)
@@ -2971,7 +2998,8 @@ end subroutine addboundary_r
         end do
       end if
     end do
-
+    !
+    return
   end subroutine calc_unique_r
 
   subroutine getidmap(wrk, ir0, ir1, ic0, ic1, maxid, idmap, ncat, idmapinv, catarea, idbb)
@@ -3048,6 +3076,8 @@ end subroutine addboundary_r
         end if
       end do
     end do
+    !
+    return
   end subroutine getidmap
 
   !###====================================================================
@@ -3076,7 +3106,8 @@ end subroutine addboundary_r
         if (ic > 0) string(i:i) = low(ic:ic)
       end do
     end if
-
+    !
+    return
   end function change_case
 
   function count_i1a(a, v) result(n)
@@ -3092,6 +3123,8 @@ end subroutine addboundary_r
     do i = 1, size(a)
       if (a(i) == v) n = n + 1
     end do
+    !
+    return
   end function count_i1a
   
 end module utilsmod

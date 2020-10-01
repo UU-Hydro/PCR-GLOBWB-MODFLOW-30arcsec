@@ -183,7 +183,8 @@ contains
     end if    
     if (signature == 'RUU CROSS SYSTEM MAP FORMAT') ok = .true.
     close(iu)
-    
+    !
+    return
   end function is_map_file
 
   function map_init(this, f, verb_in) result(ok)
@@ -219,7 +220,8 @@ contains
     !
     ! set return value
     ok = .true.
-    
+    !
+    return
   end function map_init
   
   function map_set_bounding_box(this, gic0, gic1, gir0, gir1, &
@@ -269,7 +271,8 @@ contains
     
     ! set return value
     ok = .true.
-    
+    !
+    return
   end function map_set_bounding_box
   
   function map_read_header(this, f, verb) result(ok)
@@ -362,7 +365,8 @@ contains
     
     ! set return value
     ok = .true.
-    
+    !
+    return
   end function map_read_header
 
   function map_write_header(this, f) result(ok)
@@ -424,7 +428,8 @@ contains
     
     ! set return value
     ok = .true.
-    
+    !
+    return
   end function map_write_header
   
   subroutine map_read_data(this, rval)
@@ -533,8 +538,8 @@ contains
       call this%set_nodata()
       call this%correct_nodata()
     end if
-    
-      
+    !
+    return
   end subroutine map_read_data
 
   subroutine map_write_data(this)
@@ -566,7 +571,8 @@ contains
       case default
         call errmsg('Kind of MAP-file not supported.')
     end select 
-      
+    !
+    return
   end subroutine map_write_data
   
   subroutine map_set_nodata(this)
@@ -637,7 +643,8 @@ contains
           end do
         end do
     end select 
-   
+    !
+    return
   end subroutine map_set_nodata
   
   subroutine map_correct_nodata(this)
@@ -688,7 +695,8 @@ contains
           end do
         end do
     end select 
-   
+    !
+    return
   end subroutine map_correct_nodata
   
   subroutine map_get_i1ar(this, i1a, i1mv, i1min, i1max)
@@ -785,7 +793,8 @@ contains
       case default
           call errmsg('Kind of MAP-file not supported.')
     end select 
-    
+    !
+    return
   end subroutine map_get_i1ar
   
   subroutine map_get_r4ar(this, r4a, r4mv, r4min, r4max)
@@ -882,7 +891,8 @@ contains
       case default
           call errmsg('Kind of MAP-file not supported.')
     end select 
-    
+    !
+    return
   end subroutine map_get_r4ar
   
   subroutine map_idf_export(this, f)
@@ -938,6 +948,8 @@ contains
     deallocate(r4a)
     
     close(iu)
+    !
+    return
   end subroutine map_idf_export
   
   subroutine map_close(this)
@@ -958,6 +970,8 @@ contains
         close(this%iu)
       end if
     end if
+    !
+    return
   end subroutine map_close
 
   subroutine map_clean_data(this)
@@ -978,7 +992,8 @@ contains
     if (associated(this%i4a))    deallocate(this%i4a)
     if (associated(this%r4a))    deallocate(this%r4a)
     if (associated(this%r8a))    deallocate(this%r8a)
-    
+    !
+    return
   end subroutine map_clean_data
   
   subroutine map_clean(this)
@@ -1003,7 +1018,8 @@ contains
     if (associated(this%gir1))  deallocate(this%gir1)
     !
     call this%clean_data()
-    
+    !
+    return
   end subroutine map_clean
   
   subroutine map_geti1val(this, icol, irow, i1val, i1mv)
@@ -1181,7 +1197,8 @@ contains
       case default
         call errmsg('Kind of MAP-file not supported.')
       end select 
-
+    !
+    return
   end subroutine map_getr4val
   
   subroutine map_readblock_i1(this, i1a, ir0, ir1, ic0, ic1, i1mv)
@@ -1218,7 +1235,8 @@ contains
         end if
       end do
     end do
-  
+    !
+    return
   end subroutine map_readblock_i1  
  
 end module pcrModule
