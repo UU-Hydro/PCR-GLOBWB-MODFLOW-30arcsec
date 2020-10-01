@@ -161,7 +161,7 @@ module mf6_post_module
     type(tBb), pointer :: bb => null()
     type(tMap), pointer :: map => null()
     logical :: linbb, lfound
-    integer(i4b) :: itile, i, j, gic, gir, ic, ir 
+    integer(i4b) :: i, j, gic, gir, ic, ir 
     real(r4b) :: r4val
     real(r4b) :: r4mv 
 ! ------------------------------------------------------------------------------
@@ -215,7 +215,7 @@ module mf6_post_module
     real(r8b) :: pertim_in, totim_in
     !
     logical :: lop
-    integer(i4b) :: ios, i, il, ir, ic
+    integer(i4b) :: ios, i
 ! ------------------------------------------------------------------------------
     !
     inquire(unit=this%iu, opened=lop)
@@ -486,6 +486,7 @@ module mf6_post_module
         read(sa(3),*) this%solid
         write(this%solname,'(a,i2.2)') 's',this%solid
         f = trim(gen%in_dir)//'solutions\post_mappings\'//trim(this%solname)//'.modmap.bin'
+        call swap_slash(f)
         call chkexist(f)
         !
         call open_file(f, iu, 'r', .true.)
@@ -543,7 +544,7 @@ module mf6_post_module
     type(tBb), pointer :: mbb => null()
     type(tPostMod), pointer :: m => null()
     character(len=mxslen) :: f
-    integer(i4b) :: i, kper, il, ic, ir, jc, jr, gic, gir
+    integer(i4b) :: i, il, ic, ir, jc, jr, gic, gir
     real(r8b) :: t, xmin, ymin
     real(r8b), dimension(:), allocatable :: totimmod
     real(r8b), dimension(:,:), allocatable :: sr8wk, mr8wk
