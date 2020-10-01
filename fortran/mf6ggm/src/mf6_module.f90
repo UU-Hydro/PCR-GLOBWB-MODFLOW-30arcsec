@@ -241,6 +241,7 @@ module mf6_module
     integer(i4b),                  pointer :: nxch        => null()
     type(tExchange), dimension(:), pointer :: xch         => null()
     integer(i4b), dimension(:),    pointer :: layer_nodes => null()
+    logical,                       pointer :: chd_sea     => null()
   contains
     procedure :: get_model_name => mf6_mod_get_model_name
     procedure :: set_disu       => mf6_mod_set_disu
@@ -2261,6 +2262,7 @@ module mf6_module
       write(iu,'(a)')
       write(iu,'(   a)') 'BEGIN PACKAGES'
       do ipck = 3, npck
+        if ((ipck == ichd1).and.(.not.this%chd_sea)) cycle
         if (trim(pr(ipck,irun)) == '-') cycle
         f = trim(this%rootdir)//trim(mn)//trim(pr(ipck,irun))//'.'//trim(pck(ipck))
         call swap_slash(f)
@@ -2677,7 +2679,9 @@ module mf6_module
     call this%get_array(i_strt, 1, 0, 1, i1wrk, r8wrk, ib_in=1) !i_strt_l1
     call this%get_array(i_strt, 2, 0, 2, i1wrk, r8wrk, ib_in=1) !i_strt_l2
     maxbound = count_i1a(i1wrk, 1)
+    allocate(this%chd_sea)
     if (maxbound > 0) then
+      this%chd_sea = .true.
       f = trim(p)//'.chd'
       call open_file(f, iu, 'w')
       !
@@ -2696,6 +2700,9 @@ module mf6_module
       f = trim(pb)//'.chd'; call this%write_list(iu, 2, f, i1wrk, r8wrk, lbin)
       write(iu,'(   a)') 'END PERIOD'
       close(iu)
+    else
+      call logmsg("*** no CHD sea boundary found ***")
+      this%chd_sea = .false.
     end if
     call clear_wrk()
     !
