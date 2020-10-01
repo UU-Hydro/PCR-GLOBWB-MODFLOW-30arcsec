@@ -23,9 +23,12 @@
 MODULE IMOD_UTL
 
  INTEGER,PARAMETER :: NOS=3
- INTEGER, SAVE :: OS = 1                      !## operating system 1=dos,2=linux,3=unix
-! INTEGER, SAVE :: OS = 2                      !## operating system 1=dos,2=linux,3=unix
- CHARACTER(LEN=20),DIMENSION(NOS),SAVE :: OSN
+#ifdef LINUX
+ INTEGER, SAVE :: OS = 2                     !## operating system 1=dos,2=linux,3=unix
+#else
+ INTEGER, SAVE :: OS = 1                     !## operating system 1=dos,2=linux,3=unix
+#endif
+  CHARACTER(LEN=20),DIMENSION(NOS),SAVE :: OSN
 
  LOGICAL,PARAMETER :: LPWT=.TRUE.    !##   FALSE=USE OLD PWT PACKAGE, TRUE=USE NEW ONE
  INTEGER,PARAMETER,PRIVATE :: MAXFILES=500
@@ -34,7 +37,7 @@ MODULE IMOD_UTL
  INTEGER,DIMENSION(2),SAVE :: IFLAG
  REAL,PARAMETER :: MSWPMV=10.0       !##   add meter to surface level urban area
 
-character(len=1024), parameter :: licfile = 'I_accepted_v3_4.txt' 
+character(len=1024), parameter :: licfile = 'I_accepted_v3_4.txt'
 integer, parameter :: nlic = 33
 character(len=79), dimension(nlic) :: lic
 integer, parameter :: nhdr = 40
@@ -46,27 +49,27 @@ data hdr/'======================================================================
          '                                                                               ',&!03
          'Copyright (C) Stichting Deltares, 2005-2016.                                   ',&!04
          '                                                                               ',&!05
-         'This Deltares-software executable is part of iMOD. iMOD is Deltares-software;  ',&!06 
-         'the source code of iMOD is also available as free open source software at      ',&!07 
-         'oss.deltares.nl. You may use the Deltares-software executables of iMOD without ',&!08 
-         'any remuneration to be paid to Deltares if you accepted the iMOD Software      ',&!09 
-         'License Agreement (iMOD License) which is offered to you as a PDF-file; you    ',&!10 
-         'should have received a copy of this PDF-file with this Deltares-software       ',&!01 
+         'This Deltares-software executable is part of iMOD. iMOD is Deltares-software;  ',&!06
+         'the source code of iMOD is also available as free open source software at      ',&!07
+         'oss.deltares.nl. You may use the Deltares-software executables of iMOD without ',&!08
+         'any remuneration to be paid to Deltares if you accepted the iMOD Software      ',&!09
+         'License Agreement (iMOD License) which is offered to you as a PDF-file; you    ',&!10
+         'should have received a copy of this PDF-file with this Deltares-software       ',&!01
          'executable. If not, see                                                        ',&!02
-         'http://oss.deltares.nl/web/iMOD/iMOD_Software_License_Agreement.               ',&!03 
-         'Please go to the PDF-file of the iMOD License, read it and decide whether you  ',&!04 
-         'want or do not want to accept the iMOD License.                                ',&!05 
+         'http://oss.deltares.nl/web/iMOD/iMOD_Software_License_Agreement.               ',&!03
+         'Please go to the PDF-file of the iMOD License, read it and decide whether you  ',&!04
+         'want or do not want to accept the iMOD License.                                ',&!05
          '                                                                               ',&!06
          'According to the file "I_accepted_v3_4.txt" on your computer you accepted the  ',&!07
          'terms and conditions of the iMOD license; WARNING: IF IT WAS NOT YOU OR THE    ',&!08
-         'LEGAL ENTITY ON WHOSE BEHALF YOU INTENT TO USE THE IMOD-EXECUTABLE, THAT       ',&!09 
+         'LEGAL ENTITY ON WHOSE BEHALF YOU INTENT TO USE THE IMOD-EXECUTABLE, THAT       ',&!09
          'ACCEPTED THE TERMS AND CONDITIONS OF THE iMOD LICENSE YOU ARE NOT ENTITLED TO  ',&!10
          'USE THIS DELTARES-EXECUTABLE OF IMOD. In this case your use of this            ',&!01
          'Deltares-executable of the iMOD-software is prohibited and illegal: abort the  ',&!02
-         'use of this Deltares-executable immediately and refrain from using the         ',&!03 
+         'use of this Deltares-executable immediately and refrain from using the         ',&!03
          'Deltares-executables of iMOD. To make use of the Deltares-executables of iMOD  ',&!04
          'please make sure to accept the terms and conditions or have it lawfully        ',&!05
-         'accepted by the legal entity on whose behalf you intent to use the             ',&!06 
+         'accepted by the legal entity on whose behalf you intent to use the             ',&!06
          'iMOD-executable byre-invoking the "I accept"-procedure; to re-invoke the       ',&!07
          '"I accept"-procedure abort the use of this Deltares-executable of iMOD, delete ',&!08
          'the file "I_accepted_v3_4.txt", and invoke this Deltares-executable of iMOD    ',&!09
@@ -75,32 +78,32 @@ data hdr/'======================================================================
          'The iMOD software is distributed in the hope that it will be useful, but       ',&!02
          'WITHOUT ANY GUARANTEE OR (IMPLIED) WARRANTY. Any use of the                    ',&!03
          'Deltares-executables of the iMOD-software is for your own risk. See the iMOD   ',&!04
-         'License for more details.                                                      ',&!05 
+         'License for more details.                                                      ',&!05
          '                                                                               ',&!06
          'For more info, please contact: Stichting Deltares, P.O. Box 177, 2600 MH Delft,',&!07
          'The Netherlands. Email: imod.support@deltares.nl.                              ',&!08
          '===============================================================================',&!09
          '                                                                               '/ !10
-                                                                                            
-!         1234567890123456789012345678901234567890123456789012345678901234567890123456789   
+
+!         1234567890123456789012345678901234567890123456789012345678901234567890123456789
 data lic/'===============================================================================',&!01
          'Copyright (C) Stichting Deltares, 2005-2016.                                   ',&!02
          '                                                                               ',&!03
-         'This Deltares-software executable is part of iMOD. iMOD is Deltares-software;  ',&!04 
-         'the source code of iMOD is also available as free open source software at      ',&!05 
-         'oss.deltares.nl. You may use the Deltares-software executables of iMOD without ',&!06 
-         'any remuneration to be paid to Deltares if you accepted the iMOD Software      ',&!07 
-         'License Agreement (iMOD License) which is offered to you as a PDF-file; you    ',&!08 
-         'should have received a copy of this PDF-file with this Deltares-software       ',&!09 
+         'This Deltares-software executable is part of iMOD. iMOD is Deltares-software;  ',&!04
+         'the source code of iMOD is also available as free open source software at      ',&!05
+         'oss.deltares.nl. You may use the Deltares-software executables of iMOD without ',&!06
+         'any remuneration to be paid to Deltares if you accepted the iMOD Software      ',&!07
+         'License Agreement (iMOD License) which is offered to you as a PDF-file; you    ',&!08
+         'should have received a copy of this PDF-file with this Deltares-software       ',&!09
          'executable. If not, see                                                        ',&!10
-         'http://oss.deltares.nl/web/iMOD/iMOD_Software_License_Agreement.               ' ,&!01 
-         'Please go to the PDF-file of the iMOD License, read it and decide whether you  ',&!02 
-         'want or do not want to accept the iMOD License.                                ',&!03 
-         '                                                                               ',&!04 
-         'If you accept the iMOD License, please enter "Y" or "y" below this text and hit',&!05 
-         'the Enter-key.                                                                 ',&!06 
-         '                                                                               ',&!07 
-         'If you do not accept the iMOD License, please do NOT enter "Y" or "y" below    ',&!08 
+         'http://oss.deltares.nl/web/iMOD/iMOD_Software_License_Agreement.               ' ,&!01
+         'Please go to the PDF-file of the iMOD License, read it and decide whether you  ',&!02
+         'want or do not want to accept the iMOD License.                                ',&!03
+         '                                                                               ',&!04
+         'If you accept the iMOD License, please enter "Y" or "y" below this text and hit',&!05
+         'the Enter-key.                                                                 ',&!06
+         '                                                                               ',&!07
+         'If you do not accept the iMOD License, please do NOT enter "Y" or "y" below    ',&!08
          'this text and hit the Enter-key and refrain from using the Deltares-software   ',&!09
          'executables of iMOD; you may find a solution in downloading the source code of ',&!10
          'the iMOD-software and compile the executables yourself (see oss.deltares.nl).  ',&!01
@@ -111,7 +114,7 @@ data lic/'======================================================================
          'The iMOD software is distributed in the hope that it will be useful, but       ',&!06
          'WITHOUT ANY GUARANTEE OR (IMPLIED) WARRANTY. Any use of the                    ',&!07
          'Deltares-executables of the iMOD-software is for your own risk. See the iMOD   ',&!08
-         'License for more details.                                                      ',&!09 
+         'License for more details.                                                      ',&!09
          '                                                                               ',&!10
          'For more info, please contact: Stichting Deltares, P.O. Box 177, 2600 MH Delft,',&!01
          'The Netherlands. Email: imod.support@deltares.nl.                              ',&!02
@@ -204,28 +207,28 @@ CONTAINS
  CHARACTER(LEN=*),INTENT(OUT) :: SLASH
 
  IF(OS.EQ.1)THEN ! DOS
-   SLASH='\'   
+   SLASH='\'
  ELSEIF(OS.EQ.2)THEN ! UNIX
-   SLASH='/'   
+   SLASH='/'
  ENDIF
 
  END SUBROUTINE IMOD_UTL_GETSLASH
- 
+
  !###===================================================================
  SUBROUTINE IMOD_UTL_GETDIR(DIR)
  !###===================================================================
- 
+
  CHARACTER(LEN=*),INTENT(INOUT) :: DIR
- 
+
  INTEGER :: I
  CHARACTER(LEN=1) :: SLASH
- 
- CALL IMOD_UTL_GETSLASH(SLASH) 
+
+ CALL IMOD_UTL_GETSLASH(SLASH)
  I = INDEX(DIR,SLASH,BACK=.TRUE.)
  DIR = DIR(1:I)
- 
+
  END SUBROUTINE IMOD_UTL_GETDIR
- 
+
  !###===================================================================
  INTEGER FUNCTION IMOD_UTL_GETUNIT()
  !###===================================================================
@@ -1299,13 +1302,17 @@ END SUBROUTINE IMOD_UTL_QKSORT
 ! !#capsim/metaswap/none active?
 
 !#get operating system
- VOS=OSD_GET_OS()
- OS =0
- IF(VOS.EQ.3)OS=1
- IF(VOS.EQ.2)OS=2
- IF(VOS.EQ.4)OS=2
+! VOS=OSD_GET_OS()
+! OS =0
+! IF(VOS.EQ.3)OS=1
+! IF(VOS.EQ.2)OS=2
+! IF(VOS.EQ.4)OS=2
 
+#ifdef LINUX
+ OS=2
+#else
  OS=1
+#endif
 
  SELECT CASE (OS)
   !## dos
@@ -1571,7 +1578,7 @@ END SUBROUTINE IMOD_UTL_QKSORT
 
  QT=0.0
  TTIME=EDATE-SDATE
- 
+
  !## open textfiles with pump information
  IU=IMOD_UTL_GETUNIT()
  CALL IMOD_UTL_OPENASC(IU,FNAME,'R')
@@ -1627,7 +1634,7 @@ END SUBROUTINE IMOD_UTL_QKSORT
     IF(IDATE.GT.EDATE)EXIT
 
     !## within modeling window
-    IF(NDATE.GT.SDATE)THEN 
+    IF(NDATE.GT.SDATE)THEN
 
      !### defintions ($ time window current stressperiod)
      !  $        |---------|         $
@@ -1637,7 +1644,7 @@ END SUBROUTINE IMOD_UTL_QKSORT
      !## if startingdate (read from txt file) greater than start date of current stressperiod
      IF(IDATE.GT.SDATE)N=N-(IDATE-SDATE)
      I2=I1+N-1
-     
+
      IF(I2.GE.I1)QT=QT+REAL(I2-I1+1)*QQ
 !     QSORT(I1:I2)=QQ
 
@@ -2089,7 +2096,7 @@ END SUBROUTINE IMOD_UTL_QKSORT
  !###======================================================================
  LOGICAL FUNCTION IMOD_UTL_HAS_EXT(FNAME,EXT)
  !###======================================================================
- 
+
  IMPLICIT NONE
 
  CHARACTER(LEN=*), INTENT(IN) :: FNAME
@@ -2113,7 +2120,7 @@ END SUBROUTINE IMOD_UTL_QKSORT
  !###======================================================================
  SUBROUTINE IMOD_UTL_DIR_LEVEL_UP(FNAME)
  !###======================================================================
- 
+
  IMPLICIT NONE
 
  CHARACTER(LEN=*), INTENT(INOUT) :: FNAME
@@ -2131,10 +2138,10 @@ END SUBROUTINE IMOD_UTL_QKSORT
 
  END SUBROUTINE IMOD_UTL_DIR_LEVEL_UP
 
- !###====================================================================== 
+ !###======================================================================
  SUBROUTINE IMOD_UTL_ABS_PATH(PATH)
  !###======================================================================
- 
+
  IMPLICIT NONE
  CHARACTER(LEN=*), INTENT(INOUT) :: PATH
  INTEGER :: LUN, I
@@ -2359,7 +2366,7 @@ DO
   XA(N)=(Y-B)/A
   YA(N)=Y
  ENDIF
- 
+
 ENDDO
 !## try intersections with x-axes secondly
 X=XMN-CS
@@ -2378,7 +2385,7 @@ DO
   XA(N)=X
   YA(N)=A*X+B
  ENDIF
- 
+
 ENDDO
 
 !## sort intersections, determined by the one with the largest difference
@@ -2419,7 +2426,7 @@ DO I=2,N
  CALL IMOD_UTL_INTERSECT_NCORNER(ID,TD,XMIN+ ICOL   *CS,YMAX- IROW   *CS,X,Y,3)
  CALL IMOD_UTL_INTERSECT_NCORNER(ID,TD,XMIN+(ICOL-1)*CS,YMAX- IROW   *CS,X,Y,4)
  FA(I-1)=REAL(ID) !+TD
-  
+
  DX  =XA(I)-XA(I-1)
  DY  =YA(I)-YA(I-1)
  LENG=SQRT(DX**2.0+DY**2.0)
@@ -2433,7 +2440,7 @@ N=N-1
 IMOD_UTL_INTERSECT_EQUI=.TRUE.
 
 END FUNCTION IMOD_UTL_INTERSECT_EQUI
- 
+
 !###======================================================================
 SUBROUTINE IMOD_UTL_INTERSECT_NCORNER(ID,TD,X1,Y1,XC,YC,JD)
 !###======================================================================
@@ -2443,7 +2450,7 @@ REAL,INTENT(INOUT) :: TD
 INTEGER,INTENT(IN) :: JD
 REAL,INTENT(IN) :: X1,Y1,XC,YC
 REAL :: D
-  
+
 !## get nearest corner
 D=(XC-X1)**2.0+(YC-Y1)**2.0
 IF(D.GT.0.0)THEN
@@ -2533,13 +2540,13 @@ B=Y1-A*X1
 !continue search rest of intersections
 !try intersections with y-axes firstly
 IMN=0
-DO I=1,NROW 
+DO I=1,NROW
  IF(DELC(I).GT.MIN(Y1,Y2))THEN
   YMN=DELC(I)
   IMN=I
  ENDIF
 END DO
-DO I=NROW,1,-1 
+DO I=NROW,1,-1
  IF(DELC(I).LT.MAX(Y1,Y2))YMX=DELC(I)
 END DO
 
@@ -2562,7 +2569,7 @@ IF(IMN.GT.0)THEN
    XA(N)=(Y-B)/A
    YA(N)=Y
   ENDIF
-  
+
   IMN  =IMN-1
   !## model is not bigger than line-segment
   IF(IMN.LE.0)EXIT
@@ -2601,7 +2608,7 @@ IF(IMN.GT.0)THEN
    XA(N)=X
    YA(N)=A*X+B
   ENDIF
-  
+
   IMN  =IMN+1
   !## model is not bigger than line-segment
   IF(IMN.GT.NCOL)EXIT
@@ -2785,7 +2792,7 @@ END FUNCTION IMOD_UTL_INTERSECT_NONEQUI
 !###====================================================================
  SUBROUTINE IMOD_UTL_LUBACKSUB(AA,IDX,BB,N)
 !###====================================================================
- 
+
  IMPLICIT NONE
  INTEGER :: N
  REAL :: AA(N,N)
@@ -2928,7 +2935,7 @@ END FUNCTION IMOD_UTL_INTERSECT_NONEQUI
 
  RETURN
  END SUBROUTINE IMOD_UTL_LUBACKSUB_DBL
- 
+
 
 !###====================================================================
 subroutine imod_utl_chkexist( fname )
@@ -2945,5 +2952,5 @@ end if
 
 return
 end subroutine imod_utl_chkexist
- 
+
 END MODULE IMOD_UTL

@@ -6,8 +6,11 @@ module utilsmod
 
   integer(i4b), dimension(:,:), allocatable :: i4wk2d
 
-  integer(i4b), parameter :: os = 1 !Windows
-  !integer(i4b), parameter :: os = 2 !Linux
+#ifdef LINUX
+  integer(i4b), parameter :: os = 2
+#else
+  integer(i4b), parameter :: os = 1
+#endif
 
   character(len=1), parameter :: win_slash = '\'
   character(len=1), parameter :: lin_slash = '/'
