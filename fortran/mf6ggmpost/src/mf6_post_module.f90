@@ -270,6 +270,7 @@ module mf6_post_module
     f = trim(gen%out_dir)//trim(name)//'_'//trim(gen%out_pref)// &
       trim(ts)//'_l'//ta((/il/))
     !
+    call swap_slash(f)
     return
   end function mf6_post_get_out_pref
   !
@@ -409,7 +410,7 @@ module mf6_post_module
     type(tPostMod), pointer :: m => null()
     type(tBb), pointer :: bb, sbb, mbb
     logical :: lok
-    integer(i4b) :: i, iu
+    integer(i4b) :: i, j, iu
     integer(i4b), dimension(:), allocatable :: i4wk
     character(len=mxslen) :: f
     character(len=mxslen), dimension(10) :: sa
@@ -423,7 +424,15 @@ module mf6_post_module
     !
     ! 1          2 3 4       5 6 7 8   9                                    10
     ! .\mada_ss\ m 3 .ss.hds 1 2 1 idf .\mada_ss\models\run_output_bin_idf\ head_ss_
-    read(s,*)(sa(i),i=1,10)
+    i = 1; f = s
+    do i = 1, 9
+      f = adjustl(f)
+      j = index(f,' ')
+      sa(i) = f(1:j-1)
+      f = adjustl(f(j:))
+    end do
+    sa(10) = f(1:len_trim(f))
+    !read(s,*)(sa(i),i=1,10)
     !
     allocate(this%gen); gen => this%gen
     allocate(gen%in_dir);   gen%in_dir = sa(1)
