@@ -25,18 +25,19 @@ module mf6_module
   integer(i4b), parameter :: i_riv_stage         = 8
   integer(i4b), parameter :: i_riv_cond          = 9
   integer(i4b), parameter :: i_riv_rbot          = 10
-  integer(i4b), parameter :: i_recharge          = 11
-  integer(i4b), parameter :: i_part              = 12
-  integer(i4b), parameter :: i_sol               = 13
-  integer(i4b), parameter :: i_print_option      = 14
-  integer(i4b), parameter :: i_complexity        = 15
-  integer(i4b), parameter :: i_outer_hclose      = 16
-  integer(i4b), parameter :: i_outer_maximum     = 17
-  integer(i4b), parameter :: i_inner_maximum     = 17
-  integer(i4b), parameter :: i_inner_hclose      = 19
-  integer(i4b), parameter :: i_inner_rclose      = 20
-  integer(i4b), parameter :: i_relaxation_factor = 21
-  integer(i4b), parameter :: i_prim_sto          = 22
+  integer(i4b), parameter :: i_wel               = 11
+  integer(i4b), parameter :: i_recharge          = 12
+  integer(i4b), parameter :: i_part              = 13
+  integer(i4b), parameter :: i_sol               = 14
+  integer(i4b), parameter :: i_print_option      = 15
+  integer(i4b), parameter :: i_complexity        = 16
+  integer(i4b), parameter :: i_outer_hclose      = 17
+  integer(i4b), parameter :: i_outer_maximum     = 18
+  integer(i4b), parameter :: i_inner_maximum     = 19
+  integer(i4b), parameter :: i_inner_hclose      = 20
+  integer(i4b), parameter :: i_inner_rclose      = 21
+  integer(i4b), parameter :: i_relaxation_factor = 22
+  integer(i4b), parameter :: i_prim_sto          = 23
   integer(i4b), parameter :: nkey          = i_prim_sto
   !  
   character(len=20), dimension(nkey) :: keys
@@ -46,7 +47,7 @@ module mf6_module
              'strt               ', &
              'drn_elev           ', 'drn_cond            ', &
              'riv_stage          ', 'riv_cond            ', &
-             'riv_rbot           ', &
+             'riv_rbot           ', 'wel_q               ', &
              'recharge           ', 'partitions          ', &
              'solutions          ', &
              'print_option       ', 'complexity          ', &
@@ -97,12 +98,12 @@ module mf6_module
   !
   !       inam         itdis        idisu        iic          ioc         inpf          isto         ichd1        ichd2        idrn         iriv         irch         iwel
   !       1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890
-  data pr/'.chd_intf ','          ','          ','          ','.sm       ','          ','          ','          ','.intf     ','          ','          ','          ','-         ', &
-          '.ic_sm    ','          ','          ','.sm       ','          ','          ','          ','          ','-         ','          ','          ','          ','-         ', &
-          '.ic_sh0   ','          ','          ','          ','          ','          ','          ','          ','-         ','          ','          ','          ','-         ', &
-          '.spu      ','.spu      ','          ','.ss       ','.spu      ','          ','          ','          ','-         ','.spu      ','.spu      ','.spu      ','-         ', &
-          '.ic_spu   ','          ','          ','.spu      ','          ','          ','          ','          ','-         ','          ','          ','          ','-         ', &
-          '.ic_ss    ','          ','          ','.ss       ','          ','          ','          ','          ','-         ','          ','          ','          ','-         '/
+  data pr/'.chd_intf ','          ','          ','          ','.sm       ','          ','          ','          ','.intf     ','          ','          ','          ','          ', &
+          '.ic_sm    ','          ','          ','.sm       ','          ','          ','          ','          ','-         ','          ','          ','          ','          ', &
+          '.ic_sh0   ','          ','          ','          ','          ','          ','          ','          ','-         ','          ','          ','          ','          ', &
+          '.spu      ','.spu      ','          ','.ss       ','.spu      ','          ','          ','          ','-         ','.spu      ','.spu      ','.spu      ','.spu      ', &
+          '.ic_spu   ','          ','          ','.spu      ','          ','          ','          ','          ','-         ','          ','          ','          ','          ', &
+          '.ic_ss    ','          ','          ','.ss       ','          ','          ','          ','          ','-         ','          ','          ','          ','          '/
   !
   ! stencil
   integer(i4b), parameter :: jp = 1
@@ -242,6 +243,7 @@ module mf6_module
     type(tExchange), dimension(:), pointer :: xch         => null()
     integer(i4b), dimension(:),    pointer :: layer_nodes => null()
     logical,                       pointer :: chd_sea     => null()
+    logical,                       pointer :: wel         => null()
   contains
     procedure :: get_model_name => mf6_mod_get_model_name
     procedure :: set_disu       => mf6_mod_set_disu
@@ -270,6 +272,7 @@ module mf6_module
     procedure :: write_drn   => mf6_mod_write_drn
     procedure :: write_riv   => mf6_mod_write_riv
     procedure :: write_rch   => mf6_mod_write_rch
+    procedure :: write_wel   => mf6_mod_write_wel
     !
     procedure :: write_exchanges => mf6_mod_write_exchanges
     !
@@ -2222,6 +2225,7 @@ module mf6_module
     call this%write_drn(lbin)
     call this%write_riv(lbin)
     call this%write_rch(lbin)
+    call this%write_wel(lbin)
     call this%write_nam()
     !
     return
@@ -2263,6 +2267,7 @@ module mf6_module
       write(iu,'(   a)') 'BEGIN PACKAGES'
       do ipck = 3, npck
         if ((ipck == ichd1).and.(.not.this%chd_sea)) cycle
+        if ((ipck == iwel).and.(.not.this%wel)) cycle
         if (trim(pr(ipck,irun)) == '-') cycle
         f = trim(this%rootdir)//trim(mn)//trim(pr(ipck,irun))//'.'//trim(pck(ipck))
         call swap_slash(f)
@@ -2872,6 +2877,7 @@ module mf6_module
       call this%get_array(i_riv_rbot,  1, iper, 2, i1wrk, r8wrk3, ib_in=2, toponly_in=.true.) !i_riv_rbot_l1
       !
       ! checks and filter for zero conductance
+      n = 0
       do i = 1, size(i1wrk)
         stage = r8wrk(i); cond = r8wrk2(i); rbot = r8wrk3(i)
         if (i1wrk(i) == 1) then
@@ -3030,6 +3036,111 @@ module mf6_module
     !
     return
   end subroutine mf6_mod_write_rch
+  
+  subroutine mf6_mod_write_wel(this, lbin)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+!
+    ! -- dummy
+    class(tMf6_mod) :: this
+    logical, intent(in) :: lbin
+    ! -- local
+    character(len=mxslen), dimension(:), allocatable :: cwk
+    character(len=mxslen) :: p, pb, f
+    integer(i4b) :: iu, i, n, nbound, maxbound, iper, jper, nper, nperspu
+! ------------------------------------------------------------------------------
+    call clear_wrk()
+    !
+    p = trim(this%rootdir)//trim(this%modelname)
+    if (lbin) then
+      pb =  trim(this%bindir)//trim(this%modelname)
+    else
+      pb = p
+    end if
+    !
+    ! write all binary files and store the file strings
+    nper = raw%nper
+    allocate(cwk(nper))
+    maxbound = 0
+    !
+    allocate(this%wel)
+    this%wel = .false.
+    !
+    do iper = 1, nper
+      call this%get_array(i_wel, 1, iper, 1, i1wrk, r8wrk, ib_in=2)
+      call this%get_array(i_wel, 2, iper, 2, i1wrk, r8wrk, ib_in=2)
+      ! filter for zero flux
+      n = 0
+      do i = 1, size(i1wrk)
+        if (r8wrk(i) == DZERO) then
+          if (i1wrk(i) == 1) n = n + 1
+          i1wrk(i) = 0
+        end if
+      end do
+      if (n > 0) then
+        call logmsg('Removed '//ta((/n/))//' wells with zero flux.')
+      end if
+      nbound = count_i1a(i1wrk, 1)
+      maxbound = max(nbound,maxbound)
+      if (nbound > 0) then
+        f = trim(pb)//'.wel.sp'//ta((/iper/),3)
+        call this%write_list(iu, 2, f, i1wrk, r8wrk, lbin, cwk(iper))
+      end if
+      call clear_wrk()
+    end do
+    !
+    if (maxbound == 0) then
+      this%wel = .false.
+      call logmsg('No wells found')
+      return
+    end if
+    !
+    f = trim(p)//'.wel'
+    call open_file(f, iu, 'w')
+    write(iu,'(   a)') 'BEGIN OPTIONS'
+    write(iu,'(   a)') 'END OPTIONS'
+    write(iu,'(a)')
+    write(iu,'(   a)') 'BEGIN DIMENSIONS'
+    write(iu,'(2x,a)') 'MAXBOUND '//ta((/maxbound/))
+    write(iu,'(   a)') 'END DIMENSIONS'
+    write(iu,'(a)')
+    do iper = 1, nper
+      write(iu,'(   a)') 'BEGIN PERIOD '//ta((/iper/))
+      write(iu,'(a)') trim(cwk(iper))
+      write(iu,'(   a)') 'END PERIOD'
+    end do
+    close(iu)
+    !
+    if (ltransient) then
+      f = trim(p)//trim(pr(irch,irun0tr))//'.wel'
+      call open_file(f, iu, 'w')
+      write(iu,'(   a)') 'BEGIN OPTIONS'
+      write(iu,'(   a)') 'END OPTIONS'
+      write(iu,'(a)')
+      write(iu,'(   a)') 'BEGIN DIMENSIONS'
+      write(iu,'(2x,a)') 'MAXBOUND '//ta((/maxbound/))
+      write(iu,'(   a)') 'END DIMENSIONS'
+      write(iu,'(a)')
+      nperspu = raw%geti('nyear_spinup')*12
+      do iper = 1, nper
+        write(iu,'(   a)') 'BEGIN PERIOD '//ta((/iper/))
+        !jper = mod(iper,nperspu)
+        !if (jper == 0) jper = nperspu
+        jper = mod(iper,12)
+        if (jper == 0) jper = 1
+        write(iu,'(a)') trim(cwk(jper))
+        write(iu,'(   a)') 'END PERIOD'
+      end do
+      close(iu)
+    end if
+    !
+    call clear_wrk()
+    !
+    return
+  end subroutine mf6_mod_write_wel
   
   subroutine mf6_mod_write_exchanges(this, ju)
 ! ******************************************************************************
