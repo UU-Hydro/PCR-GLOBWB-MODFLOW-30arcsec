@@ -8,7 +8,7 @@ module mf6_module
     calc_unique, sa, open_file, create_dir, swap_slash, tas, ta, get_rel_up, &
     writebin, get_jd, jd_next_month, get_month_days, getwords, getminmax, &
     replacetoken, IZERO, RZERO, DZERO, DONE, tBB, calc_unique, tI4grid, count_i1a, &
-    get_jd, get_ymd_from_jd, jd_next_month, get_abs_path, get_month_days_s
+    get_jd, get_ymd_from_jd, jd_next_month, get_abs_path, get_month_days_s, get_slash
   use imod_idf
   use pcrModule, only: tMap
   
@@ -279,6 +279,8 @@ module mf6_module
     procedure :: write_post_map  => mf6_mod_write_post_map
     !
     procedure :: clean_regions  => mf6_mod_clean_regions
+    !
+    procedure :: count_i1a => mf6_mod_count_i1a
   end type tMf6_mod
   
   type tMf6_sol
@@ -1393,12 +1395,12 @@ module mf6_module
     logical, intent(in), optional :: toponly_in
     ! -- local
     type(tReg), pointer :: reg
+    type(tData), pointer :: dat => null()
+    type(idfobj), pointer :: idf
     integer(i4b) :: n, nt, i, ireg, ir, ic, jr, jc, ib, itile, ilay, nlay
     integer(i4b) :: arrsiz
     real(r4b) :: r4val
     logical :: lfirst, ltile, toponly, found, ldefault
-    type(tData), pointer :: dat => null()
-    type(idfobj), pointer :: idf
 ! ------------------------------------------------------------------------------
     lfirst = .true.
     ltile = .true.
@@ -1661,6 +1663,49 @@ module mf6_module
     return
   end subroutine mf6_mod_clean_regions
     
+  function mf6_mod_count_i1a(this, i1a) result(cnt)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+!
+    ! -- dummy
+    class(tMf6_mod) :: this
+    integer(i1b), dimension(:), intent(in) :: i1a
+    integer(i4b), dimension(gnlay) :: cnt
+    ! -- local
+    type(tReg), pointer :: reg
+    type(tBb), pointer :: bb => null()
+    integer(i4b) :: ireg, il, ir, ic, n
+! ------------------------------------------------------------------------------
+    !
+    cnt = 0
+    !
+    if (.not.associated(this%nreg)) return
+    !
+    do ireg = 1, this%nreg
+      reg => this%reg(ireg)
+      bb => reg%bb
+      do il = 1, gnlay
+        do ir = 1, bb%nrow
+          do ic = 1, bb%ncol
+            n = abs(reg%nodmap(ic,ir,il))
+            if (n > 0) then
+              if (i1a(n) == 1) then
+                cnt(il) = cnt(il) + 1
+              end if
+            end if
+          end do
+        end do
+      end do
+    end do
+    !
+    call logmsg('#cells assigned to layers: '//ta(cnt))
+    !
+    return
+  end function mf6_mod_count_i1a
+  
   subroutine mf6_mod_get_model_name(this, i, modelname)
 ! ******************************************************************************
 ! ******************************************************************************
@@ -2210,11 +2255,13 @@ module mf6_module
     ! -- local
     logical, parameter :: lbin = .true.
 ! ------------------------------------------------------------------------------
+    call logmsg('**************************************************************')
     if (raw%nper == 1) then 
       call logmsg('***** Writing for steady-state model '//trim(this%modelname)//'...')
     else
       call logmsg('***** Writing for transient model '//trim(this%modelname)//'...')
     end if
+    call logmsg('**************************************************************')
     !
     call this%write_disu(lbin)
     call this%write_ic(lbin)
@@ -2669,6 +2716,7 @@ module mf6_module
     ! -- local
     character(len=mxslen) :: p, pb, f
     integer(i4b) :: iu, maxbound
+    integer(i4b), dimension(gnlay) :: nbound_lay
 ! ------------------------------------------------------------------------------
     !
     call clear_wrk()
@@ -2683,7 +2731,8 @@ module mf6_module
     ! external boundaries (sea)
     call this%get_array(i_strt, 1, 0, 1, i1wrk, r8wrk, ib_in=1) !i_strt_l1
     call this%get_array(i_strt, 2, 0, 2, i1wrk, r8wrk, ib_in=1) !i_strt_l2
-    maxbound = count_i1a(i1wrk, 1)
+    nbound_lay = this%count_i1a(i1wrk); maxbound = sum(nbound_lay)
+    !
     allocate(this%chd_sea)
     if (maxbound > 0) then
       this%chd_sea = .true.
@@ -2715,7 +2764,7 @@ module mf6_module
       ! internal boundaries (partitions)
       call this%get_array(i_strt, 1, 0, 1, i1wrk, r8wrk, ib_in=3) !i_strt_l1
       call this%get_array(i_strt, 2, 0, 2, i1wrk, r8wrk, ib_in=3) !i_strt_l2
-      maxbound = count_i1a(i1wrk, 1)
+      nbound_lay = this%count_i1a(i1wrk); maxbound = sum(nbound_lay)
       if (maxbound > 0) then
         f = trim(p)//trim(pr(ichd2,irun0ss))//'.chd'
         !
@@ -2754,6 +2803,7 @@ module mf6_module
     character(len=mxslen), dimension(:), allocatable :: cwk
     character(len=mxslen) :: p, pb, f
     integer(i4b) :: i, n, iu, nbound, maxbound, iper, jper, nper, nperspu
+    integer(i4b), dimension(gnlay) :: nbound_lay
 ! ------------------------------------------------------------------------------
     call clear_wrk()
     !
@@ -2786,7 +2836,7 @@ module mf6_module
         call logmsg('Removed '//ta((/n/))//' drains with zero conductance.')
       end if
       !
-      nbound = count_i1a(i1wrk, 1)
+      nbound_lay = this%count_i1a(i1wrk); nbound = sum(nbound_lay)
       if (nbound == 0) then
         call errmsg('No drains found.')
       end if
@@ -2852,6 +2902,7 @@ module mf6_module
     character(len=mxslen), dimension(:), allocatable :: cwk
     character(len=mxslen) :: p, pb, f
     integer(i4b) :: iu, nbound, maxbound, i, n, iper, jper, nper, nperspu
+    integer(i4b), dimension(gnlay) :: nbound_lay
     real(r8b) :: stage, rbot, cond
 ! ------------------------------------------------------------------------------
     call clear_wrk()
@@ -2897,7 +2948,7 @@ module mf6_module
         call logmsg('Removed '//ta((/n/))//' rivers with zero conductance.')
       end if
       !
-      nbound = count_i1a(i1wrk, 1)
+      nbound_lay = this%count_i1a(i1wrk); nbound = sum(nbound_lay)
       if (nbound == 0) then
         call errmsg('No rivers found.')
       end if
@@ -2965,6 +3016,7 @@ module mf6_module
     character(len=mxslen), dimension(:), allocatable :: cwk
     character(len=mxslen) :: p, pb, f
     integer(i4b) :: iu, nbound, maxbound, iper, jper, nper, nperspu
+    integer(i4b), dimension(gnlay) :: nbound_lay
 ! ------------------------------------------------------------------------------
     call clear_wrk()
     !
@@ -2983,7 +3035,7 @@ module mf6_module
     do iper = 1, nper
       call this%get_array(i_recharge, 0, iper, 1, i1wrk, r8wrk, ib_in=2, toponly_in=.true.)
       call this%get_array(i_recharge, 0, iper, 2, i1wrk, r8wrk, ib_in=2, toponly_in=.true.)
-      nbound = count_i1a(i1wrk, 1)
+      nbound_lay = this%count_i1a(i1wrk); nbound = sum(nbound_lay)
       if (nbound == 0) then
         call errmsg('No recharge found')
       end if
@@ -3051,6 +3103,7 @@ module mf6_module
     character(len=mxslen), dimension(:), allocatable :: cwk
     character(len=mxslen) :: p, pb, f
     integer(i4b) :: iu, i, n, nbound, maxbound, iper, jper, nper, nperspu
+    integer(i4b), dimension(gnlay) :: nbound_lay
 ! ------------------------------------------------------------------------------
     call clear_wrk()
     !
@@ -3083,8 +3136,8 @@ module mf6_module
       if (n > 0) then
         call logmsg('Removed '//ta((/n/))//' wells with zero flux.')
       end if
-      nbound = count_i1a(i1wrk, 1)
-      maxbound = max(nbound,maxbound)
+      nbound_lay = this%count_i1a(i1wrk); nbound = sum(nbound_lay)
+      maxbound = max(nbound, maxbound)
       if (nbound > 0) then
         f = trim(pb)//'.wel.sp'//ta((/iper/),3)
         call this%write_list(iu, 2, f, i1wrk, r8wrk, lbin, cwk(iper))
@@ -3217,8 +3270,9 @@ module mf6_module
     logical, intent(in), optional :: lreuse_in
     ! -- local
     logical :: lok, lreuse
+    character(len=1) :: slash
     character(len=mxslen) :: map_dir, map_file, f
-    integer(i4b) :: i, jlay, jper
+    integer(i4b) :: i, j, jlay, jper
 ! ------------------------------------------------------------------------------
     !
     if ((.not.associated(ntile)).or.(.not.associated(tilebb))) then
@@ -3269,6 +3323,12 @@ module mf6_module
       f = trim(map_dir)//trim(map_file)
       call replacetoken(f, '?', i)
       call chkexist(f)
+      !
+      if (i == 1) then
+        slash = get_slash()
+        j = index(f,slash,back=.true.)
+        call logmsg("Initializing (tile 1): "//trim(f(j+1:))//'...')
+      end if
       !
       lok = this%maps(i)%init(f,1)
       if (.not.lok) then
