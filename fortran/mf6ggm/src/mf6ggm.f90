@@ -2,8 +2,8 @@ program mf6ggm
   ! modules
   use pcrModule, only: tMap
   use utilsmod, only: i1b, i2b, i4b, i8b, r4b, r8b, mxslen, open_file, chkexist, errmsg, &
-    quicksort_d, label_node, tBB, DZERO, writeidf, create_dir, swap_slash, count_i1a, &
-    change_work_dir, get_work_dir, ta, fileexist
+    quicksort_d, label_node, tBB, DZERO, writeidf, create_dir, swap_slash, &
+    change_work_dir, get_work_dir, ta, fileexist, writeasc
   use metis_module, only: tMetis, tolimbal
   use mf6_module, only:  tMf6_sol, tMf6_mod, tReg, raw, tDistMap, tExchange, ntile, tilebb, &
     gncol, gnrow, gnlay, gxmin, gymin, gcs, cam2 !debug
@@ -51,6 +51,7 @@ program mf6ggm
   !
   type tSol
     integer(i4b) :: iact = 1
+    integer(i4b) :: iwrite_modid = 0
     logical      :: lmm = .false. ! T: multi-model; F: single-model
     integer(i4b) :: ncat = 0
     integer(i4b) :: np = 1
@@ -73,7 +74,7 @@ program mf6ggm
   type(tMetis), dimension(:), pointer :: solmet => null()
   type(tMod), pointer :: md => null()
   type(tMf6_mod), pointer :: mmd => null(), mmd2 => null()
-  type(tBB), pointer :: bb => null(), mbb => null()
+  type(tBB), pointer :: bb => null(), mbb => null(), sbb => null()
   type(tReg), pointer :: r => null()
   type(tModReg), pointer :: mr => null()
   type(tCatIntf), pointer :: intf => null()
@@ -95,12 +96,13 @@ program mf6ggm
   integer(i4b) :: iu, ju, nsol, nsol_mm, nsol_sm, i, j, k, kk, k0, k1, n, nn, nb, n_reg, nja_reg
   integer(i4b) :: solncat, solmxlid, mxlid, nja_cat, m_reg, iact, ncell, i4v, i4mv
   integer(i4b) :: lid, gid, lid1, gid1, lid2, nja, p, pp, p0, w, wtot, nmod, ipart, isol, ireg
-  integer(i4b) :: il0, il1, ir0, ir1, ic0, ic1, nlay0, nlay1
+  integer(i4b) :: il0, il1, ir0, ir1, ic0, ic1, nlay0, nlay1, ios
   integer(i4b) :: mxncol, mxnrow, nc, nr, ic, ir, il, jc, jr, kc, kr, ixch, jxch
   integer(i4b) :: gir0, gir1, gic0, gic1, pnod, ptil, pnlay, nodsign, modid, nintf, modid0, modid1
   integer(i4b), dimension(:), allocatable :: ia_reg, ja_reg, ia_cat, catlid, catgid
   integer(i4b), dimension(:), allocatable :: ia, ja
   integer(i4b), dimension(:), allocatable :: mapping
+  integer(i4b), dimension(:,:), allocatable :: solmodid
   real(r8b) :: xmin, ymin
   real(r8b), dimension(:), allocatable :: ncell_reg
 ! ------------------------------------------------------------------------------
@@ -157,7 +159,10 @@ program mf6ggm
   allocate(sol(nsol), solmet(nsol_mm+1))
   do i = 1, nsol_mm
     sol(i)%lmm = .true.
-    read(iu,*) sol(i)%iact, sol(i)%np
+    read(iu,*,iostat=ios) sol(i)%iact, sol(i)%np, sol(i)%iwrite_modid
+    if (ios /= 0) then
+      read(iu,*,iostat=ios) sol(i)%iact, sol(i)%np
+    end if
     sol(i)%iact = max(sol(i)%iact, 0)
   end do
   read(iu,'(a)') mod_inp
@@ -837,6 +842,34 @@ program mf6ggm
   do isol = 1, nsol ! BEGIN loop over all solutions
     s => sol(isol)
     if (s%iact == 0) cycle
+    
+    ! Init writing the model ID
+    if (s%iwrite_modid == 1) then
+      ! deterime solutlion bounding box
+      if (.not.associated(sbb)) then
+         allocate(sbb)
+      end if
+      do ipart = 1, s%np ! BEGIN loop over models
+        md => s%mod(ipart); modid = md%lmodid; mmd => smod(modid)
+        do ireg = 1, md%nreg
+          r => mmd%reg(ireg); bb => r%bb
+          sbb%ic0 = min(sbb%ic0, bb%ic0)
+          sbb%ic1 = max(sbb%ic1, bb%ic1)
+          sbb%ir0 = min(sbb%ir0, bb%ir0)
+          sbb%ir1 = max(sbb%ir1, bb%ir1)
+        end do
+      end do
+      sbb%ncol= sbb%ic1 - sbb%ic0 + 1
+      sbb%nrow= sbb%ir1 - sbb%ir0 + 1
+      if (allocated(solmodid)) deallocate(solmodid)
+      allocate(solmodid(sbb%ncol,sbb%nrow))
+      do ir = 1, sbb%nrow
+        do ic = 1, sbb%ncol
+         solmodid(ic,ir) = 0
+        end do
+      end do
+    end if 
+    !
     do ipart = 1, s%np ! BEGIN loop over models
       md => s%mod(ipart); modid = md%lmodid; mmd => smod(modid)
       !
@@ -963,7 +996,25 @@ program mf6ggm
         end do
       end do
       !
-      ! DEBUG
+      ! store model ID
+      if (s%iwrite_modid == 1) then
+        do il = 1, gnlay
+          do ireg = 1, md%nreg
+            r => mmd%reg(ireg); bb => r%bb
+            do ir = 1, bb%nrow
+              do ic = 1, bb%ncol
+                i4v = r%nodmap(ic,ir,il)
+                if (i4v /= 0) then
+                  jc = ic + bb%ic0 - 1; jr = ir + bb%ir0 - 1
+                  kc = jc - sbb%ic0 + 1; kr = jr - sbb%ir0 + 1
+                  solmodid(kc,kr) = md%gmodid
+                end if
+            end do
+          end do
+          end do
+        end do
+      end if
+      !
       if (.false.) then
         !if (s%lmm) then
           do ireg = 1, md%nreg
@@ -1053,7 +1104,19 @@ program mf6ggm
       call mmd%clean_regions()
       !
     end do ! END loop over all models
+  !
+    if (s%iwrite_modid == 1) then
+      f = '..\post_mappings\s'//ta((/isol/),2)//'.asc'
+      call swap_slash(f)
+      xmin = gxmin + (sbb%ic0-1)*gcs
+      ymin = gymin + (gnrow-sbb%ir1)*gcs
+      call writeasc(f, solmodid, sbb%ncol, sbb%nrow, &
+        dble(xmin), dble(ymin), dble(gcs), DZERO)
+      deallocate(solmodid)
+      sbb => null()
+    end if
   end do ! BEGIN loop over all solutions
+  !
   !
   if (.not.lwsol) then
     ! close the mapping-files
@@ -1132,6 +1195,7 @@ program mf6ggm
     write(*,'(a,i2.2,a,i3.3)') 'Solution ',isol,' # output interface: ',nintf
   end do !isol
   !
+  !
   if (.false.) then !!! DEBUG OUTPUT !!!
     s => sol(1)
     do i = 1, s%np ! loop over models
@@ -1166,6 +1230,9 @@ program mf6ggm
     end do
     stop
   end if
+  
+  
+  
   !
   ! write the exchange files for all models  
   do isol = 1, nsol
