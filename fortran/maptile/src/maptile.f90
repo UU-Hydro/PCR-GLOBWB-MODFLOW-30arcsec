@@ -15,6 +15,7 @@ program maprcb
   integer, dimension(:), allocatable :: proc_icolmin, proc_icolmax, proc_irowmin, proc_irowmax
   integer, dimension(:), allocatable :: proc_dicolmin, proc_dicolmax, proc_dirowmin, proc_dirowmax
   real :: nodata, dmin, dmax
+  integer, dimension(:,:), allocatable :: iwrk
   real, dimension(:,:), allocatable :: loadptr, wrk
   double precision :: xul, yul, xmin, xmax, ymin, ymax, cs, dxmin, dxmax, dymin, dymax
   logical, parameter :: lround = .true.
@@ -178,6 +179,13 @@ program maprcb
   close(lun)
   if (iverb == 1) stop  
   
+  allocate(iwrk(ncol,nrow))
+  do irow = 1, nrow
+    do icol = 1, ncol
+      iwrk(icol,irow) = 0
+    end do
+  end do
+  !
   iproc = 0
   itile = 0
   do irow = 1, ny_map
@@ -195,6 +203,7 @@ program maprcb
       do ir = ir0, ir1
         do ic = ic0, ic1
           wrk(ic-ic0+1,ir-ir0+1) = loadptr(ic,ir)
+          iwrk(ic,ir) = iproc
         end do
       end do
       xmin = xul+(ic0-1)*cs; ymin = yul-ir1*cs
@@ -212,4 +221,10 @@ program maprcb
     end do
   end do
 
+  f = 'tiles_glob'
+  xmin = xul; ymin = yul-nrow*cs
+  call writeasc(trim(f)//'.asc', iwrk, ncol, nrow, &
+    xmin, ymin, cs, 0.D0)
+  call writeidf(trim(f)//'.idf', iwrk, ncol, nrow, &
+    xmin, ymin, cs, 0.D0)
 end program
