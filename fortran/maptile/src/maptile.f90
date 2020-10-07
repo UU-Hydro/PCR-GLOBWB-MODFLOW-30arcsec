@@ -203,7 +203,7 @@ program maprcb
       do ir = ir0, ir1
         do ic = ic0, ic1
           wrk(ic-ic0+1,ir-ir0+1) = loadptr(ic,ir)
-          iwrk(ic,ir) = iproc
+          iwrk(ic,ir) = itile
         end do
       end do
       xmin = xul+(ic0-1)*cs; ymin = yul-ir1*cs
