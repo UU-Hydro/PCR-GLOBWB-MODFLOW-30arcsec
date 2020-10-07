@@ -89,7 +89,7 @@ program mf6ggm
   real(r4b),    dimension(:,:,:), allocatable :: r4wk3d
   real(r8b),    dimension(:),     allocatable :: r8wk1d
   !
-  character(len=mxslen) :: f, d, out_dir, map_pref, mod_inp
+  character(len=mxslen) :: str, f, d, out_dir, map_pref, mod_inp
   logical :: lwmod, lwsol, lok
   integer(i1b) :: nlay
   integer(i2b) :: itile
@@ -159,9 +159,10 @@ program mf6ggm
   allocate(sol(nsol), solmet(nsol_mm+1))
   do i = 1, nsol_mm
     sol(i)%lmm = .true.
-    read(iu,*,iostat=ios) sol(i)%iact, sol(i)%np, sol(i)%iwrite_modid
+    read(iu,'(a)') str
+    read(str,*,iostat=ios) sol(i)%iact, sol(i)%np, sol(i)%iwrite_modid
     if (ios /= 0) then
-      read(iu,*,iostat=ios) sol(i)%iact, sol(i)%np
+      read(str,*,iostat=ios) sol(i)%iact, sol(i)%np
     end if
     sol(i)%iact = max(sol(i)%iact, 0)
   end do
