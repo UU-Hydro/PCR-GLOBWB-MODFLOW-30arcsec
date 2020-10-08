@@ -66,10 +66,12 @@ module utilsmod
   private :: readasc_r_r, readasc_r_d
 
   interface writeasc
-    module procedure :: writeasc_r_d
-    module procedure :: writeasc_d_d
+    module procedure :: writeasc_i4_r4
+    module procedure :: writeasc_i4_r8
+    module procedure :: writeasc_r4_r8
+    module procedure :: writeasc_r8_r8
   end interface
-  private :: writeasc_r_d, writeasc_d_d
+  private :: writeasc_i4_r4, writeasc_i4_r8, writeasc_r4_r8, writeasc_r8_r8
 
   interface addboundary
     module procedure :: addboundary_i
@@ -1202,37 +1204,37 @@ module utilsmod
     return
   end subroutine writeascheader
 
-  subroutine writeasc_i_r(f, x, ncol, nrow, xll, yll, cs, nodata)
+  subroutine writeasc_i4_r4(f, x, ncol, nrow, xll, yll, cs, nodata)
 ! ******************************************************************************
     ! -- arguments
     character(len=*), intent(in) :: f
-    integer, intent(in) :: ncol, nrow
-    integer, dimension(ncol,nrow), intent(in) :: x
-    real, intent(in) :: xll, yll, cs, nodata
+    integer(i4b), intent(in) :: ncol, nrow
+    integer(i4b), dimension(ncol,nrow), intent(in) :: x
+    real(r4b), intent(in) :: xll, yll, cs, nodata
     ! -- locals
-    integer :: lun, icol, irow
+    integer(i4b) :: lun, icol, irow
 ! ------------------------------------------------------------------------------
 
     write(*,'(1x,a,1x,2a)') 'Writing',trim(f),'...'
 
     lun = getlun(); open(unit=lun,file=f,status='replace')
-    call writeascheader(lun, ncol, nrow, dble(xll), dble(yll), dble(cs),        &
+    call writeascheader(lun, ncol, nrow, real(xll,r8b), real(yll,r8b), real(cs,r8b),        &
       dble(nodata))
     write(lun,*)((x(icol,irow),icol=1,ncol),irow=1,nrow)
     close(lun)
     !
     return
-  end subroutine writeasc_i_r
+  end subroutine writeasc_i4_r4
 
-  subroutine writeasc_r_d(f, x, ncol, nrow, xll, yll, cs, nodata)
+  subroutine writeasc_r4_r8(f, x, ncol, nrow, xll, yll, cs, nodata)
 ! ******************************************************************************
     ! -- arguments
     character(len=*), intent(in) :: f
-    integer, intent(in) :: ncol, nrow
-    real, dimension(ncol,nrow), intent(in) :: x
-    double precision, intent(in) :: xll, yll, cs, nodata
+    integer(i4b), intent(in) :: ncol, nrow
+    real(r4b), dimension(ncol,nrow), intent(in) :: x
+    real(r8b), intent(in) :: xll, yll, cs, nodata
     ! -- locals
-    integer :: lun, icol, irow
+    integer(i4b) :: lun, icol, irow
 ! ------------------------------------------------------------------------------
 
     write(*,'(1x,a,1x,2a)') 'Writing',trim(f),'...'
@@ -1243,7 +1245,7 @@ module utilsmod
     close(lun)
     !
     return
-  end subroutine writeasc_r_d
+  end subroutine writeasc_r4_r8
 
   subroutine writeidf_i1_r8(f, x, ncol, nrow, xll, yll, cs, nodata)
 ! ******************************************************************************
@@ -1403,15 +1405,15 @@ module utilsmod
     return
   end subroutine writeidf_r8_r8
 
-  subroutine writeasc_d_d(f, x, ncol, nrow, xll, yll, cs, nodata)
+  subroutine writeasc_i4_r8(f, x, ncol, nrow, xll, yll, cs, nodata)
 ! ******************************************************************************
     ! -- arguments
     character(len=*), intent(in) :: f
-    integer, intent(in) :: ncol, nrow
-    double precision, dimension(ncol,nrow), intent(in) :: x
-    double precision, intent(in) :: xll, yll, cs, nodata
+    integer(i4b), intent(in) :: ncol, nrow
+    integer(i4b), dimension(ncol,nrow), intent(in) :: x
+    real(r8b), intent(in) :: xll, yll, cs, nodata
     ! -- locals
-    integer :: lun, icol, irow
+    integer(i4b) :: lun, icol, irow
 ! ------------------------------------------------------------------------------
 
     write(*,'(1x,a,1x,2a)') 'Writing',trim(f),'...'
@@ -1422,7 +1424,28 @@ module utilsmod
     close(lun)
     !
     return
-  end subroutine writeasc_d_d
+  end subroutine writeasc_i4_r8
+
+  subroutine writeasc_r8_r8(f, x, ncol, nrow, xll, yll, cs, nodata)
+! ******************************************************************************
+    ! -- arguments
+    character(len=*), intent(in) :: f
+    integer(i4b), intent(in) :: ncol, nrow
+    real(r8b), dimension(ncol,nrow), intent(in) :: x
+    real(r8b), intent(in) :: xll, yll, cs, nodata
+    ! -- locals
+    integer(i4b) :: lun, icol, irow
+! ------------------------------------------------------------------------------
+
+    write(*,'(1x,a,1x,2a)') 'Writing',trim(f),'...'
+
+    lun = getlun(); open(unit=lun,file=f,status='replace')
+    call writeascheader(lun, ncol, nrow, xll, yll, cs, nodata)
+    write(lun,*)((x(icol,irow),icol=1,ncol),irow=1,nrow)
+    close(lun)
+    !
+    return
+  end subroutine writeasc_r8_r8
 
   subroutine readasc_r_d(f, x, ncol, nrow, xll, yll, cs, nodata, idebug)
 ! ******************************************************************************
