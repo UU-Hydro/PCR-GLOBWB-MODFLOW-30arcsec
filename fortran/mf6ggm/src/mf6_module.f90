@@ -147,6 +147,7 @@ module mf6_module
     character(len=mxslen), dimension(:), allocatable :: perdate
   contains
     procedure :: init => mf6_raw_init
+    procedure :: mf6_raw_init_distmap
     procedure :: mf6_raw_get_index
     procedure :: mf6_raw_key_exists
     procedure :: mf6_raw_get_name_char, mf6_raw_get_name_i4b
@@ -163,12 +164,14 @@ module mf6_module
   integer(i4b), pointer :: ntile => null()
   !
   type tDistMap
-    logical                           :: linit  = .false.
-    integer(i4b),             pointer :: ntile  => null()
-    real(r4b),                pointer :: r4def  => null()
-    logical,                  pointer :: larea  => null()
-    type(tBB), dimension(:),  pointer :: tilebb => null()
-    type(tMap), dimension(:), pointer :: maps   => null()
+    logical                             :: linit  = .false.
+    integer(i4b),               pointer :: gntile => null()
+    integer(i2b), dimension(:), pointer :: g2ltile => null()
+    integer(i4b),               pointer :: ntile  => null()
+    real(r4b),                  pointer :: r4def  => null()
+    logical,                    pointer :: larea  => null()
+    type(tBB), dimension(:),    pointer :: tilebb => null()
+    type(tMap), dimension(:),   pointer :: maps   => null()
   contains
     procedure :: init   => mf6_distmap_init
     procedure :: clean  => mf6_distmap_clean
@@ -232,6 +235,8 @@ module mf6_module
   type tMf6_mod
     integer(i4b)                           :: imod        = -1      !model ID
     integer(i4b),                  pointer :: isol        => null() !solution ID
+    integer(i4b),                  pointer :: ntile       => null() !number of attached tiles
+    integer(i2b), dimension(:),    pointer :: itile       => null() !global tile numbers
     type(tBb),                     pointer :: bb          => null()
     character(len=mxslen),         pointer :: modelname   => null()
     character(len=mxslen),         pointer :: rootdir     => null()
@@ -422,6 +427,30 @@ module mf6_module
     !
     return
   end subroutine mf6_raw_init
+  
+  
+  subroutine mf6_raw_init_distmap(this)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+!
+    ! -- dummy
+    class(tRawDat) :: this
+    ! -- local
+    type(tDistMap), pointer :: distmap => null()
+    integer(i4b) :: i
+! ------------------------------------------------------------------------------
+    do i = 1, this%nraw
+      distmap => this%raw(i)%dat%distmap
+      if (associated(distmap)) then
+        distmap%linit = .false.
+      end if
+    end do
+    !
+    return
+  end subroutine mf6_raw_init_distmap
   
   function mf6_raw_get_index(this, key, ilay, iper) result(ind)
 ! ******************************************************************************
@@ -731,25 +760,26 @@ module mf6_module
     case(i_map)
       call errmsg("Error mf6_raw_read_block_r4b: map file not supported")
     case(i_distmap)
-      if (.not.present(itile)) then
-        call errmsg('Could not read tiles.')
-      end if
-      call dat%distmap%init(dat%s, jlay, jper)
-      nc = ic1 - ic0 + 1; nr = ir1 - ir0 + 1
-      allocate(arr(nc,nr))
-      do ir = 1, nr
-        do ic = 1, nc
-          jc = ic + ic0 - 1; jr = ir + ir0 - 1
-          i = int(itile(ic,ir),i4b)
-          if (i < 0) then
-            i = -i
-          end if
-          if (i > 0) then
-            r4v = dat%distmap%getval(jc, jr, i)
-            arr(ic,ir) = r4v
-          end if
-        end do
-      end do
+      call errmsg("Error mf6_raw_read_block_r4b: distributed map file not supported")
+      !if (.not.present(itile)) then
+      !  call errmsg('Could not read tiles.')
+      !end if
+      !call dat%distmap%init(dat%s, jlay, jper)
+      !nc = ic1 - ic0 + 1; nr = ir1 - ir0 + 1
+      !allocate(arr(nc,nr))
+      !do ir = 1, nr
+      !  do ic = 1, nc
+      !    jc = ic + ic0 - 1; jr = ir + ir0 - 1
+      !    i = int(itile(ic,ir),i4b)
+      !    if (i < 0) then
+      !      i = -i
+      !    end if
+      !    if (i > 0) then
+      !      r4v = dat%distmap%getval(jc, jr, i)
+      !      arr(ic,ir) = r4v
+      !    end if
+      !  end do
+      !end do
     case(i_undefined)
       call errmsg("Error mf6_raw_read_block_r4b: not a recognized file")
     end select
@@ -1347,7 +1377,7 @@ module mf6_module
       case(i_map)
         call errmsg("Error mf6_raw_read_block_r4b: map file not supported")
       case(i_distmap)
-        call dat%distmap%init(dat%s, ilay_dat, iper_dat, .true.)
+        call dat%distmap%init(dat%s, this%itile, ilay_dat, iper_dat, .true.)
         reg => this%reg(ireg)
         gir = ir + reg%bb%ir0 - 1; gic = ic + reg%bb%ic0 - 1
         itile = int(reg%itile(ic,ir),i4b)
@@ -1449,7 +1479,7 @@ module mf6_module
       case(i_map)
         call errmsg("Error mf6_raw_read_block_r4b: map file not supported")
       case(i_distmap)
-        call dat%distmap%init(dat%s, ilay_dat, iper_dat)
+        call dat%distmap%init(dat%s, this%itile, ilay_dat, iper_dat)
     end select
     
     do ireg = 1, this%nreg
@@ -1538,7 +1568,7 @@ module mf6_module
               call errmsg('mf6_mod_get_array_r8: program error 3 '//ta((/ib/))//' '//&
                 ta((/n/))//' '//ta((/arrsiz/)))
             end if
-            arr(n) = dble(r4val)
+            arr(n) = real(r4val,r8b)
             arrflg(n) = 1
           end if
         end do
@@ -2262,6 +2292,9 @@ module mf6_module
       call logmsg('***** Writing for transient model '//trim(this%modelname)//'...')
     end if
     call logmsg('**************************************************************')
+    !
+    ! set flag for reinitializing all distmap files
+    call raw%mf6_raw_init_distmap()
     !
     call this%write_disu(lbin)
     call this%write_ic(lbin)
@@ -3255,7 +3288,7 @@ module mf6_module
     return
   end subroutine mf6_mod_write_exchanges
   
-  subroutine mf6_distmap_init(this, map_file_in, ilay, iper, lreuse_in)
+  subroutine mf6_distmap_init(this, map_file_in, litile, ilay, iper, lreuse_in)
 ! ******************************************************************************
 ! ******************************************************************************
 !
@@ -3265,6 +3298,7 @@ module mf6_module
     ! -- dummy
     class(tDistMap) :: this
     character(len=*), intent(in) :: map_file_in
+    integer(i2b), dimension(:), optional, intent(in) :: litile
     integer(i4b), intent(in), optional :: ilay
     integer(i4b), intent(in), optional :: iper
     logical, intent(in), optional :: lreuse_in
@@ -3272,7 +3306,7 @@ module mf6_module
     logical :: lok, lreuse
     character(len=1) :: slash
     character(len=mxslen) :: map_dir, map_file, f
-    integer(i4b) :: i, j, jlay, jper
+    integer(i4b) :: i, j, k, jlay, jper, lntile
 ! ------------------------------------------------------------------------------
     !
     if ((.not.associated(ntile)).or.(.not.associated(tilebb))) then
@@ -3315,22 +3349,33 @@ module mf6_module
     !
     map_dir = raw%getc('input_map_dir')
     !
-    allocate(this%ntile); this%ntile = ntile
-    this%tilebb => tilebb
-    allocate(this%maps(ntile))
-    !
+    lntile = size(litile)
+    allocate(this%gntile); this%gntile = ntile
+    allocate(this%ntile); this%ntile = lntile
+    allocate(this%g2ltile(ntile))
     do i = 1, ntile
+      this%g2ltile(i) = 0
+    end do
+    do i = 1, lntile
+      j = litile(i)
+      this%g2ltile(j) = i
+    end do
+    this%tilebb => tilebb
+    allocate(this%maps(lntile))
+    !
+    do k = 1, lntile
+      i = litile(k)
       f = trim(map_dir)//trim(map_file)
       call replacetoken(f, '?', i)
       call chkexist(f)
       !
-      if (i == 1) then
+      if (k == 1) then
         slash = get_slash()
         j = index(f,slash,back=.true.)
-        call logmsg("Initializing (tile 1): "//trim(f(j+1:))//'...')
+        call logmsg('Initializing (tile '//ta((/i/))//'): '// trim(f(j+1:)) //'...')
       end if
       !
-      lok = this%maps(i)%init(f,1)
+      lok = this%maps(k)%init_light(f,1)
       if (.not.lok) then
         call errmsg('Could not initialize '//trim(f))
       end if
@@ -3357,6 +3402,8 @@ module mf6_module
     end do
     deallocate(this%maps)
     deallocate(this%ntile)
+    deallocate(this%gntile)
+    deallocate(this%g2ltile)
     this%tilebb => null()
     this%linit = .false.
     !
@@ -3378,7 +3425,7 @@ module mf6_module
     real(r4b), optional, intent(in) :: nodata_in
     real(r4b) :: r4val
     ! -- local
-    integer(i4b) :: ic, ir
+    integer(i4b) :: ic, ir, jtile
     real(r4b) :: nodata
 ! ------------------------------------------------------------------------------
     !
@@ -3390,7 +3437,12 @@ module mf6_module
     !
     ic = gic - this%tilebb(itile)%ic0 + 1
     ir = gir - this%tilebb(itile)%ir0 + 1
-    call this%maps(itile)%get_val(ic, ir, r4val, nodata)
+    !
+    jtile = this%g2ltile(itile)
+    if (jtile == 0) then
+      call errmsg("Program error: mf6_distmap_getval_r4")
+    end if
+    call this%maps(jtile)%get_val(ic, ir, r4val, nodata)
     !
     return
   end function mf6_distmap_getval_r4

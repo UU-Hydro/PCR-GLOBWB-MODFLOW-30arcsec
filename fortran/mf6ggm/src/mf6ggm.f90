@@ -92,7 +92,7 @@ program mf6ggm
   character(len=mxslen) :: str, f, d, out_dir, map_pref, mod_inp
   logical :: lwmod, lwsol, lok
   integer(i1b) :: nlay
-  integer(i2b) :: itile
+  integer(i2b) :: itile, i2v
   integer(i4b) :: iu, ju, nsol, nsol_mm, nsol_sm, i, j, k, kk, k0, k1, n, nn, nb, n_reg, nja_reg
   integer(i4b) :: solncat, solmxlid, mxlid, nja_cat, m_reg, iact, ncell, i4v, i4mv
   integer(i4b) :: lid, gid, lid1, gid1, lid2, nja, p, pp, p0, w, wtot, nmod, ipart, isol, ireg
@@ -940,6 +940,36 @@ program mf6ggm
         end do ! END loop over catchments cells
       end do ! END loop over catchments
       !
+      ! Set the tile number for this model
+      if (allocated(i4wk1d)) deallocate(i4wk1d)
+      allocate(i4wk1d(ntile))
+      do i = 1, ntile
+        i4wk1d(i) = 0
+      end do
+      do ireg = 1, md%nreg
+        r => mmd%reg(ireg); bb => r%bb
+        do ir = 1, bb%nrow
+          do ic = 1, bb%ncol
+            i2v = abs(r%itile(ic,ir))
+            if (i2v /= 0) then
+              i4wk1d(i2v) = 1
+            end if
+          end do
+        end do
+      end do
+      allocate(mmd%ntile)
+      mmd%ntile = sum(i4wk1d)
+      if (mmd%ntile > 0) then
+        allocate(mmd%itile(mmd%ntile))
+        j = 0
+        do i = 1, ntile
+          if (i4wk1d(i) == 1) then
+            j = j + 1
+            mmd%itile(j) = int(i,i2b)
+          end if
+        end do
+      end if
+      !
       ! reorder the nodes
       allocate(mmd%layer_nodes(gnlay)); mmd%layer_nodes = 0
       do ireg = 1, md%nreg
@@ -1010,8 +1040,8 @@ program mf6ggm
                   kc = jc - sbb%ic0 + 1; kr = jr - sbb%ir0 + 1
                   solmodid(kc,kr) = md%gmodid
                 end if
+              end do
             end do
-          end do
           end do
         end do
       end if
@@ -1105,7 +1135,7 @@ program mf6ggm
       call mmd%clean_regions()
       !
     end do ! END loop over all models
-  !
+    !
     if (s%iwrite_modid == 1) then
       f = '..\post_mappings\s'//ta((/isol/),2)//'.asc'
       call swap_slash(f)

@@ -127,7 +127,9 @@ module pcrModule
     integer(i4b), pointer :: gic1  => null() !global
   contains
     procedure :: init         => map_init
-    procedure :: read_header  => map_read_header
+    procedure :: read_header  => map_read_full_header
+    procedure :: init_light         => map_init_light
+    procedure :: read_light_header  => map_read_light_header
     procedure :: set_bb       => map_set_bounding_box
     procedure :: read_data    => map_read_data
     procedure :: write_header => map_write_header
@@ -224,6 +226,44 @@ contains
     return
   end function map_init
   
+
+  function map_init_light(this, f, verb_in) result(ok)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+    ! -- dummy
+    class(tMap) :: this
+    character(len=*), intent(in) :: f
+    integer(i4b), intent(in), optional :: verb_in
+    !
+    logical :: ok
+    ! -- local
+    integer(i4b) :: verb
+    logical :: lok
+! ------------------------------------------------------------------------------
+    if (present(verb_in)) then
+      verb = verb_in
+    else
+      verb = 0
+    end if
+    !
+    lok = this%read_light_header(f, verb)
+    !
+    allocate(this%gic0, this%gic1, this%gir0, this%gir1)
+    !
+    this%gic0 = IZERO
+    this%gic1 = IZERO
+    this%gir0 = IZERO
+    this%gir1 = IZERO
+    !
+    ! set return value
+    ok = .true.
+    !
+    return
+  end function map_init_light
+  
   function map_set_bounding_box(this, gic0, gic1, gir0, gir1, &
     gxll, gyll, gnrow, gncol) result(ok)
 ! ******************************************************************************
@@ -275,7 +315,7 @@ contains
     return
   end function map_set_bounding_box
   
-  function map_read_header(this, f, verb) result(ok)
+  function map_read_full_header(this, f, verb) result(ok)
 ! ******************************************************************************
 ! ******************************************************************************
 !
@@ -367,8 +407,52 @@ contains
     ok = .true.
     !
     return
-  end function map_read_header
+  end function map_read_full_header
 
+  function map_read_light_header(this, f, verb) result(ok)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+    ! -- dummy
+    class(tMap) :: this
+    character(len=*), intent(in) :: f
+    integer(i4b), intent(in) :: verb
+    logical :: ok
+    ! -- local
+    integer :: i, iinc
+    real, parameter :: nodata = -9999. ! should be exactly the same as in rdrsmodule !
+    type(tMapHdr), pointer :: hdr
+! ------------------------------------------------------------------------------
+    call chkexist(f)
+    allocate(this%f)
+    this%f = f
+    
+    ! open file in stream mode
+    if (.not.associated(this%iu)) allocate(this%iu)
+    this%iu=getlun()
+    if (verb == 0) write(*,*) 'Reading '//trim(f)//'...'
+    open(unit=this%iu,file=f,form='unformatted',access='stream',status='old')
+    
+    ! READ HEADER
+    allocate(this%header)
+    hdr => this%header
+    read(this%iu,pos= 66+1) hdr%cellRepr
+    do i = 1, ncr
+       if(crval(i).eq.hdr%cellRepr)then
+          hdr%cellRepr=i
+          exit
+       end if   
+    end do    
+    read(this%iu,pos=104+1) hdr%nrCols
+    
+    ! set return value
+    ok = .true.
+    !
+    return
+  end function map_read_light_header
+  
   function map_write_header(this, f) result(ok)
 ! ******************************************************************************
 ! ******************************************************************************
