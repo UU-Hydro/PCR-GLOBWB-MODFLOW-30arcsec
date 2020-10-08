@@ -249,6 +249,8 @@ module mf6_module
     integer(i4b), dimension(:),    pointer :: layer_nodes => null()
     logical,                       pointer :: chd_sea     => null()
     logical,                       pointer :: wel         => null()
+    character(len=mxslen),         pointer :: fbin        => null()
+    integer(i4b),                  pointer :: iubin       => null()
   contains
     procedure :: get_model_name => mf6_mod_get_model_name
     procedure :: set_disu       => mf6_mod_set_disu
@@ -1918,7 +1920,7 @@ module mf6_module
     return
   end subroutine mf6_mod_set_disu
   
-  subroutine mf6_mod_write_array_i4(this, iu, nx, f, arr, lbin)
+  subroutine mf6_mod_write_array_i4(this, iu, nx, f, arr, lbin, lbinpos_in)
 ! ******************************************************************************
 ! ******************************************************************************
 !
@@ -1932,23 +1934,46 @@ module mf6_module
     character(len=*), intent(inout) :: f
     integer(i4b), dimension(:), intent(in) :: arr
     logical, intent(in) :: lbin
+    logical, intent(in), optional :: lbinpos_in
     ! -- local
     integer(i4b), parameter :: i4dum = 1
     real(r8b), parameter :: r8dum = DZERO
     character(len=16) :: c16dum = ''
     integer(i4b) :: ju, i, narr
+    integer(i8b) :: p0, p1
     character(len=mxslen) :: fmt
+    logical :: lbinpos
 ! ------------------------------------------------------------------------------
+    if (present(lbinpos_in)) then
+      lbinpos = lbinpos_in
+    else
+      lbinpos = .false.
+    end if
+    !    
     write(fmt,'(a,i,a)') '(',nx,'x,a)'
     if (lbin) then
-      f = trim(f)//'.bin'
-      call open_file(f, ju, 'w', .true.)
+      if (.not.lbinpos) then
+        f = trim(f)//'.bin'
+        call open_file(f, ju, 'w', .true.)
+      else
+        f = this%fbin
+        ju = this%iubin
+      end if
       narr = size(arr)
+      if (lbinpos) inquire(ju,pos=p0)
       write(ju) i4dum, i4dum, r8dum, r8dum, c16dum, narr, i4dum, i4dum
       write(ju) arr
-      close(ju)
+      if (lbinpos) then
+        inquire(ju,pos=p1)
+      else
+        close(ju)
+      end if
       !call get_rel_up(f, 2)
-      write(iu,fmt) 'OPEN/CLOSE '//trim(f)//' (BINARY)'
+      if (.not.lbinpos) then
+        write(iu,fmt) 'OPEN/CLOSE '//trim(f)//' (BINARY)'
+      else
+        write(iu,fmt) 'OPEN/CLOSE '//trim(f)//' (BINARY) '//ta((/p0,p1/))
+      end if
     else
       f = trim(f)//'.asc'
       call open_file(f, ju, 'w')
@@ -1963,7 +1988,7 @@ module mf6_module
     return
   end subroutine mf6_mod_write_array_i4
   
-  subroutine mf6_mod_write_array_r8(this, iu, nx, f, arr, lbin)
+  subroutine mf6_mod_write_array_r8(this, iu, nx, f, arr, lbin, lbinpos_in)
 ! ******************************************************************************
 ! ******************************************************************************
 !
@@ -1977,23 +2002,46 @@ module mf6_module
     character(len=*), intent(inout) :: f
     real(r8b), dimension(:), intent(in) :: arr
     logical, intent(in) :: lbin
+    logical, intent(in), optional :: lbinpos_in
     ! -- local
     integer(i4b), parameter :: i4dum = 1
     real(r8b), parameter :: r8dum = DZERO
     character(len=16) :: c16dum = ''
     integer(i4b) :: ju, i, narr
+    integer(i8b) :: p0, p1
     character(len=mxslen) :: fmt
+    logical :: lbinpos
 ! ------------------------------------------------------------------------------
+    if (present(lbinpos_in)) then
+      lbinpos = lbinpos_in
+    else
+      lbinpos = .false.
+    end if
+    !
     write(fmt,'(a,i,a)') '(',nx,'x,a)'
     if (lbin) then
-      f = trim(f)//'.bin'
-      call open_file(f, ju, 'w', .true.)
+      if (.not.lbinpos) then
+        f = trim(f)//'.bin'
+        call open_file(f, ju, 'w', .true.)
+      else
+        f = this%fbin
+        ju = this%iubin
+      end if
+      if (lbinpos) inquire(ju,pos=p0)
       narr = size(arr)
       write(ju) i4dum, i4dum, r8dum, r8dum, c16dum, narr, i4dum, i4dum
       write(ju) arr
-      close(ju)
+      if (lbinpos) then
+        inquire(ju,pos=p1)
+      else
+        close(ju)
+      end if
       !call get_rel_up(f, 2)
-      write(iu,fmt) 'OPEN/CLOSE '//trim(f)//' (BINARY)'
+      if (.not.lbinpos) then
+        write(iu,fmt) 'OPEN/CLOSE '//trim(f)//' (BINARY)'
+      else
+        write(iu,fmt) 'OPEN/CLOSE '//trim(f)//' (BINARY) '//ta((/p0,p1/))
+      end if
     else
       f = trim(f)//'.asc'
       call open_file(f, ju, 'w')
@@ -2008,7 +2056,7 @@ module mf6_module
     return
   end subroutine mf6_mod_write_array_r8
   
-  subroutine mf6_mod_write_list_1(this, iu, nx, f, arrflg, arr, lbin, s)
+  subroutine mf6_mod_write_list_1(this, iu, nx, f, arrflg, arr, lbin, lbinpos, s)
 ! ******************************************************************************
 ! ******************************************************************************
 !
@@ -2023,11 +2071,13 @@ module mf6_module
     integer(i1b), dimension(:), intent(in) :: arrflg
     real(r8b), dimension(:), intent(in) :: arr
     logical, intent(in) :: lbin
+    logical, intent(in) :: lbinpos
     character(len=*), intent(out), optional :: s
     ! -- local
     integer(i4b), dimension(:), allocatable :: i4w
     real(r8b), dimension(:), allocatable :: r8w1
     integer(i4b) :: ju, i, n
+    integer(i8b) :: p0, p1
     character(len=mxslen) :: fmt
     logical :: liu
 ! ------------------------------------------------------------------------------
@@ -2040,40 +2090,52 @@ module mf6_module
     !
     write(fmt,'(a,i,a)') '(',nx,'x,a)'
     if (lbin) then
-      f = trim(f)//'.bin'
-      call open_file(f, ju, 'w', .true.)
-      if (.true.) then !buffering
+      if (.not.lbinpos) then
+        f = trim(f)//'.bin'
+        call open_file(f, ju, 'w', .true.)
+      else
+        f = this%fbin
+        ju = this%iubin
+      end if
+      n = 0
+      do i = 1, size(arrflg)
+        if (arrflg(i) == 1) then
+          n = n + 1
+        end if
+      end do
+      if (lbinpos) then
+        inquire(ju,pos=p0)
+      end if
+      if (n > 0) then
+        allocate(i4w(n),r8w1(n))
         n = 0
         do i = 1, size(arrflg)
           if (arrflg(i) == 1) then
             n = n + 1
+            i4w(n) = i; r8w1(n) = arr(i)
           end if
         end do
-        if (n > 0) then
-          allocate(i4w(n),r8w1(n))
-          n = 0
-          do i = 1, size(arrflg)
-            if (arrflg(i) == 1) then
-              n = n + 1
-              i4w(n) = i; r8w1(n) = arr(i)
-            end if
-          end do
-          write(ju)((i4w(i),r8w1(i)),i=1,n)
-          deallocate(i4w,r8w1)
-        end if
-      else
-        do i = 1, size(arrflg)
-          if (arrflg(i) == 1) then
-            write(ju) i, arr(i)
-          end if
-        end do
+        write(ju)((i4w(i),r8w1(i)),i=1,n)
+        deallocate(i4w,r8w1)
       end if
-      close(ju)
+      if (lbinpos) then
+        inquire(ju,pos=p1)
+      else
+        close(ju)
+      end if
       !call get_rel_up(f, 2)
       if (liu) then
-        write(iu,fmt) 'OPEN/CLOSE '//trim(f)// ' (BINARY)'
+        if (lbinpos) then
+          write(iu,fmt) 'OPEN/CLOSE '//trim(f)// ' (BINARY) '//ta((/p0,p1/))
+        else
+          write(iu,fmt) 'OPEN/CLOSE '//trim(f)// ' (BINARY)'
+        end if
       else
-        write(s,fmt) 'OPEN/CLOSE '//trim(f)// ' (BINARY)'
+        if (lbinpos) then
+          write(s,fmt) 'OPEN/CLOSE '//trim(f)// ' (BINARY) '//ta((/p0,p1/))
+        else
+          write(s,fmt) 'OPEN/CLOSE '//trim(f)// ' (BINARY)'
+        end if
       end if
     else
       f = trim(f)//'.asc'
@@ -2095,7 +2157,7 @@ module mf6_module
     return
   end subroutine mf6_mod_write_list_1
   
-  subroutine mf6_mod_write_list_2(this, iu, nx, f, arrflg, arr, arr2, lbin, s)
+  subroutine mf6_mod_write_list_2(this, iu, nx, f, arrflg, arr, arr2, lbin, lbinpos, s)
 ! ******************************************************************************
 ! ******************************************************************************
 !
@@ -2111,11 +2173,13 @@ module mf6_module
     real(r8b), dimension(:), intent(in) :: arr
     real(r8b), dimension(:), intent(in) :: arr2
     logical, intent(in) :: lbin
+    logical, intent(in) :: lbinpos
     character(len=*), intent(out), optional :: s
     ! -- local
     integer(i4b), dimension(:), allocatable :: i4w
     real(r8b), dimension(:), allocatable :: r8w1, r8w2
     integer(i4b) :: ju, i, n
+    integer(i8b) :: p0, p1
     character(len=mxslen) :: fmt
     logical :: liu
 ! ------------------------------------------------------------------------------
@@ -2128,40 +2192,52 @@ module mf6_module
     !
     write(fmt,'(a,i,a)') '(',nx,'x,a)'
     if (lbin) then
-      f = trim(f)//'.bin'
-      call open_file(f, ju, 'w', .true.)
-      if (.true.) then !buffering
+      if (.not.lbinpos) then
+        f = trim(f)//'.bin'
+        call open_file(f, ju, 'w', .true.)
+      else
+        f = this%fbin
+        ju = this%iubin
+      end if
+      n = 0
+      do i = 1, size(arrflg)
+        if (arrflg(i) == 1) then
+          n = n + 1
+        end if
+      end do
+      if (lbinpos) then
+        inquire(ju,pos=p0)
+      end if
+      if (n > 0) then
+        allocate(i4w(n),r8w1(n),r8w2(n))
         n = 0
         do i = 1, size(arrflg)
           if (arrflg(i) == 1) then
             n = n + 1
+            i4w(n) = i; r8w1(n) = arr(i); r8w2(n) = arr2(i)
           end if
         end do
-        if (n > 0) then
-          allocate(i4w(n),r8w1(n),r8w2(n))
-          n = 0
-          do i = 1, size(arrflg)
-            if (arrflg(i) == 1) then
-              n = n + 1
-              i4w(n) = i; r8w1(n) = arr(i); r8w2(n) = arr2(i)
-            end if
-          end do
-          write(ju)((i4w(i),r8w1(i),r8w2(i)),i=1,n)
-          deallocate(i4w,r8w1,r8w2)
-        end if
-      else
-        do i = 1, size(arrflg)
-          if (arrflg(i) == 1) then
-            write(ju) i, arr(i), arr2(i)
-          end if
-        end do
+        write(ju)((i4w(i),r8w1(i),r8w2(i)),i=1,n)
+        deallocate(i4w,r8w1,r8w2)
       end if
-      close(ju)
+      if (lbinpos) then
+        inquire(ju,pos=p1)
+      else
+        close(ju)
+      end if
       !call get_rel_up(f, 2)
       if (liu) then
-        write(iu,fmt) 'OPEN/CLOSE '//trim(f)// ' (BINARY)'
+        if (lbinpos) then
+          write(iu,fmt) 'OPEN/CLOSE '//trim(f)// ' (BINARY) '//ta((/p0,p1/))
+        else
+          write(iu,fmt) 'OPEN/CLOSE '//trim(f)// ' (BINARY)'
+        end if
       else
-        write(s,fmt) 'OPEN/CLOSE '//trim(f)// ' (BINARY)'
+        if (lbinpos) then
+          write(s,fmt) 'OPEN/CLOSE '//trim(f)// ' (BINARY) '//ta((/p0,p1/))
+        else
+          write(s,fmt) 'OPEN/CLOSE '//trim(f)// ' (BINARY)'
+        end if
       end if
     else
       f = trim(f)//'.asc'
@@ -2184,7 +2260,7 @@ module mf6_module
   end subroutine mf6_mod_write_list_2
   
   subroutine mf6_mod_write_list_3(this, iu, nx, f, arrflg, arr, arr2, arr3, &
-    lbin, s)
+    lbin, lbinpos, s)
 ! ******************************************************************************
 ! ******************************************************************************
 !
@@ -2201,11 +2277,13 @@ module mf6_module
     real(r8b), dimension(:), intent(in) :: arr2
     real(r8b), dimension(:), intent(in) :: arr3
     logical, intent(in) :: lbin
+    logical, intent(in) :: lbinpos
     character(len=*), intent(out), optional :: s
     ! -- local
     integer(i4b), dimension(:), allocatable :: i4w
     real(r8b), dimension(:), allocatable :: r8w1, r8w2, r8w3
     integer(i4b) :: ju, i, n
+    integer(i8b) :: p0, p1
     character(len=mxslen) :: fmt
     logical :: liu
 ! ------------------------------------------------------------------------------
@@ -2217,40 +2295,52 @@ module mf6_module
     !
     write(fmt,'(a,i,a)') '(',nx,'x,a)'
     if (lbin) then
-      f = trim(f)//'.bin'
-      call open_file(f, ju, 'w', .true.)
-      if(.true.) then !buffering
+      if (.not.lbinpos) then
+        f = trim(f)//'.bin'
+        call open_file(f, ju, 'w', .true.)
+      else
+        f = this%fbin
+        ju = this%iubin
+      end if
+      n = 0
+      do i = 1, size(arrflg)
+        if (arrflg(i) == 1) then
+          n = n + 1
+        end if
+      end do
+      if (lbinpos) then
+        inquire(ju,pos=p0)
+      end if
+      if (n > 0) then
+        allocate(i4w(n),r8w1(n),r8w2(n),r8w3(n))
         n = 0
         do i = 1, size(arrflg)
           if (arrflg(i) == 1) then
             n = n + 1
+            i4w(n) = i; r8w1(n) = arr(i); r8w2(n) = arr2(i); r8w3(n) = arr3(i)
           end if
         end do
-        if (n > 0) then
-          allocate(i4w(n),r8w1(n),r8w2(n),r8w3(n))
-          n = 0
-          do i = 1, size(arrflg)
-            if (arrflg(i) == 1) then
-              n = n + 1
-              i4w(n) = i; r8w1(n) = arr(i); r8w2(n) = arr2(i); r8w3(n) = arr3(i)
-            end if
-          end do
-          write(ju)((i4w(i),r8w1(i),r8w2(i),r8w3(i)),i=1,n)
-          deallocate(i4w,r8w1,r8w2,r8w3)
-        end if
-      else
-        do i = 1, size(arrflg)
-          if (arrflg(i) == 1) then
-            write(ju) i, arr(i), arr2(i), arr3(i)
-          end if
-        end do
+        write(ju)((i4w(i),r8w1(i),r8w2(i),r8w3(i)),i=1,n)
+        deallocate(i4w,r8w1,r8w2,r8w3)
       end if
-      close(ju)
+      if (lbinpos) then
+        inquire(ju,pos=p1)
+      else
+        close(ju)
+      end if
       !call get_rel_up(f, 2)
       if (liu) then
-        write(iu,fmt) 'OPEN/CLOSE '//trim(f)// ' (BINARY)'
+        if (lbinpos) then
+          write(iu,fmt) 'OPEN/CLOSE '//trim(f)// ' (BINARY) '//ta((/p0,p1/))
+        else
+          write(iu,fmt) 'OPEN/CLOSE '//trim(f)// ' (BINARY)'
+        end if
       else
-        write(s,fmt) 'OPEN/CLOSE '//trim(f)// ' (BINARY)'
+        if (lbinpos) then
+          write(s,fmt) 'OPEN/CLOSE '//trim(f)// ' (BINARY) '//ta((/p0,p1/))
+        else
+          write(s,fmt) 'OPEN/CLOSE '//trim(f)// ' (BINARY)'
+        end if
       end if
     else
       f = trim(f)//'.asc'
@@ -2283,7 +2373,8 @@ module mf6_module
     ! -- dummy
     class(tMf6_mod) :: this
     ! -- local
-    logical, parameter :: lbin = .true.
+    logical, parameter :: lbin    = .true.
+    logical, parameter :: lbinpos = .true.
 ! ------------------------------------------------------------------------------
     call logmsg('**************************************************************')
     if (raw%nper == 1) then 
@@ -2296,17 +2387,29 @@ module mf6_module
     ! set flag for reinitializing all distmap files
     call raw%mf6_raw_init_distmap()
     !
-    call this%write_disu(lbin)
-    call this%write_ic(lbin)
+    ! open the binary file
+    if (lbinpos) then
+      allocate(this%fbin, this%iubin)
+      this%fbin = trim(this%bindir)//trim(this%modelname)//'.bin'
+      call open_file(this%fbin, this%iubin, 'w', .true.)
+    end if
+    !
+    call this%write_disu(lbin, lbinpos)
+    call this%write_ic(lbin, lbinpos)
     call this%write_oc()
-    call this%write_npf(lbin)
-    call this%write_sto(lbin)
-    call this%write_chd(lbin)
-    call this%write_drn(lbin)
-    call this%write_riv(lbin)
-    call this%write_rch(lbin)
-    call this%write_wel(lbin)
+    call this%write_npf(lbin, lbinpos)
+    call this%write_sto(lbin, lbinpos)
+    call this%write_chd(lbin, lbinpos)
+    call this%write_drn(lbin, lbinpos)
+    call this%write_riv(lbin, lbinpos)
+    call this%write_rch(lbin, lbinpos)
+    call this%write_wel(lbin, lbinpos)
     call this%write_nam()
+    !
+    ! close the binary file
+    if (lbinpos) then
+      close(this%iubin)
+    end if
     !
     return
   end subroutine mf6_mod_write
@@ -2360,7 +2463,7 @@ module mf6_module
     return
   end subroutine mf6_mod_write_nam
   
-  subroutine mf6_mod_write_disu(this, lbin)
+  subroutine mf6_mod_write_disu(this, lbin, lbinpos)
 ! ******************************************************************************
 ! ******************************************************************************
 !
@@ -2370,6 +2473,7 @@ module mf6_module
     ! -- dummy
     class(tMf6_mod) :: this
     logical, intent(in) :: lbin
+    logical, intent(in) :: lbinpos
     ! -- local
     character(len=mxslen) :: p, pb, f
     integer(i4b) :: iu, i, j, n, m
@@ -2440,9 +2544,9 @@ module mf6_module
     end do
     !
     write(iu,'(2x,a)') 'TOP'
-    f = trim(pb)//'.disu.top'; call this%write_array(iu, 4, f, r8wrk, lbin)
+    f = trim(pb)//'.disu.top'; call this%write_array(iu, 4, f, r8wrk, lbin, lbinpos)
     write(iu,'(2x,a)') 'BOT'
-    f = trim(pb)//'.disu.bot'; call this%write_array(iu, 4, f, r8wrk2, lbin)
+    f = trim(pb)//'.disu.bot'; call this%write_array(iu, 4, f, r8wrk2, lbin, lbinpos)
     call clear_wrk()
     write(iu,'(2x,a)') 'AREA'
     write(iu,'(4x,a)') 'CONSTANT '//ta((/gcs*gcs/))
@@ -2450,15 +2554,15 @@ module mf6_module
     write(iu,'(a)')
     write(iu,'(   a)') 'BEGIN CONNECTIONDATA'
     write(iu,'(2x,a)') 'IAC'
-    f = trim(pb)//'.disu.iac'; call this%write_array(iu, 4, f, disu%iac, lbin)
+    f = trim(pb)//'.disu.iac'; call this%write_array(iu, 4, f, disu%iac, lbin, lbinpos)
     write(iu,'(2x,a)') 'JA'
-    f = trim(pb)//'.disu.ja'; call this%write_array(iu, 4, f, disu%ja, lbin)
+    f = trim(pb)//'.disu.ja'; call this%write_array(iu, 4, f, disu%ja, lbin, lbinpos)
     write(iu,'(2x,a)') 'IHC'
-    f = trim(pb)//'.disu.ihc'; call this%write_array(iu, 4, f, disu%ihc, lbin)
+    f = trim(pb)//'.disu.ihc'; call this%write_array(iu, 4, f, disu%ihc, lbin, lbinpos)
     write(iu,'(2x,a)') 'CL12'
-    f = trim(pb)//'.disu.cl12'; call this%write_array(iu, 4, f, disu%cl12, lbin)
+    f = trim(pb)//'.disu.cl12'; call this%write_array(iu, 4, f, disu%cl12, lbin, lbinpos)
     write(iu,'(2x,a)') 'HWVA'
-    f = trim(pb)//'.disu.hwva'; call this%write_array(iu, 4, f, disu%hwva, lbin)
+    f = trim(pb)//'.disu.hwva'; call this%write_array(iu, 4, f, disu%hwva, lbin, lbinpos)
     write(iu,'(   a)') 'END CONNECTIONDATA'
     close(iu)
     !
@@ -2472,7 +2576,7 @@ module mf6_module
     return
   end subroutine mf6_mod_write_disu
 
-  subroutine mf6_mod_write_ic(this, lbin)
+  subroutine mf6_mod_write_ic(this, lbin, lbinpos)
 ! ******************************************************************************
 ! ******************************************************************************
 !
@@ -2482,6 +2586,7 @@ module mf6_module
     ! -- dummy
     class(tMf6_mod) :: this
     logical, intent(in) :: lbin
+    logical, intent(in) :: lbinpos
     ! -- local
     character(len=mxslen) :: p, pb, f, d
     integer(i4b) :: iu, irun0
@@ -2511,7 +2616,7 @@ module mf6_module
       write(iu,'(2x,a)') 'STRT'
       call this%get_array(i_strt, 1, 0, 1, i1wrk, r8wrk) !i_strt_l1
       call this%get_array(i_strt, 2, 0, 2, i1wrk, r8wrk) !i_strt_l2
-      f = trim(pb)//'.ic'; call this%write_array(iu, 4, f, r8wrk, lbin)
+      f = trim(pb)//'.ic'; call this%write_array(iu, 4, f, r8wrk, lbin, lbinpos)
       write(iu,'(   a)') 'END GRIDDATA'
       close(iu)
       !
@@ -2633,7 +2738,7 @@ module mf6_module
     return
   end subroutine mf6_mod_write_oc
   
-  subroutine mf6_mod_write_npf(this, lbin)
+  subroutine mf6_mod_write_npf(this, lbin, lbinpos)
 ! ******************************************************************************
 ! ******************************************************************************
 !
@@ -2643,6 +2748,7 @@ module mf6_module
     ! -- dummy
     class(tMf6_mod) :: this
     logical, intent(in) :: lbin
+    logical, intent(in) :: lbinpos
     ! -- local
     character(len=mxslen) :: p, pb, f
     integer(i4b) :: iu
@@ -2668,12 +2774,12 @@ module mf6_module
     write(iu,'(2x,a)') 'K'
     call this%get_array(i_k, 1, 0, 1, i1wrk, r8wrk) !i_k_l1
     call this%get_array(i_k, 2, 0, 2, i1wrk, r8wrk) !i_k_l2
-    f = trim(pb)//'.npf.k'; call this%write_array(iu, 4, f, r8wrk, lbin)
+    f = trim(pb)//'.npf.k'; call this%write_array(iu, 4, f, r8wrk, lbin, lbinpos)
     call clear_wrk()
     write(iu,'(2x,a)') 'K33'
     call this%get_array(i_k33, 1, 0, 1, i1wrk, r8wrk) !i_k33_l1
     call this%get_array(i_k33, 2, 0, 2, i1wrk, r8wrk) !i_k33_l2
-    f = trim(pb)//'.npf.k33'; call this%write_array(iu, 4, f, r8wrk, lbin)
+    f = trim(pb)//'.npf.k33'; call this%write_array(iu, 4, f, r8wrk, lbin, lbinpos)
     call clear_wrk()
     write(iu,'(   a)') 'END GRIDDATA'
     close(iu)
@@ -2681,7 +2787,7 @@ module mf6_module
     return
   end subroutine mf6_mod_write_npf
   
-  subroutine mf6_mod_write_sto(this, lbin)
+  subroutine mf6_mod_write_sto(this, lbin, lbinpos)
 ! ******************************************************************************
 ! ******************************************************************************
 !
@@ -2691,6 +2797,7 @@ module mf6_module
     ! -- dummy
     class(tMf6_mod) :: this
     logical, intent(in) :: lbin
+    logical, intent(in) :: lbinpos
     ! -- local
     character(len=mxslen) :: p, pb, f
     integer(i4b) :: iu
@@ -2717,7 +2824,7 @@ module mf6_module
     write(iu,'(2x,a)') 'SS'
     call this%get_array(i_prim_sto, 1, 0, 1, i1wrk, r8wrk)
     call this%get_array(i_prim_sto, 2, 0, 2, i1wrk, r8wrk)
-    f = trim(pb)//'.sto.ps'; call this%write_array(iu, 4, f, r8wrk, lbin)
+    f = trim(pb)//'.sto.ps'; call this%write_array(iu, 4, f, r8wrk, lbin, lbinpos)
     call clear_wrk()
     write(iu,'(2x,a)') 'SY'
     write(iu,'(4x,a)') 'CONSTANT 0'
@@ -2736,7 +2843,7 @@ module mf6_module
     return
   end subroutine mf6_mod_write_sto
   
-  subroutine mf6_mod_write_chd(this, lbin)
+  subroutine mf6_mod_write_chd(this, lbin, lbinpos)
 ! ******************************************************************************
 ! ******************************************************************************
 !
@@ -2746,6 +2853,7 @@ module mf6_module
     ! -- dummy
     class(tMf6_mod) :: this
     logical, intent(in) :: lbin
+    logical, intent(in) :: lbinpos
     ! -- local
     character(len=mxslen) :: p, pb, f
     integer(i4b) :: iu, maxbound
@@ -2784,7 +2892,8 @@ module mf6_module
       !do i = 1, size(r8wrk)
       !  r8wrk(i) = DZERO
       !end do
-      f = trim(pb)//'.chd'; call this%write_list(iu, 2, f, i1wrk, r8wrk, lbin)
+      f = trim(pb)//'.chd'
+      call this%write_list(iu, 2, f, i1wrk, r8wrk, lbin, lbinpos)
       write(iu,'(   a)') 'END PERIOD'
       close(iu)
     else
@@ -2811,7 +2920,8 @@ module mf6_module
         write(iu,'(   a)') 'END DIMENSIONS'
         write(iu,'(a)')
         write(iu,'(   a)') 'BEGIN PERIOD 1'
-        f = trim(pb)//trim(pr(ichd2,irun0ss))//'.chd'; call this%write_list(iu, 4, f, i1wrk, r8wrk, lbin)
+        f = trim(pb)//trim(pr(ichd2,irun0ss))//'.chd'
+        call this%write_list(iu, 4, f, i1wrk, r8wrk, lbin, lbinpos)
         write(iu,'(   a)') 'END PERIOD'
         close(iu)
       end if
@@ -2822,7 +2932,7 @@ module mf6_module
     return
   end subroutine mf6_mod_write_chd
   
-  subroutine mf6_mod_write_drn(this, lbin)
+  subroutine mf6_mod_write_drn(this, lbin, lbinpos)
 ! ******************************************************************************
 ! ******************************************************************************
 !
@@ -2832,6 +2942,7 @@ module mf6_module
     ! -- dummy
     class(tMf6_mod) :: this
     logical, intent(in) :: lbin
+    logical, intent(in) :: lbinpos
     ! -- local
     character(len=mxslen), dimension(:), allocatable :: cwk
     character(len=mxslen) :: p, pb, f
@@ -2875,7 +2986,7 @@ module mf6_module
       end if
       maxbound = max(nbound,maxbound)
       f = trim(pb)//'.drn.sp'//ta((/iper/),3)
-      call this%write_list(iu, 4, f, i1wrk, r8wrk, r8wrk2, lbin, cwk(iper))
+      call this%write_list(iu, 4, f, i1wrk, r8wrk, r8wrk2, lbin, lbinpos, cwk(iper))
       call clear_wrk()
     end do
     !
@@ -2921,7 +3032,7 @@ module mf6_module
     return
   end subroutine mf6_mod_write_drn
   
-  subroutine mf6_mod_write_riv(this, lbin)
+  subroutine mf6_mod_write_riv(this, lbin, lbinpos)
 ! ******************************************************************************
 ! ******************************************************************************
 !
@@ -2931,6 +3042,7 @@ module mf6_module
     ! -- dummy
     class(tMf6_mod) :: this
     logical, intent(in) :: lbin
+    logical, intent(in) :: lbinpos
     ! -- local
     character(len=mxslen), dimension(:), allocatable :: cwk
     character(len=mxslen) :: p, pb, f
@@ -2987,7 +3099,7 @@ module mf6_module
       end if
       maxbound = max(nbound,maxbound)
       f = trim(pb)//'.riv.sp'//ta((/iper/),3)
-      call this%write_list(iu, 2, f, i1wrk, r8wrk, r8wrk2, r8wrk3, lbin, cwk(iper))
+      call this%write_list(iu, 2, f, i1wrk, r8wrk, r8wrk2, r8wrk3, lbin, lbinpos, cwk(iper))
       call clear_wrk()
     end do 
     !
@@ -3035,7 +3147,7 @@ module mf6_module
     return
   end subroutine mf6_mod_write_riv
   
-  subroutine mf6_mod_write_rch(this, lbin)
+  subroutine mf6_mod_write_rch(this, lbin, lbinpos)
 ! ******************************************************************************
 ! ******************************************************************************
 !
@@ -3045,6 +3157,7 @@ module mf6_module
     ! -- dummy
     class(tMf6_mod) :: this
     logical, intent(in) :: lbin
+    logical, intent(in) :: lbinpos
     ! -- local
     character(len=mxslen), dimension(:), allocatable :: cwk
     character(len=mxslen) :: p, pb, f
@@ -3074,7 +3187,7 @@ module mf6_module
       end if
       maxbound = max(nbound,maxbound)
       f = trim(pb)//'.rch.sp'//ta((/iper/),3)
-      call this%write_list(iu, 2, f, i1wrk, r8wrk, lbin, cwk(iper))
+      call this%write_list(iu, 2, f, i1wrk, r8wrk, lbin, lbinpos, cwk(iper))
       call clear_wrk()
     end do
     !
@@ -3122,7 +3235,7 @@ module mf6_module
     return
   end subroutine mf6_mod_write_rch
   
-  subroutine mf6_mod_write_wel(this, lbin)
+  subroutine mf6_mod_write_wel(this, lbin, lbinpos)
 ! ******************************************************************************
 ! ******************************************************************************
 !
@@ -3132,6 +3245,7 @@ module mf6_module
     ! -- dummy
     class(tMf6_mod) :: this
     logical, intent(in) :: lbin
+    logical, intent(in) :: lbinpos
     ! -- local
     character(len=mxslen), dimension(:), allocatable :: cwk
     character(len=mxslen) :: p, pb, f
@@ -3153,7 +3267,7 @@ module mf6_module
     maxbound = 0
     !
     allocate(this%wel)
-    this%wel = .false.
+    this%wel = .true.
     !
     do iper = 1, nper
       call this%get_array(i_wel, 1, iper, 1, i1wrk, r8wrk, ib_in=2)
@@ -3173,7 +3287,7 @@ module mf6_module
       maxbound = max(nbound, maxbound)
       if (nbound > 0) then
         f = trim(pb)//'.wel.sp'//ta((/iper/),3)
-        call this%write_list(iu, 2, f, i1wrk, r8wrk, lbin, cwk(iper))
+        call this%write_list(iu, 2, f, i1wrk, r8wrk, lbin, lbinpos, cwk(iper))
       end if
       call clear_wrk()
     end do

@@ -687,7 +687,8 @@ program mf6ggm
       !mmd%rootdir = trim(out_dir)//'models\'//trim(mmd%modelname)//'\'
       mmd%rootdir = '..\..\models\run_input\'//trim(mmd%modelname)//'\'
       call swap_slash(mmd%rootdir)
-      mmd%bindir = trim(mmd%rootdir)//'bin\'; call swap_slash(mmd%bindir)
+      !mmd%bindir = trim(mmd%rootdir)//'bin\'; call swap_slash(mmd%bindir)
+      mmd%bindir = trim(mmd%rootdir); call swap_slash(mmd%bindir)
     end do
   end do
   !

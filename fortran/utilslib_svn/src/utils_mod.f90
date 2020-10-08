@@ -95,10 +95,11 @@ module utilsmod
 
   interface ta
     module procedure :: ta_i4
+    module procedure :: ta_i8
     module procedure :: ta_r4
     module procedure :: ta_r8
   end interface
-  private :: ta_i4, ta_r4, ta_r8
+  private :: ta_i4, ta_i8, ta_r4, ta_r8
 
   type tPol
     integer(i4b) :: id = 0
@@ -484,6 +485,41 @@ module utilsmod
     return
   end function ta_i4
 
+  function ta_i8(arr, ndig) result(s)
+! ******************************************************************************
+    ! -- arguments
+    integer(i8b), dimension(:), intent(in) :: arr
+    character(len=:), allocatable :: s
+    integer(i4b), intent(in), optional :: ndig
+    ! -- locals
+    logical :: lfmt
+    integer(i4b) :: i
+    character(len=mxslen) :: w, fmt
+! ------------------------------------------------------------------------------
+    if (present(ndig)) then
+      lfmt = .true.
+      write(fmt,'(a,i2,a,i2,a)') '(i',ndig,'.',ndig,')'
+    else
+      lfmt = .false.
+    end if
+    if (lfmt) then
+      write(w,fmt) arr(1)
+    else
+      write(w,*) arr(1)
+    end if
+    s = trim(adjustl(w))
+    do i = 2, size(arr)
+      if (lfmt) then
+        write(w,fmt) arr(i)
+      else
+        write(w,*) arr(i)
+      end if
+      s = s//' '//trim(adjustl(w))
+    end do
+    !
+    return
+  end function ta_i8
+  
   function ta_r4(arr) result(s)
 ! ******************************************************************************
     ! -- arguments
