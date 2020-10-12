@@ -787,13 +787,13 @@ module utilsmod
     iu = getlun()
     if ((act == 'r') .and.(.not.lbin)) then
       call logmsg('Reading ascii file '//trim(f)//'...')
-      open(unit=iu, file=f, form='formatted', access='sequential', action='read', status='old')
+      open(unit=iu, file=f, form='formatted', access='sequential', action='read', status='old',share='denynone')
     else if ((act == 'w') .and.(.not.lbin)) then
       call logmsg('Writing ascii file '//trim(f)//'...')
       open(unit=iu, file=f, form='formatted', access='sequential', action='write', status='replace')
     else if ((act == 'r') .and.(lbin)) then
       call logmsg('Reading binary file '//trim(f)//'...')
-      open(unit=iu, file=f, form='unformatted', access='stream', action='read', status='old')
+      open(unit=iu, file=f, form='unformatted', access='stream', action='read', status='old',share='denynone')
     else if ((act == 'w') .and.(lbin)) then
       call logmsg('Writing binary file '//trim(f)//'...')
       open(unit=iu, file=f, form='unformatted', access='stream', action='write', status='replace')

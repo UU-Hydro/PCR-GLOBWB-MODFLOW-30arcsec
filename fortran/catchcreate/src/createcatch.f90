@@ -44,13 +44,14 @@
       real(r8b), dimension(:), allocatable, intent(out) :: acc_stem
     end subroutine calc_stem
     !
-    function cat_size(cat, icat, bb) result(area)
+    function cat_size(cat, icat, bb, areag) result(area)
       use pcrModule, only: i4b, r8b
       use utilsmod, only: tBB
       implicit none
       integer(i4b), dimension(:,:), intent(in) :: cat
       integer(i4b), intent(in) :: icat
       type(tBB), intent(in) :: bb
+      real(r8b), dimension(:), intent(in) :: areag
       real(r8b) :: area
     end function cat_size
     !
@@ -65,7 +66,7 @@
     !
     recursive subroutine refine_catch(cat, icat, jcat, pbb, catptr, acc, &
       icir_pit, ldd, lddmv, &
-      idepth, maxdepth, maxtrib, minarea)
+      idepth, maxdepth, maxtrib, minarea, areag)
       use pcrModule, only: i1b, i4b, r8b
       use utilsmod, only: tBB
       implicit none
@@ -81,7 +82,8 @@
       integer(i4b),                 intent(inout) :: idepth
       integer(i4b),                 intent(in)    :: maxdepth
       integer(i4b),                 intent(in)    :: maxtrib
-      real(r8b),                    intent(in)    :: minarea    
+      real(r8b),                    intent(in)    :: minarea
+      real(r8b), dimension(:),      intent(in)    :: areag
     end subroutine refine_catch
   end interface
   
@@ -91,7 +93,8 @@
     ! modules
     use interface_mod
     use pcrModule
-    use utilsmod, only: writeasc, writeidf, tPol, readgen, filtergen_i1, tBB, DZERO, quicksort_d, ta
+    use utilsmod, only: writeasc, writeidf, tPol, readgen, filtergen_i1, tBB, DZERO, quicksort_d, ta, errmsg
+    use imod_idf, only: idfobj, idfread, imod_utl_printtext, idfdeallocatex
     
     implicit none
     
@@ -100,7 +103,7 @@
     type(tBB) :: catptrbb
     type(tBB), dimension(:), allocatable :: bb, bb_sub
     logical :: ok, flg
-    character(len=1024) :: f_ldd, f_gen, s, fmt
+    character(len=1024) :: f_ldd, f_gen, f_area, s, fmt
     integer(i1b) :: lddmv
     integer(i1b), dimension(:,:), allocatable :: ldd, catptr
     integer(i4b) :: maxtrib
@@ -111,29 +114,51 @@
     integer(i4b), dimension(:,:), allocatable :: cat !, wrk
     integer(i4b), dimension(:,:), allocatable :: icir_stem
     real(r8b) :: area, minarea
+    real(r8b), dimension(:), allocatable :: areag
     real(r8b), dimension(:), allocatable :: cat_area
     real(r8b), dimension(:,:), allocatable :: acc
     real(r8b), dimension(:), allocatable :: acc_stem
-    
+    !
     integer(i4b), dimension(:), allocatable :: ind, indinv
-    
+    !
     real(r4b) :: cs, xul, yul, xmin, ymin
     logical :: lstop = .false.
+    !
+    type(idfobj) :: idf
+! ------------------------------------------------------------------------------
     
     call getarg(1,f_ldd)
     call getarg(2,f_gen)
-    
+    call getarg(3,f_area)
+   
+    ! read the gen file for clipping
     p = readgen(f_gen)
-    
+    !
     ! read the map file
     allocate(map)
-    ok = map%read_header(f_ldd)
+    ok = map%read_header(f_ldd, 0)
     cs  = map%header%cellsizex
     xul = map%header%xul
     yul = map%header%yul
     nc = map%header%nrcols
     nr = map%header%nrrows
     lddmv = 0
+    !
+    ! read the area
+    call imod_utl_printtext('Reading '//trim(f_area),0)
+    if (.not.idfread(idf,f_area,1)) then
+      call imod_utl_printtext('Could not read '//trim(f_area),2)
+    end if
+    call imod_utl_printtext('Done reading '//trim(f_area),0)
+    ! check
+    if (idf%nrow /= nr) then
+      call errmsg("Invalid number of rows")
+    end if
+    allocate(areag(nr))
+    do ir = 1, nr
+      areag(ir) = idf%x(1,ir)
+    end do
+    call idfdeallocatex(idf)
     !
     flg = .false.; ir0 = 1; ir1 = nr; ic0 = 1; ic1 = nc
     !
@@ -202,7 +227,8 @@
     ! first, find the catchment boundary
     maxtrib = 4
     catid = mxcatid + 1
-    minarea = 10000.d0
+!    minarea = 10000.d0 !cells
+    minarea = 100.d0 * 1000.d0 * 1000.d0 !m2
     maxdepth = 50
     jcat = mxcatid
     !
@@ -213,7 +239,7 @@
     end if
     !
     do icat = icat0, icat1
-      area = cat_size(cat, icat, bb(icat))
+      area = cat_size(cat, icat, bb(icat), areag)
       if (area < minarea) cycle
       write(s,*) area
       write(*,'(a,i2.2,a,i7.7,a,i7.7,a)') 'Processing ', maxdepth,' pfafstetter levels for catchment ', icat, '/', mxcatid, ' area '//trim(s)//'...'
@@ -221,7 +247,7 @@
       idepth = 0
       call refine_catch(cat, icat, jcat, bb(icat), &
         catptr, acc, icir_pit, ldd, lddmv, &
-        idepth, maxdepth, maxtrib, minarea)
+        idepth, maxdepth, maxtrib, minarea, areag)
       if (flg) then
         do ir = 1, nr
           do ic = 1, nc
@@ -621,9 +647,6 @@
       end if
       !
       do while(.true.)
-        if ((ic == 10655).and.(jr == 6749)) then
-          write(*,*) 'break'
-        end if
         ! loop over inflow neighbors
         r8wk = DZERO
         linflow = .false.
@@ -675,7 +698,7 @@
     return
   end subroutine calc_stem
   
-  function cat_size(cat, icat, bb) result(area)
+  function cat_size(cat, icat, bb, areag) result(area)
 ! ******************************************************************************
 ! ******************************************************************************
 !
@@ -691,6 +714,7 @@
     integer(i4b), dimension(:,:), intent(in) :: cat
     integer(i4b), intent(in) :: icat
     type(tBB), intent(in) :: bb
+    real(r8b), dimension(:), intent(in) :: areag
     real(r8b) :: area
     !
     ! -- local
@@ -700,7 +724,7 @@
     do ir = bb%ir0, bb%ir1
       do ic = bb%ic0, bb%ic1
         if (cat(ic,ir) == icat) then
-          area = area + DONE
+          area = area + areag(ir)
         end if
       end do
     end do
@@ -785,7 +809,7 @@
   
   recursive subroutine refine_catch(cat, icat, jcat, pbb, catptr, acc, &
     icir_pit, ldd, lddmv, &
-    idepth, maxdepth, maxtrib, minarea)
+    idepth, maxdepth, maxtrib, minarea, areag)
 ! ******************************************************************************
 ! ******************************************************************************
 !
@@ -812,6 +836,7 @@
     integer(i4b),                 intent(in)    :: maxdepth
     integer(i4b),                 intent(in)    :: maxtrib
     real(r8b),                    intent(in)    :: minarea
+    real(r8b), dimension(:),      intent(in)    :: areag
     !
     ! -- local
     type(tBB), dimension(:), allocatable :: cbb
@@ -830,7 +855,7 @@
     idepth = idepth + 1
     if (idepth > maxdepth) return
     !
-    area = cat_size(cat, icat, pbb)
+    area = cat_size(cat, icat, pbb, areag)
     if (area < minarea) return
     !
     call calc_stem(acc, icir_pit, cat, icat, pbb, ldd, lddmv, &
@@ -921,7 +946,7 @@
       jcjr_pit = icir_outlet(:,i)
       call refine_catch(cat, jcat0+i, jcat, pbb, &
         catptr, acc, jcjr_pit, ldd, lddmv, &
-        jdepth, maxdepth, maxtrib, minarea)
+        jdepth, maxdepth, maxtrib, minarea, areag)
     end do
     deallocate(cbb)
     !

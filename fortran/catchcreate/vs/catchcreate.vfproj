@@ -73,9 +73,9 @@
 		<Filter Name="Utility Library">
 		<File RelativePath="..\..\utilslib_svn\src\utils_mod.f90">
 			<FileConfiguration Name="Release|x64">
-				<Tool Name="VFFortranCompilerTool" WarnUnusedVariables="false"/></FileConfiguration>
+				<Tool Name="VFFortranCompilerTool" Preprocess="preprocessYes" WarnUnusedVariables="false"/></FileConfiguration>
 			<FileConfiguration Name="Debug|x64">
-				<Tool Name="VFFortranCompilerTool" WarnUnusedVariables="false"/></FileConfiguration></File></Filter>
+				<Tool Name="VFFortranCompilerTool" Preprocess="preprocessYes" WarnUnusedVariables="false"/></FileConfiguration></File></Filter>
 		<File RelativePath="..\src\createcatch.f90">
 			<FileConfiguration Name="Release|x64">
 				<Tool Name="VFFortranCompilerTool" WarnDeclarations="true" WarnUnusedVariables="true"/></FileConfiguration>
