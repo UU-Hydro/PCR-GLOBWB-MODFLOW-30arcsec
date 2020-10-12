@@ -2375,6 +2375,8 @@ module mf6_module
     ! -- local
     logical, parameter :: lbin    = .true.
     logical, parameter :: lbinpos = .true.
+    character(len=mxslen) :: f
+    integer(i4b) :: iu
 ! ------------------------------------------------------------------------------
     call logmsg('**************************************************************')
     if (raw%nper == 1) then 
@@ -2410,6 +2412,10 @@ module mf6_module
     if (lbinpos) then
       close(this%iubin)
     end if
+    !
+    f = '..\..\log\done_'//trim(this%modelname)
+    call open_file(f, iu, 'w')
+    close(iu)
     !
     return
   end subroutine mf6_mod_write
@@ -2948,6 +2954,7 @@ module mf6_module
     character(len=mxslen) :: p, pb, f
     integer(i4b) :: i, n, iu, nbound, maxbound, iper, jper, nper, nperspu
     integer(i4b), dimension(gnlay) :: nbound_lay
+    logical, dimension(:), allocatable :: lact
 ! ------------------------------------------------------------------------------
     call clear_wrk()
     !
@@ -2960,7 +2967,7 @@ module mf6_module
     !
     ! write all binary files and store the file strings
     nper = raw%nper
-    allocate(cwk(nper))
+    allocate(cwk(nper), lact(nper))
     maxbound = 0
     do iper = 1, nper
       call this%get_array(i_drn_elev, 1, iper, 1, i1wrk, r8wrk, ib_in=2) !i_drn_elev_l1
@@ -2981,12 +2988,15 @@ module mf6_module
       end if
       !
       nbound_lay = this%count_i1a(i1wrk); nbound = sum(nbound_lay)
-      if (nbound == 0) then
-        call errmsg('No drains found.')
-      end if
       maxbound = max(nbound,maxbound)
-      f = trim(pb)//'.drn.sp'//ta((/iper/),3)
-      call this%write_list(iu, 4, f, i1wrk, r8wrk, r8wrk2, lbin, lbinpos, cwk(iper))
+      if (nbound == 0) then
+        lact(iper) = .false.
+        call logmsg('No drains found.')
+      else
+        lact(iper) = .true.
+        f = trim(pb)//'.drn.sp'//ta((/iper/),3)
+        call this%write_list(iu, 4, f, i1wrk, r8wrk, r8wrk2, lbin, lbinpos, cwk(iper))
+      end if
       call clear_wrk()
     end do
     !
@@ -3001,7 +3011,7 @@ module mf6_module
     write(iu,'(a)')
     do iper = 1, nper
       write(iu,'(   a)') 'BEGIN PERIOD '//ta((/iper/))
-      write(iu,'(a)') trim(cwk(iper))
+      if (lact(iper)) write(iu,'(a)') trim(cwk(iper))
       write(iu,'(   a)') 'END PERIOD'
     end do
     close(iu)
@@ -3021,12 +3031,13 @@ module mf6_module
         write(iu,'(   a)') 'BEGIN PERIOD '//ta((/iper/))
         jper = mod(iper, nperspu)
         if (jper == 0) jper = nperspu
-        write(iu,'(a)') trim(cwk(jper))
+        if (lact(jper)) write(iu,'(a)') trim(cwk(jper))
         write(iu,'(   a)') 'END PERIOD'
       end do
       close(iu)
     end if
     !
+    deallocate(cwk, lact)
     call clear_wrk()
     !
     return
@@ -3049,6 +3060,7 @@ module mf6_module
     integer(i4b) :: iu, nbound, maxbound, i, n, iper, jper, nper, nperspu
     integer(i4b), dimension(gnlay) :: nbound_lay
     real(r8b) :: stage, rbot, cond
+    logical, dimension(:), allocatable :: lact
 ! ------------------------------------------------------------------------------
     call clear_wrk()
     !
@@ -3061,7 +3073,7 @@ module mf6_module
     !
     ! write all binary files and store the file strings
     nper = raw%nper
-    allocate(cwk(nper))
+    allocate(cwk(nper), lact(nper))
     maxbound = 0
     !
     do iper = 1, nper
@@ -3094,12 +3106,15 @@ module mf6_module
       end if
       !
       nbound_lay = this%count_i1a(i1wrk); nbound = sum(nbound_lay)
-      if (nbound == 0) then
-        call errmsg('No rivers found.')
-      end if
       maxbound = max(nbound,maxbound)
-      f = trim(pb)//'.riv.sp'//ta((/iper/),3)
-      call this%write_list(iu, 2, f, i1wrk, r8wrk, r8wrk2, r8wrk3, lbin, lbinpos, cwk(iper))
+      if (nbound == 0) then
+        lact(iper) = .false.
+        call logmsg('No rivers found.')
+      else
+        lact(iper) = .true.
+        f = trim(pb)//'.riv.sp'//ta((/iper/),3)
+        call this%write_list(iu, 2, f, i1wrk, r8wrk, r8wrk2, r8wrk3, lbin, lbinpos, cwk(iper))
+      end if
       call clear_wrk()
     end do 
     !
@@ -3114,7 +3129,7 @@ module mf6_module
     write(iu,'(a)')
     do iper = 1, nper
       write(iu,'(   a)') 'BEGIN PERIOD '//ta((/iper/))
-      write(iu,'(a)') trim(cwk(iper))
+       if (lact(iper)) write(iu,'(a)') trim(cwk(iper))
       write(iu,'(   a)') 'END PERIOD'
     end do
     close(iu)
@@ -3136,12 +3151,13 @@ module mf6_module
         !if (jper == 0) jper = nperspu
         jper = mod(iper,12)
         if (jper == 0) jper = 1
-        write(iu,'(a)') trim(cwk(jper))
+         if (lact(jper)) write(iu,'(a)') trim(cwk(jper))
         write(iu,'(   a)') 'END PERIOD'
       end do
       close(iu)
     end if
     !
+    deallocate(cwk, lact)
     call clear_wrk()
     !
     return
@@ -3163,6 +3179,7 @@ module mf6_module
     character(len=mxslen) :: p, pb, f
     integer(i4b) :: iu, nbound, maxbound, iper, jper, nper, nperspu
     integer(i4b), dimension(gnlay) :: nbound_lay
+    logical, dimension(:), allocatable :: lact
 ! ------------------------------------------------------------------------------
     call clear_wrk()
     !
@@ -3175,19 +3192,22 @@ module mf6_module
     !
     ! write all binary files and store the file strings
     nper = raw%nper
-    allocate(cwk(nper))
+    allocate(cwk(nper), lact(nper))
     maxbound = 0
     !
     do iper = 1, nper
       call this%get_array(i_recharge, 0, iper, 1, i1wrk, r8wrk, ib_in=2, toponly_in=.true.)
       call this%get_array(i_recharge, 0, iper, 2, i1wrk, r8wrk, ib_in=2, toponly_in=.true.)
       nbound_lay = this%count_i1a(i1wrk); nbound = sum(nbound_lay)
-      if (nbound == 0) then
-        call errmsg('No recharge found')
-      end if
       maxbound = max(nbound,maxbound)
-      f = trim(pb)//'.rch.sp'//ta((/iper/),3)
-      call this%write_list(iu, 2, f, i1wrk, r8wrk, lbin, lbinpos, cwk(iper))
+      if (nbound == 0) then
+        lact(iper) = .false.
+        call errmsg('No recharge found')
+      else
+        lact(iper) = .true.
+        f = trim(pb)//'.rch.sp'//ta((/iper/),3)
+        call this%write_list(iu, 2, f, i1wrk, r8wrk, lbin, lbinpos, cwk(iper))
+      end if
       call clear_wrk()
     end do
     !
@@ -3202,7 +3222,7 @@ module mf6_module
     write(iu,'(a)')
     do iper = 1, nper
       write(iu,'(   a)') 'BEGIN PERIOD '//ta((/iper/))
-      write(iu,'(a)') trim(cwk(iper))
+      if (lact(iper)) write(iu,'(a)') trim(cwk(iper))
       write(iu,'(   a)') 'END PERIOD'
     end do
     close(iu)
@@ -3224,12 +3244,13 @@ module mf6_module
         !if (jper == 0) jper = nperspu
         jper = mod(iper,12)
         if (jper == 0) jper = 1
-        write(iu,'(a)') trim(cwk(jper))
+        if (lact(jper)) write(iu,'(a)') trim(cwk(jper))
         write(iu,'(   a)') 'END PERIOD'
       end do
       close(iu)
     end if
     !
+    deallocate(cwk, lact)
     call clear_wrk()
     !
     return
@@ -3251,6 +3272,7 @@ module mf6_module
     character(len=mxslen) :: p, pb, f
     integer(i4b) :: iu, i, n, nbound, maxbound, iper, jper, nper, nperspu
     integer(i4b), dimension(gnlay) :: nbound_lay
+    logical, dimension(:), allocatable :: lact
 ! ------------------------------------------------------------------------------
     call clear_wrk()
     !
@@ -3263,7 +3285,7 @@ module mf6_module
     !
     ! write all binary files and store the file strings
     nper = raw%nper
-    allocate(cwk(nper))
+    allocate(cwk(nper), lact(nper))
     maxbound = 0
     !
     allocate(this%wel)
@@ -3286,8 +3308,11 @@ module mf6_module
       nbound_lay = this%count_i1a(i1wrk); nbound = sum(nbound_lay)
       maxbound = max(nbound, maxbound)
       if (nbound > 0) then
+        lact(iper) = .true.
         f = trim(pb)//'.wel.sp'//ta((/iper/),3)
         call this%write_list(iu, 2, f, i1wrk, r8wrk, lbin, lbinpos, cwk(iper))
+      else
+        lact(iper) = .false.
       end if
       call clear_wrk()
     end do
@@ -3309,7 +3334,7 @@ module mf6_module
     write(iu,'(a)')
     do iper = 1, nper
       write(iu,'(   a)') 'BEGIN PERIOD '//ta((/iper/))
-      write(iu,'(a)') trim(cwk(iper))
+      if (lact(iper)) write(iu,'(a)') trim(cwk(iper))
       write(iu,'(   a)') 'END PERIOD'
     end do
     close(iu)
@@ -3331,12 +3356,13 @@ module mf6_module
         !if (jper == 0) jper = nperspu
         jper = mod(iper,12)
         if (jper == 0) jper = 1
-        write(iu,'(a)') trim(cwk(jper))
+        if (lact(jper)) write(iu,'(a)') trim(cwk(jper))
         write(iu,'(   a)') 'END PERIOD'
       end do
       close(iu)
     end if
     !
+    deallocate(cwk, lact)
     call clear_wrk()
     !
     return

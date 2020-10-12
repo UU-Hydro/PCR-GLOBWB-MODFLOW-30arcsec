@@ -833,9 +833,11 @@ program mf6ggm
   ! write the MODFLOW models and store exchange node numbers
   !
   ! create empty output directories
+  d = trim(out_dir)//'log'; call create_dir(d,.true.);
   d = trim(out_dir)//'models\run_output_lst'; call create_dir(d,.true.);
   d = trim(out_dir)//'models\run_output_bin'; call create_dir(d,.true.);
   d = trim(out_dir)//'solutions\run_output'; call create_dir(d,.true.);
+  d = trim(out_dir)//'solutions\post_mappings'; call create_dir(d,.true.);
   !
   ! change the cwd to directory with mfsim nam files.
   d = trim(out_dir)//'solutions\run_input'
@@ -1262,9 +1264,6 @@ program mf6ggm
     end do
     stop
   end if
-  
-  
-  
   !
   ! write the exchange files for all models  
   do isol = 1, nsol
