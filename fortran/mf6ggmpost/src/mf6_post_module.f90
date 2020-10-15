@@ -312,7 +312,8 @@ module mf6_post_module
          call errmsg('mf6_post_mod_write')
        end if
        if (gen%ltop) then
-         r8x(ic,ir) = this%r8buff(i) - this%top(i)
+         !r8x(ic,ir) = this%r8buff(i) - this%top(i)
+         r8x(ic,ir) = this%top(i) - this%r8buff(i) !Water table depth > 0!
        else
          r8x(ic,ir) = this%r8buff(i)
        end if
