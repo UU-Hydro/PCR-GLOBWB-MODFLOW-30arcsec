@@ -912,12 +912,12 @@ module utilsmod
     integer(I4B), intent(out) :: imax
     ! -- locals
     character(len=mxslen) :: s
-    integer(I4b) :: i, j, n
+    integer(I4B) :: i, j, n, ios1, ios2, ival1, ival2
     character(len=mxslen), dimension(:), allocatable :: words
 ! ------------------------------------------------------------------------------
     words = getwords(key, sep)
     n = size(words)
-    if (n) return
+    if (n == 0) return
     !
     imin = 0
     imax = 0
@@ -926,11 +926,22 @@ module utilsmod
       if (s(1:1) == token) then
         j = index(s,':')
         if (j == 0) then
-          read(s(2:),*) imin
-          imax = imin
+          read(s(2:),*,iostat=ios1) ival1
+          if (ios1 == 0) then
+            imin = ival1
+            imax = imin
+          else
+            !write(*,*) '@@@ debug'
+          end if
         else
-          read(s(2:j-1),*) imin
-          read(s(j+1:),*)  imax
+          read(s(2:j-1),*,iostat=ios1) ival1
+          read(s(j+1:),*,iostat=ios2) ival2
+          if ((ios1 == 0).and.(ios2 == 0)) then
+            imin = ival1
+            imax = ival2
+          else
+            call errmsg("Could not read "//trim(s))
+          end if
         end if
       end if
     end do
