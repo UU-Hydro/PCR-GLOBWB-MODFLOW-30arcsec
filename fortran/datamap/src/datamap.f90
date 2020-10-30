@@ -4,11 +4,13 @@ program datamap
   use imod_idf_par, only: idfobj
   use imod_idf
   use utilsmod, only: mxslen, i1b, i2b, i4b, r4b, r8b, DZERO, DONE, &
-    readidf_block, writeidf, tBB, errmsg, quicksort_d, addboundary, open_file, &
+    readidf_block, writeasc, writeidf, tBB, errmsg, quicksort_d, addboundary, open_file, &
     chkexist, readgen, tPol, logmsg, ta
   !
   implicit none
   !
+  integer(i4b) :: sea_opt
+  
   interface
     recursive subroutine label_node(ia, ja, id, i4wk1d, ireg)
       use utilsmod, only: i4b
@@ -74,7 +76,7 @@ program datamap
   !
   character(len=mxslen) :: f, out_pref, s, tile_pref
   logical :: ldone, lfound, lskip, linitpol, lin
-  integer(i1b), dimension(:,:), allocatable :: landmask
+  integer(i4b), dimension(:,:), allocatable :: landmask
   integer(i1b), dimension(:,:), allocatable :: nlay
   integer(i2b), dimension(:,:), allocatable :: itile
   integer(i4b) :: p, ofs, iread, ios
@@ -96,6 +98,7 @@ program datamap
   real(r8b), dimension(:), allocatable :: regncell, r8wk1d
 ! ------------------------------------------------------------------------------
   !
+  sea_opt = 1
   !
   !gir0 = 1; gir1 = 9000; gic0 = 1; gic1 = 16000
   !gir0 = 1; gir1 = 9000; gic0 = 6500; gic1 = 16000 !USA
@@ -148,6 +151,8 @@ program datamap
       ir = (gymin+gnrow*gcs-pol(i)%ymax)/gcs; gir0 = min(gir0, ir)
       ir = gnrow-(pol(i)%ymin-gymin)/gcs;     gir1 = max(gir1, ir)
     end do
+    gic0 = max(gic0,1); gic1 = min(gic1, gncol)
+    gir0 = max(gir0,1); gir1 = min(gir1, gnrow)
   end if
   !
   if (iread == 0) then
@@ -164,12 +169,20 @@ program datamap
     end do
   end if
   !
+  if (.false.) then
+    call writeidf('tmp.idf', xid, nc, nr, &
+      gxmin + (gic0-1)*gcs, gymin + (gnrow-gir1)*idf%dx, &
+      gcs, 0.D0); stop
+  end if
+  
   ! set the land mask
   allocate(landmask(nc,nr))
   do ir = 1, nr
     do ic = 1, nc
-      if (xid(ic,ir) /= 0) then
+      if (xid(ic,ir) > 0) then
         landmask(ic,ir) = 1
+      else if (xid(ic,ir) < 0) then
+        landmask(ic,ir) = -1
       else
         landmask(ic,ir) = 0
       end if
@@ -178,6 +191,12 @@ program datamap
   !
   ! remove catchment outside of polygon(s)
   if (linitpol .and. (na == 6)) then
+    do ir = 1, nr
+      do ic = 1, nc
+        xid(ic,ir) = abs(xid(ic,ir))
+      end do
+    end do
+    
     do ir = 1, nr
       do ic = 1, nc
         if (xid(ic,ir) /= 0) then
@@ -213,6 +232,21 @@ program datamap
       end do
     end do
     deallocate(i4wk1d1)
+    !
+    do ir = 1, nr
+      do ic = 1, nc
+        id = abs(xid(ic,ir))
+        if ((id > 0).and.(landmask(ic,ir) == -1)) then
+          xid(ic,ir) = -abs(xid(ic,ir))
+        end if  
+      end do
+    end do
+  end if
+  !
+  if (.false.) then
+    call writeidf('tmp.idf', xid, nc, nr, &
+      gxmin + (gic0-1)*gcs, gymin + (gnrow-gir1)*idf%dx, &
+      gcs, 0.D0); stop
   end if
   !
   if (linitpol .and. (na > 6)) then
@@ -272,7 +306,7 @@ program datamap
   if (.false.) then
     call writeidf('tmp.idf', xid, nc, nr, &
       gxmin + (gic0-1)*gcs, gymin + (gnrow-gir1)*idf%dx, &
-      gcs, 0.D0)
+      gcs, 0.D0); stop
   end if
   !
   call idfdeallocatex(idf)
@@ -313,8 +347,15 @@ program datamap
   end if
   call idfdeallocatex(idf)
   !
+  ! determine the sea option
+  if (minval(xid) < 0) then
+    sea_opt = 2
+    call logmsg("***** Using inclusive sea option *****")
+  end if
+  !
   ! label the sea cells
-  call addboundary(xid, nc, nr)
+  if (sea_opt == 1) call addboundary(xid, nc, nr)
+  
   do ir = 1, nr
     do ic = 1, nc
       if (xid(ic,ir) < 0) then !labeled as CHD
@@ -327,7 +368,17 @@ program datamap
     end do
   end do
   if (.false.) then
+    do ir = 1, nr
+      do ic = 1, nc
+        if (xid(ic,ir) /= 1) then !labeled as CHD
+          xid(ic,ir) = 0
+        end if
+      end do
+    end do
     call writeidf('tmp.idf', xid, nc, nr, &
+      gxmin + (gic0-1)*gcs, gymin + (gnrow-gir1)*idf%dx, &
+      gcs, 0.D0)
+    call writeasc('tmp.asc', xid, nc, nr, &
       gxmin + (gic0-1)*gcs, gymin + (gnrow-gir1)*idf%dx, &
       gcs, 0.D0)
   end if
@@ -391,17 +442,26 @@ program datamap
         bb%ic0 = min(bb%ic0, ic); bb%ic1 = max(bb%ic1, ic)
         if (xid(ic,ir) > 0) then
           cat(id2)%nlnd = cat(id2)%nlnd + 1; nlnd = nlnd + 1
+        else
+          cat(id2)%nsea = cat(id2)%nsea + 1; nsea = nsea + 1
+        end if
+        if (xid(ic,ir) /= 0) then
           if (nlay(ic,ir) == 0) then
             call errmsg('Zero weight.')
           end if
           cat(id2)%w = cat(id2)%w + int(nlay(ic,ir),i4b)
-        else
-          cat(id2)%nsea = cat(id2)%nsea + 1; nsea = nsea + 1
         end if
       end if
     end do
   end do
-  
+  !
+  ! check for zero weights
+  do i = 1, mxlid
+    if (cat(i)%w <= DZERO) then
+      call errmsg('Program error: zero weight found.')
+    end if
+  end do
+  !
   do i = 1, mxlid
     bb => cat(i)%lbb
     bb%nrow = bb%ir1 - bb%ir0 + 1
@@ -425,6 +485,7 @@ program datamap
       id1 = l2g(i) ! global ID
       bb => cat(i)%lbb
       ir0 = bb%ir0; ir1 = bb%ir1; ic0 = bb%ic0; ic1 = bb%ic1 !BB
+      !write(*,'(a)') ta((/i/))//'('//ta((/id1/))//')/'//ta((/mxlid/))//': ('//ta((/ic0,ic1,ir0,ir1/))//')'
       !
       ! label the neighboring cells
       nbr = 0 ! initialize number of neighbors
@@ -772,22 +833,25 @@ program datamap
     end if
     !
     ! add the sea boundary
-    call addboundary(idf%x, idf%ncol, idf%nrow, idf%nodata)
+    if (sea_opt == 1) call addboundary(idf%x, idf%ncol, idf%nrow, idf%nodata)
     !
     do ir = 1, idf%nrow
       do ic = 1, idf%ncol
         jc = ic0 + ic - 1; jr = ir0 + ir - 1 ! global
+        !if ((jc == 174).and.(jr == 4483)) then
+        !  write(*,*) '@@@@'
+        !end if
         kc = jc - gic0 + 1; kr = jr - gir0 + 1
         if ((kc >= 1).and.(kc <= nc).and.(kr >= 1).and.(kr <= nr)) then
           r4val = idf%x(ic,ir)
           if ((r4val /= idf%nodata) .and.(r4val > 0.)) then
             itile(kc,kr) = i
-          end if
-          if (landmask(kc,kr) == 2) then
-            if ((r4val /= idf%nodata) .and.(r4val < 0.).and.(i4wk2d(kc,kr) <= 0.)) then
-              i4wk2d(kc,kr) = i
-            else
-              i4wk2d(kc,kr) = -i
+            if (landmask(kc,kr) == 2) then
+              if ((r4val /= idf%nodata) .and.(r4val < 0.).and.(i4wk2d(kc,kr) <= 0.)) then
+                i4wk2d(kc,kr) = i
+              else
+                i4wk2d(kc,kr) = -i
+              end if
             end if
           end if
         end if
@@ -841,6 +905,10 @@ program datamap
           i4wk2d(1,n) = jc; i4wk2d(2,n) = jr ! global node number
           i1wk1d(n) = nlay(ic,ir)
           i2wk1d(n) = itile(ic,ir)  !tile
+          ! check
+          if (i2wk1d(n) == 0) then
+            call errmsg("No tile found.")
+          end if
           if (id < 0) then
             i4wk2d(1,n) = -i4wk2d(1,n)
           end if
@@ -870,6 +938,31 @@ program datamap
   call open_file(f, iu, 'w', .true.)
   write(iu)(i2wk1d(i),i=1,n)
   close(iu)
+  !
+  if (allocated(i1wk1d)) deallocate(i1wk1d)
+  allocate(i1wk1d(ntile))
+  do i = 1, ntile
+    i1wk1d(i) = 0
+  end do
+  do i = 1, n
+    j = int(i2wk1d(i),i4b)
+    j = abs(j)
+    i1wk1d(j) = 1
+  end do
+  m = 0
+  do i = 1, ntile
+    if (i1wk1d(i) == 1) m = m + 1
+  end do
+  if (allocated(i4wk1d1)) deallocate(i4wk1d1)
+  allocate(i4wk1d1(m))
+  m = 0
+  do i = 1, ntile
+    if (i1wk1d(i) == 1) then
+      m = m + 1
+      i4wk1d1(m) = i
+    end if
+  end do
+  write(*,'(a)') 'Tiles found: '//ta(i4wk1d1)
   !
   ! ---------------
   ! write the interfaces
