@@ -55,18 +55,20 @@
       real(r8b) :: area
     end function cat_size
     !
-    subroutine cat_unique(cat, bb, area)
+    subroutine cat_unique(cat, bb, area, areag, gir0)
       use pcrModule, only: i4b, r8b
       use utilsmod, only: tBB
       implicit none
       integer(i4b), dimension(:,:), intent(inout) :: cat
       type(tBB), dimension(:), allocatable, intent(out) :: bb
       real(r8b), dimension(:), allocatable :: area
+      real(r8b), dimension(:), intent(in) :: areag
+      integer(i4b), intent(in) :: gir0
     end subroutine cat_unique
     !
     recursive subroutine refine_catch(cat, icat, jcat, pbb, catptr, acc, &
       icir_pit, ldd, lddmv, &
-      idepth, maxdepth, maxtrib, minarea, areag)
+      idepth, maxdepth, maxtrib, minarea, areag, achk)
       use pcrModule, only: i1b, i4b, r8b
       use utilsmod, only: tBB
       implicit none
@@ -84,6 +86,7 @@
       integer(i4b),                 intent(in)    :: maxtrib
       real(r8b),                    intent(in)    :: minarea
       real(r8b), dimension(:),      intent(in)    :: areag
+      integer(i4b),                 intent(inout) :: achk
     end subroutine refine_catch
   end interface
   
@@ -97,6 +100,8 @@
     use imod_idf, only: idfobj, idfread, imod_utl_printtext, idfdeallocatex
     
     implicit none
+    
+    real(r8b), parameter :: sqkm = 1000000.d0 !m2
     
     type(tMap), pointer :: map
     type(tPol), dimension(:), allocatable :: p
@@ -123,6 +128,7 @@
     !
     real(r4b) :: cs, xul, yul, xmin, ymin
     logical :: lstop = .false.
+    integer(i4b) :: areachk
     !
     type(idfobj) :: idf
 ! ------------------------------------------------------------------------------
@@ -166,6 +172,7 @@
     !flg = .true.; ir0 = 1; ir1 = 9000; ic0 = 1; ic1 = 16000; kcat = 641508 ! Missisippi
     !flg = .true.; ir0 = 9000; ir1 = 17000; ic0 = 11500; ic1 = 17500; kcat = 30715 ! Amazone
     !flg = .true.; ir0 = 6000; ir1 = 15000; ic0 = 19500; ic1 = 28000; kcat = 114403 ! Africa
+    flg = .true.; ir0 = 4380; ir1 = 5300; ic0 = 21800; ic1 = 23100; kcat = 2790 ! Rhine-Meuse
     
     xmin = xul + (ic0-1)*cs; ymin = yul-ir1*cs ! ymin = yul-9000*cs
     !
@@ -227,9 +234,11 @@
     ! first, find the catchment boundary
     maxtrib = 4
     catid = mxcatid + 1
-!    minarea = 10000.d0 !cells
-    minarea = 100.d0 * 1000.d0 * 1000.d0 !m2
-    maxdepth = 50
+!    minarea = 100.d0 * sqkm !m2
+    minarea = 1.d0 * sqkm !m2
+    minarea = 0.d0 !m2
+    maxdepth = 8
+    !
     jcat = mxcatid
     !
     if (.not.flg) then
@@ -245,9 +254,10 @@
       write(*,'(a,i2.2,a,i7.7,a,i7.7,a)') 'Processing ', maxdepth,' pfafstetter levels for catchment ', icat, '/', mxcatid, ' area '//trim(s)//'...'
       call calc_acc(acc, cat, icat, bb(icat), ldd, lddmv, icir_pit)
       idepth = 0
+      areachk = 1
       call refine_catch(cat, icat, jcat, bb(icat), &
         catptr, acc, icir_pit, ldd, lddmv, &
-        idepth, maxdepth, maxtrib, minarea, areag)
+        idepth, maxdepth, maxtrib, minarea, areag, areachk)
       if (flg) then
         do ir = 1, nr
           do ic = 1, nc
@@ -259,14 +269,21 @@
       end if
     end do
     !
-    call cat_unique(cat, bb, cat_area)
-    write(*,'(a)') '# catchments, min. area, max. area: ' // &
-      ta((/size(bb)/)) // ', ' // ta((/minval(cat_area)/)) // ', ' // &
-      ta((/maxval(cat_area)/))
+    do ir = 1, nr
+      do ic = 1, nc
+        cat(ic,ir) = abs(cat(ic,ir))
+      end do
+    end do
+    !
+    call cat_unique(cat, bb, cat_area, areag, ir0)
+    write(*,'(a)') '# catchments, min. area (km2), max. area (km2): ' // &
+      ta((/size(bb)/)) // ', ' // ta((/minval(cat_area)/sqkm/)) // ', ' // &
+      ta((/maxval(cat_area)/sqkm/))
     
     !mxcatid = size(bb)
     !
-    call writeidf('cat.idf', cat, size(cat,1), size(cat,2), dble(xmin), dble(ymin), dble(cs), DZERO)
+    call writeidf('cat_lev'//ta((/maxdepth/))//'.idf', cat, size(cat,1), size(cat,2), dble(xmin), dble(ymin), dble(cs), DZERO)
+    call writeasc('cat_lev'//ta((/maxdepth/))//'.asc', cat, size(cat,1), size(cat,2), dble(xmin), dble(ymin), dble(cs), DZERO)
     !call writeidf('tmp.idf', wrk, size(wrk,1), size(wrk,2), dble(xmin), dble(ymin), dble(cs), DZERO)
     !call writeidf('acc.idf', acc, size(acc,1), size(acc,2), dble(xmin), dble(ymin), dble(cs), DZERO)
     !call writeidf('tmp.idf', tmp, size(tmp,1), size(tmp,2), xmin, ymin, cs, 0.)
@@ -730,7 +747,7 @@
     end do
   end function cat_size
   !
-  subroutine cat_unique(cat, bb, area)
+  subroutine cat_unique(cat, bb, area, areag, gir0)
 ! ******************************************************************************
 ! ******************************************************************************
 !
@@ -746,6 +763,8 @@
     integer(i4b), dimension(:,:), intent(inout) :: cat
     type(tBB), dimension(:), allocatable, intent(out) :: bb
     real(r8b), dimension(:), allocatable :: area
+    real(r8b), dimension(:), intent(in) :: areag
+    integer(i4b), intent(in) :: gir0
     !
     ! -- local
     integer(i4b) :: nc, nr, ic, ir, n, m, v, w, i
@@ -797,7 +816,7 @@
           cat(ic,ir) = w
           bb(w)%ir0 = min(bb(w)%ir0, ir); bb(w)%ir1 = max(bb(w)%ir1, ir)
           bb(w)%ic0 = min(bb(w)%ic0, ic); bb(w)%ic1 = max(bb(w)%ic1, ic)
-          area(w) = area(w) + DONE
+          area(w) = area(w) + areag(ir+gir0+1)
         end if
       end do
     end do
@@ -809,7 +828,7 @@
   
   recursive subroutine refine_catch(cat, icat, jcat, pbb, catptr, acc, &
     icir_pit, ldd, lddmv, &
-    idepth, maxdepth, maxtrib, minarea, areag)
+    idepth, maxdepth, maxtrib, minarea, areag, achk)
 ! ******************************************************************************
 ! ******************************************************************************
 !
@@ -837,6 +856,7 @@
     integer(i4b),                 intent(in)    :: maxtrib
     real(r8b),                    intent(in)    :: minarea
     real(r8b), dimension(:),      intent(in)    :: areag
+    integer(i4b), intent(inout) :: achk
     !
     ! -- local
     type(tBB), dimension(:), allocatable :: cbb
@@ -851,12 +871,19 @@
     integer(i4b) :: n
     integer(i4b), parameter :: mxoutlet = 1000
     integer(i4b), dimension(2, mxoutlet) :: icir_outlet
+    integer(i4b), dimension(:), allocatable :: areachk
 ! ------------------------------------------------------------------------------
     idepth = idepth + 1
-    if (idepth > maxdepth) return
+    if (idepth > maxdepth) then
+      return
+    end if
     !
     area = cat_size(cat, icat, pbb, areag)
-    if (area < minarea) return
+    if ((area < minarea) .and. (achk == 1)) then
+      !write(*,*) 'Area,jcat',area,jcat
+      achk = -1
+      return
+    end if
     !
     call calc_stem(acc, icir_pit, cat, icat, pbb, ldd, lddmv, &
       nstem, icir_stem, acc_stem)
@@ -874,7 +901,7 @@
     n = 1
     icir_outlet(1,n) = icir_stem(1,n)
     icir_outlet(2,n) = icir_stem(2,n)
-    
+    !
     do i = nstem-1, nstem-maxtrib, -1
       j = ind(i); ic =  icir_stem(1,j); ir = icir_stem(2,j)
       n = n + 1
@@ -941,14 +968,35 @@
     !deallocate(ind, icir_stem, acc_stem)
     !
     ! recursion
+    allocate(areachk(size(cbb)))
+    do i = 1, size(cbb)
+      areachk(i) = 1
+    end do
+    !do i = 1, size(cbb), 2
+    !  areachk(i) = 0
+    !end do
+    !
     do i = 1, size(cbb)
       jdepth = idepth
       jcjr_pit = icir_outlet(:,i)
       call refine_catch(cat, jcat0+i, jcat, pbb, &
         catptr, acc, jcjr_pit, ldd, lddmv, &
-        jdepth, maxdepth, maxtrib, minarea, areag)
+        jdepth, maxdepth, maxtrib, minarea, areag, areachk(i))
     end do
-    deallocate(cbb)
+    !
+    do i = 1, size(cbb)
+      if (areachk(i) == -1) then
+        do ir = cbb(i)%ir0, cbb(i)%ir1
+          do ic = cbb(i)%ic0, cbb(i)%ic1
+            if (cat(ic,ir) == jcat0+i) then
+              cat(ic,ir) = jcat
+            end if
+          end do
+        end do
+      end if
+    end do
+    !
+    deallocate(cbb, areachk)
     !
     return
   end subroutine refine_catch
