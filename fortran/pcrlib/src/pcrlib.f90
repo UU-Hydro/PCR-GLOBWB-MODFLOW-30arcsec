@@ -1267,7 +1267,8 @@ contains
       case(cr_real4)
         read(unit=this%iu,pos=p+4*n) vr4
         if (ieee_is_nan(vr4)) then
-          r4val = this%r4mv
+!          r4val = this%r4mv
+          r4val = r4mv
         else
           r4val = real(vr4,r4b)
         end if
