@@ -5,6 +5,7 @@ module mf6_post_module
   use utilsmod, only: IZERO, DZERO, DONE, tBB, errmsg, logmsg, swap_slash, open_file, chkexist, &
     get_jd, get_ymd_from_jd, ta, writeasc, writeidf, replacetoken
   use pcrModule, only: tmap
+  use imod_idf
   !
   implicit none
   !
@@ -30,10 +31,15 @@ module mf6_post_module
   character(len=mxslen) :: tilebb = ''
   character(len=mxslen) :: top = ''
   !
+  integer(i4b), parameter :: i_idf = 1
+  integer(i4b), parameter :: i_map = 2
+  
   type tTop
-    integer(i4b), pointer             :: ntile => null()
-    type(tBb), dimension(:), pointer  :: tilebb => null()
-    type(tMap), dimension(:), pointer :: maps => null()
+    integer(i4b), pointer               :: i_type => null()
+    integer(i4b), pointer               :: ntile => null()
+    type(tBb), dimension(:), pointer    :: tilebb => null()
+    type(tMap), dimension(:), pointer   :: maps => null()
+    type(idfobj), dimension(:), pointer :: idfs => null()
   end type tTop
   type(tTop), pointer :: topmap => null()
   !
@@ -72,7 +78,8 @@ module mf6_post_module
   end type tPostMod
   !
   type tPostSol
-    logical, pointer                      :: lwritesol => null()
+    logical, pointer                      :: lwritesol   => null()
+    logical, pointer                      :: lwritemodid => null()
     integer(i4b), pointer                 :: solid     => null()
     character(len=mxslen), pointer        :: solname     => null()
     type(tBB), pointer                    :: bb         => null()
@@ -160,10 +167,12 @@ module mf6_post_module
     ! --- local
     type(tBb), pointer :: bb => null()
     type(tMap), pointer :: map => null()
+    type(idfobj), pointer :: idf => null()
     logical :: linbb, lfound
     integer(i4b) :: i, j, gic, gir, ic, ir 
     real(r4b) :: r4val
-    real(r4b) :: r4mv 
+    real(r4b) :: r4mv
+    real(r8b) :: r8val
 ! ------------------------------------------------------------------------------
     r4mv = -9999.
     if (.not.associated(this%top)) then
@@ -180,18 +189,31 @@ module mf6_post_module
           linbb = .true.
         end if
         if (linbb) then
-          map => topmap%maps(j)
           ic = gic - bb%ic0 + 1; ir = gir - bb%ir0 + 1
-          if (.not.associated(map%r4mv)) then !!WORKAROUND!!
-            allocate(map%r4mv)
-            map%r4mv = r4mv
-          end if
-          call map%get_val(ic, ir, r4val, r4mv)
-          if (r4val /= r4mv) then
-            lfound = .true.
-            this%top(i) = real(r4val,r8b)
-          else
-            linbb = .false.
+          if (topmap%i_type == i_map) then
+            map => topmap%maps(j)
+            if (.not.associated(map%r4mv)) then !!WORKAROUND!!
+              allocate(map%r4mv)
+              map%r4mv = r4mv
+            end if
+            call map%get_val(ic, ir, r4val, r4mv)
+            if (r4val /= r4mv) then
+              lfound = .true.
+              this%top(i) = real(r4val,r8b)
+            else
+              linbb = .false.
+            end if
+          else !idf
+            idf => topmap%idfs(j)
+            r8val = idfgetval(idf,ir,ic)
+            if (r8val /= idf%nodata) then
+              lfound = .true.
+              !if (r8val /= DZERO) then !workaround
+                this%top(i) = r8val
+              !end if
+            else
+              linbb = .false.
+            end if
           end if
         end if
         if (lfound) exit
@@ -410,7 +432,7 @@ module mf6_post_module
     type(tGen), pointer :: gen => null()
     type(tPostMod), pointer :: m => null()
     type(tBb), pointer :: bb, sbb, mbb
-    logical :: lok
+    logical :: lok, lex
     integer(i4b) :: i, j, iu
     integer(i4b), dimension(:), allocatable :: i4wk
     character(len=mxslen) :: f
@@ -458,15 +480,35 @@ module mf6_post_module
         bb%nrow = bb%ir1 - bb%ir0 + 1
       end do
       close(iu)
-      allocate(topmap%maps(topmap%ntile))
+      allocate(topmap%i_type)
+      if (index(top,'.map',back=.true.) > 0) then
+        topmap%i_type = i_map
+      else if (index(top,'.idf',back=.true.) > 0) then
+        topmap%i_type = i_idf
+      else
+        call errmsg("Unrecognize top file format.")
+      end if
+      if (topmap%i_type == i_map) then
+        allocate(topmap%maps(topmap%ntile))
+      else
+        allocate(topmap%idfs(topmap%ntile))
+      end if
       do i = 1, topmap%ntile
         f = top
         call replacetoken(f, '?', i)
         call swap_slash(f)
-        call chkexist(f)
-        lok = topmap%maps(i)%init(f, 1)
-        if (.not.lok) then
-          call errmsg('Initializing top.')
+        inquire(file=f,exist=lex)
+        if (.not.lex) then
+          call logmsg("Could not find "//trim(f))
+        else
+          if (topmap%i_type == i_map) then
+            lok = topmap%maps(i)%init(f, 1)
+          else
+            lok = idfread(topmap%idfs(i), f, 0)
+          end if
+          if (.not.lok) then
+            call errmsg('Initializing top.')
+          end if
         end if
       end do
     else
@@ -482,7 +524,8 @@ module mf6_post_module
         call errmsg('mf6_post_sol_init')
     end select
     !
-    allocate(this%lwritesol, this%nmod)
+    allocate(this%lwritesol, this%lwritemodid, this%nmod)
+    this%lwritemodid = .false.
     select case(trim(sa(2)))
       case('m')
         this%lwritesol = .false.
@@ -490,8 +533,11 @@ module mf6_post_module
         allocate(this%mod(1))
         m => this%mod(1)
         allocate(m%modid); read(sa(3),*) m%modid
-      case('s')
+      case('s','smodid')
         this%lwritesol = .true.
+        if (trim(sa(2)) == 'smodid') then !solution + tile
+          this%lwritemodid = .true.
+        end if
         allocate(this%solid, this%solname)
         read(sa(3),*) this%solid
         write(this%solname,'(a,i2.2)') 's',this%solid
@@ -555,6 +601,7 @@ module mf6_post_module
     type(tPostMod), pointer :: m => null()
     character(len=mxslen) :: f
     integer(i4b) :: i, il, ic, ir, jc, jr, gic, gir
+    integer(i4b), dimension(:,:), allocatable :: si4wk
     real(r8b) :: t, xmin, ymin
     real(r8b), dimension(:), allocatable :: totimmod
     real(r8b), dimension(:,:), allocatable :: sr8wk, mr8wk
@@ -584,6 +631,16 @@ module mf6_post_module
       !
       if (this%lwritesol) then
         sbb => this%bb
+        !
+        if (this%lwritemodid) then
+          allocate(si4wk(sbb%ncol,sbb%nrow))
+          do ir = 1, sbb%nrow
+            do ic = 1, sbb%ncol
+              si4wk(ic,ir) = 0
+            end do
+          end do
+        end if
+        !
         allocate(sr8wk(sbb%ncol,sbb%nrow))
         do il = this%gen%il_min, this%gen%il_max
           do ir = 1, sbb%nrow
@@ -603,6 +660,9 @@ module mf6_post_module
                     call errmsg('mf6_post_sol_write')
                   end if
                   sr8wk(jc,jr) = mr8wk(ic,ir)
+                  if (this%lwritemodid) then
+                    si4wk(jc,jr) = m%modid
+                  end if
                 end if
               end do
             end do
@@ -615,12 +675,21 @@ module mf6_post_module
             case(i_out_asc)
               call writeasc(trim(f)//'.asc',sr8wk, sbb%ncol, sbb%nrow, &
                 xmin, ymin, gcs, r8nodata)
+              if (this%lwritemodid) then
+                call writeasc(trim(f)//'_modid.asc',si4wk, sbb%ncol, sbb%nrow, &
+                  xmin, ymin, gcs, DZERO)
+              end if
             case(i_out_idf)
               call writeidf(trim(f)//'.idf', sr8wk, sbb%ncol, sbb%nrow, &
                 xmin, ymin, gcs, r8nodata)
+              if (this%lwritemodid) then
+                call writeidf(trim(f)//'_modid.idf', si4wk, sbb%ncol, sbb%nrow, &
+                  xmin, ymin, gcs, DZERO)
+              end if
           end select
         end do
         deallocate(sr8wk, mr8wk)
+        if (allocated(si4wk)) deallocate(si4wk)
       end if
     end do
     !
@@ -672,11 +741,16 @@ module mf6_post_module
     if (associated(this%bb))        deallocate(this%bb)
     !
     if (associated(topmap)) then
-      do i = 1, topmap%ntile
-        map => topmap%maps(i)
-        call map%clean()
-      end do
-      deallocate(topmap%maps)
+      if (associated(topmap%maps)) then
+        do i = 1, topmap%ntile
+          map => topmap%maps(i)
+          call map%clean()
+        end do
+        deallocate(topmap%maps)
+      end if
+      if (associated(topmap%idfs)) then
+        call idfdeallocate(topmap%idfs, topmap%ntile) 
+      end if
       deallocate(topmap%ntile)
       deallocate(topmap%tilebb)
       deallocate(topmap); topmap => null()
