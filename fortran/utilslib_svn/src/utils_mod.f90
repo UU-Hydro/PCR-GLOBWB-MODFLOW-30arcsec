@@ -1577,7 +1577,7 @@ module utilsmod
     return
   end subroutine readasc_r_r
 
-  function readidf_val(idf, icol, irow) result (rval)
+  function readidf_r8val(idf, icol, irow) result (r8val)
 ! ******************************************************************************
     ! -- modules
     use imod_idf, only: idfobj
@@ -1585,10 +1585,11 @@ module utilsmod
 
     type(idfobj), intent(in) :: idf
     integer(i4b), intent(in) :: icol, irow
-    real(r4b) :: rval
+    real(r8b) :: r8val
     ! --- local
     integer(i4b), parameter :: icf = 1
     integer(i4b) :: irec
+    real(r4b) :: r4val
 ! ------------------------------------------------------------------------------
     if ((icol < 1).or.(icol > idf%ncol)) then
       call errmsg('readidf_val: invalid column: '//ta((/icol/)))
@@ -1600,11 +1601,16 @@ module utilsmod
     irec=icf +10  +abs(idf%ieq-1) *2    +idf%ieq*(idf%nrow+idf%ncol) +idf%itb*2
     irec=irec+  ((irow-1)*idf%ncol)+icol
     !
-    read(idf%iu,rec=irec) rval
+    if (idf%itype == 4) then
+      read(idf%iu,rec=irec) r4val
+      r8val = real(r4val,r8b)
+    else
+      read(idf%iu,rec=irec) r8val
+    end if
     !
     return
-  end function readidf_val
-
+  end function readidf_r8val
+  
   subroutine readidf_block_i4(idf, ir0, ir1, ic0, ic1, arr, nodata_in)
 ! ******************************************************************************
     ! -- modules
@@ -1617,7 +1623,8 @@ module utilsmod
     ! --- local
     integer(i4b) :: nc, nr, ic, ir, jc, jr
     integer(i4b) :: nodata
-    real(r4b) :: rval
+    real(r4b) :: r4val
+    real(r8b) :: r8val
 ! ------------------------------------------------------------------------------
     if (present(nodata_in)) then
       nodata = nodata_in
@@ -1635,9 +1642,9 @@ module utilsmod
     do ir = ir0, ir1
       do ic = ic0, ic1
         jr = ir-ir0+1; jc = ic-ic0+1
-        rval = readidf_val(idf, ic, ir)
-        if (rval /= idf%nodata) then
-          arr(jc,jr) = int(rval)
+        r8val = readidf_r8val(idf, ic, ir)
+        if (r8val /= idf%nodata) then
+          arr(jc,jr) = int(r8val)
         else
           arr(jc,jr) = nodata
         end if
@@ -1660,7 +1667,8 @@ module utilsmod
     ! --- local
     integer(i4b) :: nc, nr, ic, ir, jc, jr
     real(r4b) :: nodata
-    real(r4b) :: rval
+    real(r4b) :: r4val
+    real(r8b) :: r8val
 ! ------------------------------------------------------------------------------
     if (present(nodata_in)) then
       nodata = nodata_in
@@ -1678,9 +1686,9 @@ module utilsmod
     do ir = ir0, ir1
       do ic = ic0, ic1
         jr = ir-ir0+1; jc = ic-ic0+1
-        rval = readidf_val(idf, ic, ir)
-        if (rval /= idf%nodata) then
-          arr(jc,jr) = rval
+        r8val = readidf_r8val(idf, ic, ir)
+        if (r8val /= idf%nodata) then
+          arr(jc,jr) = real(r8val,r4b)
         else
           arr(jc,jr) = nodata
         end if
@@ -1703,7 +1711,8 @@ module utilsmod
     ! --- local
     integer(i4b) :: nc, nr, ic, ir, jc, jr
     real(r8b) :: nodata
-    real(r4b) :: rval
+    real(r4b) :: r4val
+    real(r8b) :: r8val
 ! ------------------------------------------------------------------------------
     if (present(nodata_in)) then
       nodata = nodata_in
@@ -1721,9 +1730,9 @@ module utilsmod
     do ir = ir0, ir1
       do ic = ic0, ic1
         jr = ir-ir0+1; jc = ic-ic0+1
-        rval = readidf_val(idf, ic, ir)
-        if (rval /= idf%nodata) then
-          arr(jc,jr) = dble(rval)
+        r8val = readidf_r8val(idf, ic, ir)
+        if (r8val /= idf%nodata) then
+          arr(jc,jr) = r8val
         else
           arr(jc,jr) = nodata
         end if
@@ -1798,7 +1807,7 @@ module utilsmod
       do irow = ir0, ir1
         do icol = ic0, ic1
           jrow = irow - ir0 + 1; jcol = icol - ic0 + 1
-          idf%x(jcol,jrow) = readidf_val(idf, icol, irow)
+          idf%x(jcol,jrow) = readidf_r8val(idf, icol, irow)
         end do
       end do
       close(idf%iu)
