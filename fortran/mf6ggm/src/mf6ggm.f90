@@ -780,7 +780,7 @@ program mf6ggm
                   xch%bb%ncol = xch%bb%ic1-xch%bb%ic0+1; xch%bb%nrow = xch%bb%ir1-xch%bb%ir0+1
                 end if
                 if ((nlay0 == 1) .or. (nlay1 == 1)) then
-                  il0 = 2; il1 = 2
+                  il0 = gnlay; il1 = gnlay
                   xch%nexg = xch%nexg + 1
                   if (iact == 2) then
                     xch%m1reg(xch%nexg) = nodintf%my_ireg(k)
@@ -934,7 +934,7 @@ program mf6ggm
             r%nodmap(jc,jr,1) = nodsign
             r%nodmap(jc,jr,2) = nodsign
           else if (nlay == 1) then
-            r%nodmap(jc,jr,2) = nodsign
+            r%nodmap(jc,jr,1) = nodsign
           else
             call errmsg('Invalid number of layers read.')
           end if

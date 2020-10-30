@@ -4,7 +4,7 @@ module mf6_module
   use, intrinsic :: iso_fortran_env , only: error_unit, output_unit, &
      i1b => int8, i2b => int16, i4b => int32, i8b => int64, r4b => real32, r8b => real64
   use utilsmod, only: getlun, chkexist, readline, change_case, errmsg, logmsg, &
-    readidf_block, readidf_val, writeidf, checkdim, addboundary, tUnp, &
+    readidf_block, readidf_r8val, writeidf, checkdim, addboundary, tUnp, &
     calc_unique, sa, open_file, create_dir, swap_slash, tas, ta, get_rel_up, &
     writebin, get_jd, jd_next_month, get_month_days, getwords, getminmax, &
     replacetoken, IZERO, RZERO, DZERO, DONE, tBB, calc_unique, tI4grid, count_i1a, &
@@ -38,7 +38,9 @@ module mf6_module
   integer(i4b), parameter :: i_inner_rclose      = 21
   integer(i4b), parameter :: i_relaxation_factor = 22
   integer(i4b), parameter :: i_prim_sto          = 23
-  integer(i4b), parameter :: nkey          = i_prim_sto
+  integer(i4b), parameter :: i_ghb_bhead         = 24
+  integer(i4b), parameter :: i_ghb_cond          = 25
+  integer(i4b), parameter :: nkey                = i_ghb_cond
   !  
   character(len=20), dimension(nkey) :: keys
             !12345678901234567890    12345678901234567890
@@ -54,13 +56,13 @@ module mf6_module
              'outer_hclose       ', 'outer_maximum       ', &
              'inner_maximum      ', 'inner_hclose        ', &
              'inner_rclose       ', 'relaxation_factor   ', &
-             'prim_sto           '/
+             'prim_sto           ',                         &
+             'ghb_bhead          ', 'ghb_cond            '/
   
   ! parameters
   integer(i4b),          parameter :: mxslen = 1024
   character(len=mxslen), parameter :: resultsbindir = '..\..\models\run_output_bin'
   character(len=mxslen), parameter :: resultslstdir = '..\..\models\run_output_lst'
-  integer(i4b),          parameter :: nlay = 2
   logical,               parameter :: writemapidf = .false.
   logical                          :: ltransient = .false.
   character(len=2)                 :: ctim = 'ss'
@@ -78,32 +80,35 @@ module mf6_module
   integer(i4b), parameter :: iriv  = 11
   integer(i4b), parameter :: irch  = 12
   integer(i4b), parameter :: iwel  = 13
-  integer(i4b), parameter :: npck = iwel
+  integer(i4b), parameter :: ighb  = 14
+  integer(i4b), parameter :: npck = ighb
   character(len=4), dimension(npck) :: pck
   data pck/'nam ', 'tdis', 'disu', 'ic  ', 'oc  ', 'npf ', 'sto ', 'chd ', 'chd ',&
-           'drn ', 'riv ', 'rch ', 'wel '/
+           'drn ', 'riv ', 'rch ', 'wel ', 'ghb '/
+  integer(i4b), dimension(npck) :: pckact
+  
   integer(i4b), parameter :: maxrun = 6
   character(len=10), dimension(npck,maxrun) :: pr
   integer(i4b), parameter :: irun0ss = 1, irun1ss = 3, irun0tr = 4, irun1tr = 6
   !
-    !----------------------------------------------------------------------------------------------------
-    ! ss/tr |run| nam      | tdis | disu | ic  | oc | npf| sto | chd1 | chd2 | drn | riv | rch | wel
-    !----------------------------------------------------------------------------------------------------
-    ! ss    | 1 | chd_intf | #    | #    | #   | sm | #  | #   | #    | intf | #   | #   | #   | #  |
-    ! ss    | 2 | ic_sm    | #    | #    | sm  | #  | #  | #   | #    | -    | #   | #   | #   | #  |
-    ! ss    | 3 | ic_sh0   | #    | #    | #   | #  | #  | #   | #    | -    | #   | #   | #   | #  |
-    ! tr    | 1 | spu      | spu  | #    | ss  | spu| #  | #   | #    | -    | spu | spu | spu | spu|
-    ! tr    | 2 | ic_spu   | #    | #    | spu | #  | #  | #   | #    | -    | #   | #   | #   | #  |
-    ! tr    | 3 | ic_ss    | #    | #    | ss  | #  | #  | #   | #    | -    | #   | #   | #   | #  |
+    !------------------------------------------------------------------------------------------------------
+    ! ss/tr |run| nam      | tdis | disu | ic  | oc | npf| sto | chd1 | chd2 | drn | riv | rch | wel | ghb
+    !------------------------------------------------------------------------------------------------------
+    ! ss    | 1 | chd_intf | #    | #    | #   | sm | #  | #   | #    | intf | #   | #   | #   | #   | #   |
+    ! ss    | 2 | ic_sm    | #    | #    | sm  | #  | #  | #   | #    | -    | #   | #   | #   | #   | #   |
+    ! ss    | 3 | ic_sh0   | #    | #    | #   | #  | #  | #   | #    | -    | #   | #   | #   | #   | #   |
+    ! tr    | 1 | spu      | spu  | #    | ss  | spu| #  | #   | #    | -    | spu | spu | spu | spu | spu |
+    ! tr    | 2 | ic_spu   | #    | #    | spu | #  | #  | #   | #    | -    | #   | #   | #   | #   | #   |
+    ! tr    | 3 | ic_ss    | #    | #    | ss  | #  | #  | #   | #    | -    | #   | #   | #   | #   | #   |
   !
-  !       inam         itdis        idisu        iic          ioc         inpf          isto         ichd1        ichd2        idrn         iriv         irch         iwel
-  !       1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890
-  data pr/'.chd_intf ','          ','          ','          ','.sm       ','          ','          ','          ','.intf     ','          ','          ','          ','          ', &
-          '.ic_sm    ','          ','          ','.sm       ','          ','          ','          ','          ','-         ','          ','          ','          ','          ', &
-          '.ic_sh0   ','          ','          ','          ','          ','          ','          ','          ','-         ','          ','          ','          ','          ', &
-          '.spu      ','.spu      ','          ','.ss       ','.spu      ','          ','          ','          ','-         ','.spu      ','.spu      ','.spu      ','.spu      ', &
-          '.ic_spu   ','          ','          ','.spu      ','          ','          ','          ','          ','-         ','          ','          ','          ','          ', &
-          '.ic_ss    ','          ','          ','.ss       ','          ','          ','          ','          ','-         ','          ','          ','          ','          '/
+  !       inam         itdis        idisu        iic          ioc         inpf          isto         ichd1        ichd2        idrn         iriv         irch         iwel         ighb      
+  !       1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890
+  data pr/'.chd_intf ','          ','          ','          ','.sm       ','          ','          ','          ','.intf     ','          ','          ','          ','          ','          ', &
+          '.ic_sm    ','          ','          ','.sm       ','          ','          ','          ','          ','-         ','          ','          ','          ','          ','          ', &
+          '.ic_sh0   ','          ','          ','          ','          ','          ','          ','          ','-         ','          ','          ','          ','          ','          ', &
+          '.spu      ','.spu      ','          ','.ss       ','.spu      ','          ','          ','          ','-         ','.spu      ','.spu      ','.spu      ','.spu      ','.spu      ', &
+          '.ic_spu   ','          ','          ','.spu      ','          ','          ','          ','          ','-         ','          ','          ','          ','          ','          ', &
+          '.ic_ss    ','          ','          ','.ss       ','          ','          ','          ','          ','-         ','          ','          ','          ','          ','          '/
   !
   ! stencil
   integer(i4b), parameter :: jp = 1
@@ -119,14 +124,16 @@ module mf6_module
   
   integer(i4b), parameter :: i_undefined = 0
   integer(i4b), parameter :: i_idf       = 1
-  integer(i4b), parameter :: i_map       = 2
-  integer(i4b), parameter :: i_distmap   = 3
+  integer(i4b), parameter :: i_distidf   = 2
+  integer(i4b), parameter :: i_map       = 3
+  integer(i4b), parameter :: i_distmap   = 4
   integer(I4B), parameter :: maxnraw = 1000
   
   type tData
     character(mxslen)       :: s = ''
     integer(I4B)            :: file_type = i_undefined
     type(idfobj),   pointer :: idf     => null()
+    type(tDistIDF), pointer :: distidf => null()
     type(tMap),     pointer :: map     => null()
     type(tDistMap), pointer :: distmap => null()
   end type tData
@@ -147,7 +154,7 @@ module mf6_module
     character(len=mxslen), dimension(:), allocatable :: perdate
   contains
     procedure :: init => mf6_raw_init
-    procedure :: mf6_raw_init_distmap
+    procedure :: mf6_raw_init_dist
     procedure :: mf6_raw_get_index
     procedure :: mf6_raw_key_exists
     procedure :: mf6_raw_get_name_char, mf6_raw_get_name_i4b
@@ -177,6 +184,21 @@ module mf6_module
     procedure :: clean  => mf6_distmap_clean
     procedure :: getval => mf6_distmap_getval_r4
   end type tDistMap
+  
+  type tDistIDF
+    logical                             :: linit  = .false.
+    integer(i4b),                pointer :: gntile => null()
+    integer(i2b), dimension(:),  pointer :: g2ltile => null()
+    integer(i4b),                pointer :: ntile  => null()
+    real(r8b),                   pointer :: r8def  => null()
+    logical,                     pointer :: larea  => null()
+    type(tBB), dimension(:),     pointer :: tilebb => null()
+    type(idfobj), dimension(:),  pointer :: idfs   => null()
+  contains
+    procedure :: init   => mf6_distidf_init
+    procedure :: clean  => mf6_distidf_clean
+    procedure :: getval => mf6_distidf_getval_r8
+  end type tDistIDF
   !
   integer(i4b) :: gncol      = 0
   integer(i4b) :: gnrow      = 0
@@ -255,7 +277,7 @@ module mf6_module
     procedure :: get_model_name => mf6_mod_get_model_name
     procedure :: set_disu       => mf6_mod_set_disu
     procedure :: get_i_raw      => mf6_mod_get_i_raw
-    procedure :: get_val        => mf6_mod_get_val_r4
+    procedure :: get_val        => mf6_mod_get_val_r8
     procedure :: get_array      => mf6_mod_get_array_r8
     generic   :: write_array    => mf6_mod_write_array_i4, &
                                    mf6_mod_write_array_r8
@@ -278,6 +300,7 @@ module mf6_module
     procedure :: write_chd   => mf6_mod_write_chd
     procedure :: write_drn   => mf6_mod_write_drn
     procedure :: write_riv   => mf6_mod_write_riv
+    procedure :: write_ghb   => mf6_mod_write_ghb
     procedure :: write_rch   => mf6_mod_write_rch
     procedure :: write_wel   => mf6_mod_write_wel
     !
@@ -369,17 +392,25 @@ module mf6_module
           s = change_case(words(2), 'l')
           i = index(s, '.idf', back=.true.)
           if (i > 0) then
-            dat%file_type = i_idf
-            allocate(dat%idf)
+            if (nw > 2) then
+              s = change_case(words(3), 'u')
+              if (trim(s) == 'DIST') then
+                dat%file_type = i_distidf
+              end if
+            else
+              dat%file_type = i_idf
+              allocate(dat%idf)
+            end if
           end if
           i = index(s, '.map', back=.true.)
           if (i > 0) then
-             dat%file_type = i_map
              if (nw > 2) then
                s = change_case(words(3), 'u')
                if (trim(s) == 'DIST') then
                  dat%file_type = i_distmap
                end if
+             else
+               dat%file_type = i_map
              end if
           endif
           !
@@ -390,6 +421,18 @@ module mf6_module
             if (.not.idfread(dat%idf, dat%s, 0)) then
               call errmsg('Could not read '//trim(dat%s))
             end if 
+          case(i_distidf)
+            allocate(dat%distidf)
+            if (nw > 3) then
+              allocate(dat%distidf%r8def, dat%distidf%larea)
+              read(words(4),*) dat%distidf%r8def
+              dat%distidf%larea = .false.
+              if (nw > 4) then
+                if (words(5) == 'AREA') then
+                  dat%distidf%larea = .true.
+                end if
+              end if
+             end if
           case(i_map)
             allocate(dat%map)
           case(i_distmap)
@@ -409,7 +452,7 @@ module mf6_module
       end if
     end do
     !
-    this%nper  = this%geti('nper')
+    this%nper = this%geti('nper')
     if (this%nper > 1) then
       ltransient = .true.; ctim = 'tr'
     end if
@@ -430,8 +473,7 @@ module mf6_module
     return
   end subroutine mf6_raw_init
   
-  
-  subroutine mf6_raw_init_distmap(this)
+  subroutine mf6_raw_init_dist(this)
 ! ******************************************************************************
 ! ******************************************************************************
 !
@@ -442,17 +484,30 @@ module mf6_module
     class(tRawDat) :: this
     ! -- local
     type(tDistMap), pointer :: distmap => null()
-    integer(i4b) :: i
+    type(tDistIDF), pointer :: distidf => null()
+    integer(i4b) :: i, j
 ! ------------------------------------------------------------------------------
     do i = 1, this%nraw
       distmap => this%raw(i)%dat%distmap
       if (associated(distmap)) then
         distmap%linit = .false.
+        if (associated(distmap%maps)) then
+          do j = 1, distmap%ntile
+            call distmap%maps(j)%clean()
+          end do
+        end if
+      end if
+      distidf => this%raw(i)%dat%distidf
+      if (associated(distidf)) then
+        distidf%linit = .false.
+        if (associated(distidf%idfs)) then
+          call idfdeallocate(distidf%idfs, distidf%ntile)
+        end if
       end if
     end do
     !
     return
-  end subroutine mf6_raw_init_distmap
+  end subroutine mf6_raw_init_dist
   
   function mf6_raw_get_index(this, key, ilay, iper) result(ind)
 ! ******************************************************************************
@@ -1293,9 +1348,16 @@ module mf6_module
     ! -- local
     character(len=mxslen) :: f
     integer(i4b) :: iu
+    logical :: lcomplex
 ! ------------------------------------------------------------------------------
     f = trim(this%solname)//'.ims'
     call open_file(f, iu, 'w')
+    !
+    if (raw%getc('complexity',cdef='SIMPLE') == 'COMPLEX') then
+      lcomplex = .true.
+    else
+      lcomplex = .false.
+    end if
     !
     write(iu,'(   a)') 'BEGIN OPTIONS'
     write(iu,'(2x,a)') 'PRINT_OPTION '//raw%getc('print_option',cdef='ALLITER')
@@ -1303,15 +1365,15 @@ module mf6_module
     write(iu,'(   a)') 'END OPTIONS'
     write(iu,'(a)')
     write(iu,'(   a)') 'BEGIN NONLINEAR'
-    write(iu,'(2x,a)') 'OUTER_HCLOSE '//raw%getc('outer_hclose',cdef='0.001')
+    if (.not.lcomplex) write(iu,'(2x,a)') 'OUTER_HCLOSE '//raw%getc('outer_hclose',cdef='0.001')
     write(iu,'(2x,a)') 'OUTER_MAXIMUM '//raw%getc('outer_maximum',cdef='100')
     write(iu,'(   a)') 'END NONLINEAR'
     write(iu,'(a)')
     write(iu,'(   a)') 'BEGIN LINEAR'
     write(iu,'(2x,a)') 'INNER_MAXIMUM '//raw%getc('inner_maximum',cdef='100')
-    write(iu,'(2x,a)') 'INNER_HCLOSE '//raw%getc('inner_hclose',cdef='0.001')
-    write(iu,'(2x,a)') 'INNER_RCLOSE '//raw%getc('inner_rclose',cdef='1000.')
-    write(iu,'(2x,a)') 'RELAXATION_FACTOR '//raw%getc('relaxation_factor',cdef='0.98')
+    if (.not.lcomplex) write(iu,'(2x,a)') 'INNER_HCLOSE '//raw%getc('inner_hclose',cdef='0.001')
+    if (.not.lcomplex) write(iu,'(2x,a)') 'INNER_RCLOSE '//raw%getc('inner_rclose',cdef='1000.')
+    if (.not.lcomplex) write(iu,'(2x,a)') 'RELAXATION_FACTOR '//raw%getc('relaxation_factor',cdef='0.98')
     write(iu,'(   a)') 'END LINEAR'
     close(iu)
     !
@@ -1347,8 +1409,8 @@ module mf6_module
     return
   end function mf6_mod_get_i_raw
   !
-  function mf6_mod_get_val_r4(this, i_raw, i_dat, ilay_dat, iper_dat, ireg, ic, ir) &
-    result(r4val)
+  function mf6_mod_get_val_r8(this, i_raw, i_dat, ilay_dat, iper_dat, ireg, ic, ir) &
+    result(r8val)
 ! ******************************************************************************
 ! ******************************************************************************
 !
@@ -1363,19 +1425,44 @@ module mf6_module
     integer(i4b), intent(in) :: ireg
     integer(i4b), intent(in) :: ic
     integer(i4b), intent(in) :: ir
-    real(r4b) :: r4val
+    real(r8b) :: r8val
     ! -- local
     type(tReg), pointer :: reg => null()
     type(tData), pointer :: dat => null()
     type(idfobj), pointer :: idf
     integer(i4b) :: itile, gir, gic
+    real(r4b) :: r4val
 ! ------------------------------------------------------------------------------
     dat => raw%raw(i_raw)%dat
     !
     select case(dat%file_type)
       case(i_idf)
         idf => dat%idf
-        r4val = readidf_val(idf, gic, gir)
+        r8val = readidf_r8val(idf, gic, gir)
+      case(i_distidf)
+        call dat%distidf%init(dat%s, this%itile, ilay_dat, iper_dat, .true.)
+        reg => this%reg(ireg)
+        gir = ir + reg%bb%ir0 - 1; gic = ic + reg%bb%ic0 - 1
+        itile = int(reg%itile(ic,ir),i4b)
+        if (itile == 0) then
+          if (associated(dat%distidf%r8def)) then
+            call logmsg("WARNING: default value is taken!")
+            r8val = dat%distidf%r8def
+            if (dat%distidf%larea) then
+              if (.not.associated(cam2)) then
+                call logmsg("WARNING: cam2 is not defined!")
+              end if
+              r8val = r8val * cam2(ir)/(gcs*gcs)
+            end if
+          else
+            r8val = DZERO
+          end if
+        else
+          if (itile < 0) then
+            itile = -itile
+          end if
+          r8val = dat%distidf%getval(gic, gir, itile)
+        end if
       case(i_map)
         call errmsg("Error mf6_raw_read_block_r4b: map file not supported")
       case(i_distmap)
@@ -1402,10 +1489,11 @@ module mf6_module
           end if
           r4val = dat%distmap%getval(gic, gir, itile)
         end if
+        r8val = real(r4val,r8b)
     end select
     !
     return
-  end function mf6_mod_get_val_r4
+  end function mf6_mod_get_val_r8
   
   subroutine mf6_mod_get_array_r8(this, i_dat, ilay_dat, iper_dat, ilay_tgt, &
     arrflg, arr, ib_in, toponly_in)
@@ -1426,12 +1514,15 @@ module mf6_module
     integer(i4b), intent(in), optional :: ib_in
     logical, intent(in), optional :: toponly_in
     ! -- local
+    real(r4b), parameter :: r4nodata = -12345.
+    real(r8b), parameter :: r8nodata = -12345.d0
     type(tReg), pointer :: reg
     type(tData), pointer :: dat => null()
     type(idfobj), pointer :: idf
     integer(i4b) :: n, nt, i, ireg, ir, ic, jr, jc, ib, itile, ilay, nlay
     integer(i4b) :: arrsiz
     real(r4b) :: r4val
+    real(r8b) :: r8val
     logical :: lfirst, ltile, toponly, found, ldefault
 ! ------------------------------------------------------------------------------
     lfirst = .true.
@@ -1478,6 +1569,8 @@ module mf6_module
     select case(dat%file_type)
       case(i_idf)
         idf => dat%idf
+      case(i_distidf)
+        call dat%distidf%init(dat%s, this%itile, ilay_dat, iper_dat)
       case(i_map)
         call errmsg("Error mf6_raw_read_block_r4b: map file not supported")
       case(i_distmap)
@@ -1536,14 +1629,42 @@ module mf6_module
           if (n /= 0) then
             select case(dat%file_type)
               case(i_idf)
-              r4val = readidf_val(idf, ic, ir)
-              if (r4val == idf%nodata) then
-                if (lfirst) then
-                  call logmsg('WARNING, using nodata from '//trim(idf%fname)//'!')
-                  lfirst = .false.
+                r8val = readidf_r8val(idf, ic, ir)
+                if (r8val == idf%nodata) then
+                  if (lfirst) then
+                    call logmsg('WARNING, using nodata from '//trim(idf%fname)//'!')
+                    lfirst = .false.
+                  end if
                 end if
-              end if
+              case(i_distidf)
+                itile = int(reg%itile(jc,jr),i4b)
+                if (itile == 0) then
+                  if (associated(dat%distidf%r8def)) then
+                    ldefault = .true.
+                    r8val = dat%distidf%r8def
+                    if (dat%distidf%larea) then
+                      if (.not.associated(cam2)) then
+                        call logmsg("WARNING: cam2 was not defined!")
+                      end if
+                      r8val = r8val * cam2(ir)/(gcs*gcs)
+                    end if
+                  else
+                    r8val = DZERO
+                    ltile = .false.
+                  end if
+                else
+                  if (itile < 0) then
+                    itile = -itile
+                  end if
+                  r8val = dat%distidf%getval(ic, ir, itile, r8nodata)
+                  if (r8val == r8nodata) then
+                    n = 0
+                  end if
+                end if
               case(i_distmap)
+                !if (n == 2330) then
+                !  write(*,*) '@@@@@'
+                !end if
                 itile = int(reg%itile(jc,jr),i4b)
                 if (itile == 0) then
                   if (associated(dat%distmap%r4def)) then
@@ -1563,15 +1684,21 @@ module mf6_module
                   if (itile < 0) then
                     itile = -itile
                   end if
-                  r4val = dat%distmap%getval(ic, ir, itile)
+                  r4val = dat%distmap%getval(ic, ir, itile, r4nodata)
+                  if (r4val == r4nodata) then
+                    n = 0
+                  end if
                 end if
+                r8val = real(r4val,r8b)
             end select
-            if ((n < 1) .or. (n > arrsiz)) then
-              call errmsg('mf6_mod_get_array_r8: program error 3 '//ta((/ib/))//' '//&
-                ta((/n/))//' '//ta((/arrsiz/)))
+            if (n /= 0) then
+              if ((n < 1) .or. (n > arrsiz)) then
+                call errmsg('mf6_mod_get_array_r8: program error 3 '//ta((/ib/))//' '//&
+                  ta((/n/))//' '//ta((/arrsiz/)))
+              end if
+              arr(n) = r8val
+              arrflg(n) = 1
             end if
-            arr(n) = real(r4val,r8b)
-            arrflg(n) = 1
           end if
         end do
       end do
@@ -1766,7 +1893,7 @@ module mf6_module
     ! -- dummy
     class(tMf6_mod) :: this
     ! -- local
-    real(r4b), parameter :: nodata = -9999.0
+    real(r8b), parameter :: nodata = -9999.d0
     real(r8b), parameter :: thkmin = 0.1d0
     !
     integer(i4b), dimension(ns) :: ihc
@@ -1779,7 +1906,7 @@ module mf6_module
     integer(i4b) :: ireg, n, ilay, iact, nja
     integer(i4b), dimension(ns) :: s
     integer(i4b) :: ic, ir, i, top_i_raw, bot_i_raw
-    real(r4b) :: topval, botval
+    real(r8b) :: topval, botval
 ! ------------------------------------------------------------------------------
     !
     hwva(jp) = DZERO
@@ -1811,7 +1938,7 @@ module mf6_module
       disu%nja = 0
       s = 0; cl12 = DZERO
       !
-      do ilay = 1, nlay
+      do ilay = 1, gnlay
         do ireg = 1, this%nreg
           reg => this%reg(ireg); bb => reg%bb
           if (ilay == 1) then
@@ -1852,6 +1979,9 @@ module mf6_module
                     cl12(je) = gcs/2
                   end if
                 end if
+                !if (n == 7864) then
+                !  write(*,*) '@@@@@'
+                !end if
                 if (ilay == 1) then
                   topval = this%get_val(top_i_raw, i_top, 0, 0, ireg, ic, ir)
                   botval = this%get_val(bot_i_raw, i_bot, 1, 0, ireg, ic, ir)
@@ -1868,7 +1998,7 @@ module mf6_module
                   cl12(jt) = max(thkmin, topval-botval)
                   cl12(jt) = cl12(jt)/2
                 end if
-                if (ilay < nlay) then !BOT
+                if (ilay < gnlay) then !BOT
                   s(jb) = abs(reg%nodmap(ic,ir,ilay+1))
                   if ((topval == nodata).or.(botval == nodata)) then
                     call errmsg('mf6_mod_set_disu: program error (top/bot).')
@@ -2375,7 +2505,7 @@ module mf6_module
     ! -- local
     logical, parameter :: lbin    = .true.
     logical, parameter :: lbinpos = .true.
-    character(len=mxslen) :: f
+    character(len=mxslen) :: f, pack
     integer(i4b) :: iu
 ! ------------------------------------------------------------------------------
     call logmsg('**************************************************************')
@@ -2386,8 +2516,8 @@ module mf6_module
     end if
     call logmsg('**************************************************************')
     !
-    ! set flag for reinitializing all distmap files
-    call raw%mf6_raw_init_distmap()
+    ! set flag for reinitializing all distributed files
+    call raw%mf6_raw_init_dist()
     !
     ! open the binary file
     if (lbinpos) then
@@ -2395,6 +2525,13 @@ module mf6_module
       this%fbin = trim(this%bindir)//trim(this%modelname)//'.bin'
       call open_file(this%fbin, this%iubin, 'w', .true.)
     end if
+    !
+    ! set the defaults
+    pckact = 1
+    pckact(isto) = raw%geti('act_sto',idef=1)
+    pckact(iriv) = raw%geti('act_riv',idef=1)
+    pckact(iwel) = raw%geti('act_wel',idef=1)
+    pckact(ighb) = raw%geti('act_ghb',idef=0)
     !
     call this%write_disu(lbin, lbinpos)
     call this%write_ic(lbin, lbinpos)
@@ -2404,6 +2541,7 @@ module mf6_module
     call this%write_chd(lbin, lbinpos)
     call this%write_drn(lbin, lbinpos)
     call this%write_riv(lbin, lbinpos)
+    call this%write_ghb(lbin, lbinpos)
     call this%write_rch(lbin, lbinpos)
     call this%write_wel(lbin, lbinpos)
     call this%write_nam()
@@ -2451,10 +2589,14 @@ module mf6_module
       f = trim(resultslstdir)//'\'//trim(this%modelname)//'.'//trim(ctim)//trim(pr(inam,irun))//'.lst'
       call swap_slash(f)
       write(iu,'(2x,a)') 'LIST '//trim(f)
+      if (raw%geti('newton',idef=0) == 1) then
+        write(iu,'(2x,a)') 'NEWTON UNDER_RELAXATION'
+      end if
       write(iu,'(   a)') 'END OPTIONS'
       write(iu,'(a)')
       write(iu,'(   a)') 'BEGIN PACKAGES'
       do ipck = 3, npck
+        if (pckact(ipck) == 0) cycle
         if ((ipck == ichd1).and.(.not.this%chd_sea)) cycle
         if ((ipck == iwel).and.(.not.this%wel)) cycle
         if (trim(pr(ipck,irun)) == '-') cycle
@@ -2486,6 +2628,8 @@ module mf6_module
     real(r8b) :: tn, bn, tm, bm
     type(tDisu), pointer :: disu
 ! ------------------------------------------------------------------------------
+    if (pckact(idisu) == 0) return
+    !
     call clear_wrk()
     !
     ! set disu
@@ -2514,9 +2658,9 @@ module mf6_module
     write(iu,'(a)')
     write(iu,'(   a)') 'BEGIN GRIDDATA'
     call this%get_array(i_top, 0, 0, 1, i1wrk, r8wrk)
-    call this%get_array(i_bot, 1, 0, 2, i1wrk, r8wrk) !i_bot_l1
+    if (gnlay == 2) call this%get_array(i_bot, 1, 0, 2, i1wrk, r8wrk) !i_bot_l1
     call this%get_array(i_bot, 1, 0, 1, i1wrk2, r8wrk2) !i_bot_l1
-    call this%get_array(i_bot, 2, 0, 2, i1wrk2, r8wrk2) !i_bot_l2
+    if (gnlay == 2) call this%get_array(i_bot, 2, 0, 2, i1wrk2, r8wrk2) !i_bot_l2
     !
     ! do a check
     allocate(i4wrk1d(disu%nodes+1)); i4wrk1d(1) = 1
@@ -2526,6 +2670,12 @@ module mf6_module
     do i = 1, disu%nodes
       n = disu%ja(i4wrk1d(i))
       tn = r8wrk(n); bn = r8wrk2(n)
+      if (tn < -1000D0) then
+        call errmsg('Program error mf6_mod_write_disu: top(n) = nodata')
+      end if
+      if (bn < -1000D0) then
+        call errmsg('Program error mf6_mod_write_disu: bot(n) = nodata')
+      end if
       if (bn > tn) then
         call errmsg('Program error mf6_mod_write_disu: bot(n) > top(n)')
       end if
@@ -2597,6 +2747,8 @@ module mf6_module
     character(len=mxslen) :: p, pb, f, d
     integer(i4b) :: iu, irun0
 ! ------------------------------------------------------------------------------
+    if (pckact(iic) == 0) return
+    !
     if (ltransient) then
       irun0 = irun0tr
     else
@@ -2621,7 +2773,7 @@ module mf6_module
       write(iu,'(   a)') 'BEGIN GRIDDATA'
       write(iu,'(2x,a)') 'STRT'
       call this%get_array(i_strt, 1, 0, 1, i1wrk, r8wrk) !i_strt_l1
-      call this%get_array(i_strt, 2, 0, 2, i1wrk, r8wrk) !i_strt_l2
+      if (gnlay == 2) call this%get_array(i_strt, 2, 0, 2, i1wrk, r8wrk) !i_strt_l2
       f = trim(pb)//'.ic'; call this%write_array(iu, 4, f, r8wrk, lbin, lbinpos)
       write(iu,'(   a)') 'END GRIDDATA'
       close(iu)
@@ -2686,6 +2838,7 @@ module mf6_module
     character(len=mxslen) :: p, f
     integer(i4b) :: iu, iper, nperspu, irun0, irun
 ! ------------------------------------------------------------------------------
+    if (pckact(ioc) == 0) return
     !
     if (ltransient) then
       irun0 = irun0tr
@@ -2757,8 +2910,10 @@ module mf6_module
     logical, intent(in) :: lbinpos
     ! -- local
     character(len=mxslen) :: p, pb, f
-    integer(i4b) :: iu
+    integer(i4b) :: iu, icelltype
 ! ------------------------------------------------------------------------------
+    if (pckact(inpf) == 0) return
+    !
     call clear_wrk()
     !
     p = trim(this%rootdir)//trim(this%modelname)
@@ -2776,16 +2931,21 @@ module mf6_module
     write(iu,'(a)')
     write(iu,'(   a)') 'BEGIN GRIDDATA'
     write(iu,'(2x,a)') 'ICELLTYPE'
-    write(iu,'(4x,a)') 'CONSTANT 0'
+    icelltype = raw%geti('icelltype')
+    write(iu,'(4x,a)') 'CONSTANT '//ta((/icelltype/))
     write(iu,'(2x,a)') 'K'
     call this%get_array(i_k, 1, 0, 1, i1wrk, r8wrk) !i_k_l1
-    call this%get_array(i_k, 2, 0, 2, i1wrk, r8wrk) !i_k_l2
+    if (gnlay == 2) call this%get_array(i_k, 2, 0, 2, i1wrk, r8wrk) !i_k_l2
     f = trim(pb)//'.npf.k'; call this%write_array(iu, 4, f, r8wrk, lbin, lbinpos)
     call clear_wrk()
     write(iu,'(2x,a)') 'K33'
-    call this%get_array(i_k33, 1, 0, 1, i1wrk, r8wrk) !i_k33_l1
-    call this%get_array(i_k33, 2, 0, 2, i1wrk, r8wrk) !i_k33_l2
-    f = trim(pb)//'.npf.k33'; call this%write_array(iu, 4, f, r8wrk, lbin, lbinpos)
+    if (gnlay == 2) then
+      call this%get_array(i_k33, 1, 0, 1, i1wrk, r8wrk) !i_k33_l1
+      call this%get_array(i_k33, 2, 0, 2, i1wrk, r8wrk) !i_k33_l2
+      f = trim(pb)//'.npf.k33'; call this%write_array(iu, 4, f, r8wrk, lbin, lbinpos)
+    else
+      write(iu,'(4x,a)') 'CONSTANT 0.1'
+    end if
     call clear_wrk()
     write(iu,'(   a)') 'END GRIDDATA'
     close(iu)
@@ -2808,6 +2968,8 @@ module mf6_module
     character(len=mxslen) :: p, pb, f
     integer(i4b) :: iu
 ! ------------------------------------------------------------------------------
+    if (pckact(isto) == 0) return
+    !
     call clear_wrk()
     !
     p = trim(this%rootdir)//trim(this%modelname)
@@ -2862,9 +3024,10 @@ module mf6_module
     logical, intent(in) :: lbinpos
     ! -- local
     character(len=mxslen) :: p, pb, f
-    integer(i4b) :: iu, maxbound
+    integer(i4b) :: iu, maxbound, i
     integer(i4b), dimension(gnlay) :: nbound_lay
 ! ------------------------------------------------------------------------------
+    if ((pckact(ichd1) == 0).and.(pckact(ichd2) == 0)) return
     !
     call clear_wrk()
     !
@@ -2877,7 +3040,7 @@ module mf6_module
     !
     ! external boundaries (sea)
     call this%get_array(i_strt, 1, 0, 1, i1wrk, r8wrk, ib_in=1) !i_strt_l1
-    call this%get_array(i_strt, 2, 0, 2, i1wrk, r8wrk, ib_in=1) !i_strt_l2
+    if (gnlay == 2) call this%get_array(i_strt, 2, 0, 2, i1wrk, r8wrk, ib_in=1) !i_strt_l2
     nbound_lay = this%count_i1a(i1wrk); maxbound = sum(nbound_lay)
     !
     allocate(this%chd_sea)
@@ -2894,10 +3057,12 @@ module mf6_module
       write(iu,'(   a)') 'END DIMENSIONS'
       write(iu,'(a)')
       write(iu,'(   a)') 'BEGIN PERIOD 1'
-      ! set the external boundary to zero (sea-level) ***WORKAROUND***
-      !do i = 1, size(r8wrk)
-      !  r8wrk(i) = DZERO
-      !end do
+      if (raw%geti('force_sea',idef=0) == 1) then
+        call logmsg('***** Forcing zero head sea-level! *****')
+        do i = 1, size(r8wrk)
+          r8wrk(i) = DZERO
+        end do
+      end if
       f = trim(pb)//'.chd'
       call this%write_list(iu, 2, f, i1wrk, r8wrk, lbin, lbinpos)
       write(iu,'(   a)') 'END PERIOD'
@@ -2911,7 +3076,7 @@ module mf6_module
     if (.not.ltransient) then !SS only
       ! internal boundaries (partitions)
       call this%get_array(i_strt, 1, 0, 1, i1wrk, r8wrk, ib_in=3) !i_strt_l1
-      call this%get_array(i_strt, 2, 0, 2, i1wrk, r8wrk, ib_in=3) !i_strt_l2
+      if (gnlay == 2) call this%get_array(i_strt, 2, 0, 2, i1wrk, r8wrk, ib_in=3) !i_strt_l2
       nbound_lay = this%count_i1a(i1wrk); maxbound = sum(nbound_lay)
       if (maxbound > 0) then
         f = trim(p)//trim(pr(ichd2,irun0ss))//'.chd'
@@ -2956,6 +3121,8 @@ module mf6_module
     integer(i4b), dimension(gnlay) :: nbound_lay
     logical, dimension(:), allocatable :: lact
 ! ------------------------------------------------------------------------------
+    if (pckact(idrn) == 0) return
+    !
     call clear_wrk()
     !
     p = trim(this%rootdir)//trim(this%modelname)
@@ -2971,9 +3138,16 @@ module mf6_module
     maxbound = 0
     do iper = 1, nper
       call this%get_array(i_drn_elev, 1, iper, 1, i1wrk, r8wrk, ib_in=2) !i_drn_elev_l1
-      call this%get_array(i_drn_elev, 2, iper, 2, i1wrk, r8wrk, ib_in=2) !i_drn_elev_l1
+      if (gnlay == 2) call this%get_array(i_drn_elev, 2, iper, 2, i1wrk, r8wrk, ib_in=2) !i_drn_elev_l1
       call this%get_array(i_drn_cond, 1, iper, 1, i1wrk, r8wrk2, ib_in=2)
-      call this%get_array(i_drn_cond, 2, iper, 2, i1wrk, r8wrk2, ib_in=2)
+      if (gnlay == 2) call this%get_array(i_drn_cond, 2, iper, 2, i1wrk, r8wrk2, ib_in=2)
+      !
+      ! check
+      do i = 1, size(i1wrk)
+        if (r8wrk(i) < -1000D0) then
+          call errmsg("Invalid range for drain.")
+        end if
+      end do
       !
       ! filter for zero conductance
       n = 0
@@ -2981,6 +3155,9 @@ module mf6_module
         if (r8wrk2(i) == DZERO) then
           if (i1wrk(i) == 1) n = n + 1
           i1wrk(i) = 0
+        end if
+        if (r8wrk2(i) < DZERO) then
+          call errmsg("Negative drain conductance.")
         end if
       end do
       if (n > 0) then
@@ -3043,6 +3220,116 @@ module mf6_module
     return
   end subroutine mf6_mod_write_drn
   
+  subroutine mf6_mod_write_ghb(this, lbin, lbinpos)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+!
+    ! -- dummy
+    class(tMf6_mod) :: this
+    logical, intent(in) :: lbin
+    logical, intent(in) :: lbinpos
+    ! -- local
+    character(len=mxslen), dimension(:), allocatable :: cwk
+    character(len=mxslen) :: p, pb, f
+    integer(i4b) :: i, n, iu, nbound, maxbound, iper, jper, nper, nperspu
+    integer(i4b), dimension(gnlay) :: nbound_lay
+    logical, dimension(:), allocatable :: lact
+! ------------------------------------------------------------------------------
+    if (pckact(ighb) == 0) return
+    !
+    call clear_wrk()
+    !
+    p = trim(this%rootdir)//trim(this%modelname)
+    if (lbin) then
+      pb =  trim(this%bindir)//trim(this%modelname)
+    else
+      pb = p
+    end if
+    !
+    ! write all binary files and store the file strings
+    nper = raw%nper
+    allocate(cwk(nper), lact(nper))
+    maxbound = 0
+    do iper = 1, nper
+      call this%get_array(i_ghb_bhead, 1, iper, 1, i1wrk, r8wrk, ib_in=2) !i_ghb_bhead_l1
+      if (gnlay == 2) call this%get_array(i_ghb_bhead, 2, iper, 2, i1wrk, r8wrk, ib_in=2) !i_ghb_bhead_l1
+      call this%get_array(i_ghb_cond, 1, iper, 1, i1wrk, r8wrk2, ib_in=2)
+      if (gnlay == 2) call this%get_array(i_ghb_cond, 2, iper, 2, i1wrk, r8wrk2, ib_in=2)
+      !
+      ! filter for zero conductance
+      n = 0
+      do i = 1, size(i1wrk)
+        if (r8wrk2(i) == DZERO) then
+          if (i1wrk(i) == 1) n = n + 1
+          i1wrk(i) = 0
+        end if
+        if (r8wrk2(i) < DZERO) then
+          call errmsg("Negative general-head boundary conductance.")
+        end if
+      end do
+      if (n > 0) then
+        call logmsg('Removed '//ta((/n/))//' general-head boundaries with zero conductance.')
+      end if
+      !
+      nbound_lay = this%count_i1a(i1wrk); nbound = sum(nbound_lay)
+      maxbound = max(nbound,maxbound)
+      if (nbound == 0) then
+        lact(iper) = .false.
+        call logmsg('No general-head boundaries found.')
+      else
+        lact(iper) = .true.
+        f = trim(pb)//'.ghb.sp'//ta((/iper/),3)
+        call this%write_list(iu, 4, f, i1wrk, r8wrk, r8wrk2, lbin, lbinpos, cwk(iper))
+      end if
+      call clear_wrk()
+    end do
+    !
+    f = trim(p)//'.ghb'
+    call open_file(f, iu, 'w')
+    write(iu,'(   a)') 'BEGIN OPTIONS'
+    write(iu,'(   a)') 'END OPTIONS'
+    write(iu,'(a)')
+    write(iu,'(   a)') 'BEGIN DIMENSIONS'
+    write(iu,'(2x,a)') 'MAXBOUND '//ta((/maxbound/))
+    write(iu,'(   a)') 'END DIMENSIONS'
+    write(iu,'(a)')
+    do iper = 1, nper
+      write(iu,'(   a)') 'BEGIN PERIOD '//ta((/iper/))
+      if (lact(iper)) write(iu,'(a)') trim(cwk(iper))
+      write(iu,'(   a)') 'END PERIOD'
+    end do
+    close(iu)
+    !
+    if (ltransient) then
+      f = trim(p)//trim(pr(idrn,irun0tr))//'.ghb'
+      call open_file(f, iu, 'w')
+      write(iu,'(   a)') 'BEGIN OPTIONS'
+      write(iu,'(   a)') 'END OPTIONS'
+      write(iu,'(a)')
+      write(iu,'(   a)') 'BEGIN DIMENSIONS'
+      write(iu,'(2x,a)') 'MAXBOUND '//ta((/maxbound/))
+      write(iu,'(   a)') 'END DIMENSIONS'
+      write(iu,'(a)')
+      nperspu = raw%geti('nyear_spinup')*12
+      do iper = 1, nper
+        write(iu,'(   a)') 'BEGIN PERIOD '//ta((/iper/))
+        jper = mod(iper, nperspu)
+        if (jper == 0) jper = nperspu
+        if (lact(jper)) write(iu,'(a)') trim(cwk(jper))
+        write(iu,'(   a)') 'END PERIOD'
+      end do
+      close(iu)
+    end if
+    !
+    deallocate(cwk, lact)
+    call clear_wrk()
+    !
+    return
+  end subroutine mf6_mod_write_ghb
+  
   subroutine mf6_mod_write_riv(this, lbin, lbinpos)
 ! ******************************************************************************
 ! ******************************************************************************
@@ -3062,6 +3349,8 @@ module mf6_module
     real(r8b) :: stage, rbot, cond
     logical, dimension(:), allocatable :: lact
 ! ------------------------------------------------------------------------------
+    if (pckact(iriv) == 0) return
+    !
     call clear_wrk()
     !
     p = trim(this%rootdir)//trim(this%modelname)
@@ -3177,10 +3466,12 @@ module mf6_module
     ! -- local
     character(len=mxslen), dimension(:), allocatable :: cwk
     character(len=mxslen) :: p, pb, f
-    integer(i4b) :: iu, nbound, maxbound, iper, jper, nper, nperspu
+    integer(i4b) :: iu, i, n, nbound, maxbound, iper, jper, nper, nperspu
     integer(i4b), dimension(gnlay) :: nbound_lay
     logical, dimension(:), allocatable :: lact
 ! ------------------------------------------------------------------------------
+    if (pckact(irch) == 0) return
+    !
     call clear_wrk()
     !
     p = trim(this%rootdir)//trim(this%modelname)
@@ -3197,12 +3488,28 @@ module mf6_module
     !
     do iper = 1, nper
       call this%get_array(i_recharge, 0, iper, 1, i1wrk, r8wrk, ib_in=2, toponly_in=.true.)
-      call this%get_array(i_recharge, 0, iper, 2, i1wrk, r8wrk, ib_in=2, toponly_in=.true.)
+      if (gnlay == 2) call this%get_array(i_recharge, 0, iper, 2, i1wrk, r8wrk, ib_in=2, toponly_in=.true.)
+      !
+      ! check and filter for zero recharge
+      n = 0
+      do i = 1, size(i1wrk)
+        if (r8wrk(i) == DZERO) then
+          if (i1wrk(i) == 1) n = n + 1
+          i1wrk(i) = 0
+        end if
+        if (r8wrk(i) < DZERO) then
+          call logmsg('Negative recharge found.')
+        end if
+      end do
+      if (n > 0) then
+        call logmsg('Removed '//ta((/n/))//' cells with zero recharge.')
+      end if
+      !
       nbound_lay = this%count_i1a(i1wrk); nbound = sum(nbound_lay)
       maxbound = max(nbound,maxbound)
       if (nbound == 0) then
         lact(iper) = .false.
-        call errmsg('No recharge found')
+        call errmsg('No recharge found.')
       else
         lact(iper) = .true.
         f = trim(pb)//'.rch.sp'//ta((/iper/),3)
@@ -3274,6 +3581,8 @@ module mf6_module
     integer(i4b), dimension(gnlay) :: nbound_lay
     logical, dimension(:), allocatable :: lact
 ! ------------------------------------------------------------------------------
+    if (pckact(iwel) == 0) return
+    !
     call clear_wrk()
     !
     p = trim(this%rootdir)//trim(this%modelname)
@@ -3294,6 +3603,7 @@ module mf6_module
     do iper = 1, nper
       call this%get_array(i_wel, 1, iper, 1, i1wrk, r8wrk, ib_in=2)
       call this%get_array(i_wel, 2, iper, 2, i1wrk, r8wrk, ib_in=2)
+      !
       ! filter for zero flux
       n = 0
       do i = 1, size(i1wrk)
@@ -3399,6 +3709,9 @@ module mf6_module
       f = trim(d)//trim(fexg); call swap_slash(f)
       call open_file(f, iu, 'w')
       write(iu,'(   a)') 'BEGIN OPTIONS'
+      if (raw%geti('exchange_newton',idef=0) == 1) then
+        write(iu,'(2x,a)') 'NEWTON'
+      end if
       write(iu,'(   a)') 'END OPTIONS'
       write(iu,'(a)')
       write(iu,'(   a)') 'BEGIN DIMENSIONS'
@@ -3487,7 +3800,7 @@ module mf6_module
       call this%clean()
     end if
     !
-    map_dir = raw%getc('input_map_dir')
+    map_dir = raw%getc('input_dist_dir')
     !
     lntile = size(litile)
     allocate(this%gntile); this%gntile = ntile
@@ -3587,4 +3900,163 @@ module mf6_module
     return
   end function mf6_distmap_getval_r4
   !
+  subroutine mf6_distidf_init(this, idf_file_in, litile, ilay, iper, lreuse_in)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+!
+    ! -- dummy
+    class(tDistIDF) :: this
+    character(len=*), intent(in) :: idf_file_in
+    integer(i2b), dimension(:), optional, intent(in) :: litile
+    integer(i4b), intent(in), optional :: ilay
+    integer(i4b), intent(in), optional :: iper
+    logical, intent(in), optional :: lreuse_in
+    ! -- local
+    logical :: lok, lreuse
+    character(len=1) :: slash
+    character(len=mxslen) :: idf_dir, idf_file, f
+    integer(i4b) :: i, j, k, jlay, jper, lntile
+! ------------------------------------------------------------------------------
+    !
+    if ((.not.associated(ntile)).or.(.not.associated(tilebb))) then
+      call errmsg('mf6_distidf_init: no tile information found.')
+    end if
+    !
+    if (present(ilay)) then
+      jlay = ilay
+    else
+      jlay = 0
+    end if
+    if (present(iper)) then
+      jper = iper
+    else
+      jper = 0
+    end if
+    !
+    idf_file = idf_file_in
+    if (jper > 0) then
+      i = index(idf_file,'??????')
+    else
+      i = 0
+    end if
+    !
+    lreuse = .false.
+    if ((i > 0).and.(jper > 0)) then
+      idf_file(i:i+5) = trim(raw%perdate(jper))
+    else
+      if (present(lreuse_in)) then
+        lreuse = lreuse_in
+      end if
+      if (lreuse.and.this%linit) then
+        return
+      end if
+    end if
+    !
+    if (this%linit) then
+      call this%clean()
+    end if
+    !
+    idf_dir = raw%getc('input_dist_dir')
+    !
+    lntile = size(litile)
+    allocate(this%gntile); this%gntile = ntile
+    allocate(this%ntile); this%ntile = lntile
+    allocate(this%g2ltile(ntile))
+    do i = 1, ntile
+      this%g2ltile(i) = 0
+    end do
+    do i = 1, lntile
+      j = litile(i)
+      this%g2ltile(j) = i
+    end do
+    this%tilebb => tilebb
+    allocate(this%idfs(lntile))
+    !
+    do k = 1, lntile
+      i = litile(k)
+      f = trim(idf_dir)//trim(idf_file)
+      call replacetoken(f, '?', i)
+      call chkexist(f)
+      !
+      if (k == 1) then
+        slash = get_slash()
+        j = index(f,slash,back=.true.)
+        call logmsg('Initializing (tile '//ta((/i/))//'): '// trim(f(j+1:)) //'...')
+      end if
+      !
+      if (.not.idfread(this%idfs(k), f, 0)) then
+        call errmsg('Could not initialize '//trim(f))
+      end if
+    end do
+    this%linit = .true.
+    !
+    return
+  end subroutine mf6_distidf_init
+
+  subroutine mf6_distidf_clean(this)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+!
+    ! -- dummy
+    class(tDistIDF) :: this
+    ! -- local
+    integer(i4b) :: i
+! ------------------------------------------------------------------------------
+    call idfdeallocate(this%idfs, this%ntile)
+    deallocate(this%idfs); this%idfs => null()
+    deallocate(this%ntile); this%ntile => null()
+    deallocate(this%gntile); this%gntile => null()
+    deallocate(this%g2ltile); this%g2ltile => null()
+    this%tilebb => null()
+    this%linit = .false.
+    !
+    return
+  end subroutine mf6_distidf_clean
+  
+  function mf6_distidf_getval_r8(this, gic, gir, itile, nodata_in) result(r8val)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+!
+    ! -- dummy
+    class(tDistIDF) :: this
+    integer(i4b), intent(in) :: gic
+    integer(i4b), intent(in) :: gir
+    integer(i4b), intent(in) :: itile
+    real(r8b), optional, intent(in) :: nodata_in
+    real(r8b) :: r8val
+    ! -- local
+    integer(i4b) :: ic, ir, jtile
+    real(r8b) :: nodata
+! ------------------------------------------------------------------------------
+    !
+    if (present(nodata_in)) then
+      nodata = nodata_in
+    else
+      nodata = -12345.d0
+    end if
+    !
+    ic = gic - this%tilebb(itile)%ic0 + 1
+    ir = gir - this%tilebb(itile)%ir0 + 1
+    !
+    jtile = this%g2ltile(itile)
+    if (jtile == 0) then
+      call errmsg("Program error: mf6_distmap_getval_r4")
+    end if
+    !
+    r8val = idfgetval(this%idfs(jtile),ir,ic)
+    if (r8val == this%idfs(jtile)%nodata) then
+      r8val = nodata
+    end if
+    !
+    return
+  end function mf6_distidf_getval_r8
 end module
