@@ -1,16 +1,16 @@
 program mergemap2idf
   ! modules
   use pcrModule
-  use utilsmod, only: writeidf
+  use utilsmod, only: writeasc, writeidf, DZERO
   
   implicit none
   
   type(tMap), pointer :: map
  
-  logical :: ok, lex
+  logical :: ok, lex, lwritetile
   character(len=1024) :: s, f, fo, fp
-  integer(i4b) :: iact, ic, ir, nc, nr, np, lun, ios, ip, ir0, ir1, ic0, ic1, dir0, dir1, dic0, dic1
-  integer(i4b), dimension(:,:), allocatable :: iwrk
+  integer(i4b) :: iact, ic, ir, nc, nr, np, lun, ios, ip, ir0, ir1, ic0, ic1, dir0, dir1, dic0, dic1, na
+  integer(i4b), dimension(:,:), allocatable :: iwrk, itile
   real(r4b), dimension(:,:), allocatable :: gx, lx
   integer(i4b), dimension(:), allocatable :: icmin, icmax, irmin, irmax
   integer(i4b), dimension(:), allocatable :: dicmin, dicmax, dirmin, dirmax
@@ -37,7 +37,20 @@ program mergemap2idf
   call getarg(5,fp)
   !
   allocate(gx(nc,nr), iwrk(nc,nr))
-  
+  !
+  na = nargs()
+  if (na == 7) then
+    lwritetile = .true.
+    allocate(itile(nc,nr))
+    do ir = 1, nr
+      do ic = 1, nc
+        itile(nc,nr) = 0
+      end do
+    end do
+  else
+    lwritetile = .false.
+  end if
+  !
   allocate(map)
   do iact = 1, 2
     do ip = 1, np
@@ -86,6 +99,9 @@ program mergemap2idf
               ! set
               gx(ic,ir) = lval
               iwrk(ic,ir) = 1
+              if (lwritetile) then
+                itile(ic,ir) = ip
+              end if
             end if
           end do
         end do
@@ -107,6 +123,9 @@ program mergemap2idf
                 if (gval == gmv) then
                   gx(ic,ir) = lval
                   iwrk(ic, ir) = -1
+                  if (lwritetile) then
+                    itile(ic,ir) = DZERO
+                  end if
                 end if
               end if
             end if
@@ -119,7 +138,10 @@ program mergemap2idf
   end do !iact
   !
   call writeidf(fo, gx, nc, nr, dble(gxll), dble(gyll), dble(gcs), dble(gmv))
-  
+  if (lwritetile) then
+    call writeidf("tile.idf", itile, nc, nr, dble(gxll), dble(gyll), dble(gcs), DZERO)
+    call writeasc("tile.asc", itile, nc, nr, dble(gxll), dble(gyll), dble(gcs), DZERO)
+  end if
 end program
   
 subroutine get_map_fname(f, fp, ip, np)
@@ -138,14 +160,14 @@ subroutine get_map_fname(f, fp, ip, np)
   s2 = fp(i+3:j-1)
   s3 = fp(j+3:n)
   !
-  if (np < 10) then
-    write(f,'(a,i1,a,i1,a)') trim(s1), ip, trim(s2), np, trim(s3)
-  end if
-  if ((np >= 10) .and. (np < 100)) then
-    write(f,'(a,i2.2,a,i2.2,a)') trim(s1), ip, trim(s2), np, trim(s3)
-  end if
-  if ((np >= 100) .and. (np < 1000)) then
+!  if (np < 10) then
+!    write(f,'(a,i1,a,i1,a)') trim(s1), ip, trim(s2), np, trim(s3)
+!  end if
+!  if ((np >= 10) .and. (np < 100)) then
+!    write(f,'(a,i2.2,a,i2.2,a)') trim(s1), ip, trim(s2), np, trim(s3)
+!  end if
+!  if ((np >= 100) .and. (np < 1000)) then
     write(f,'(a,i3.3,a,i3.3,a)') trim(s1), ip, trim(s2), np, trim(s3)
-  end if
+!  end if
 
 end subroutine get_map_fname
