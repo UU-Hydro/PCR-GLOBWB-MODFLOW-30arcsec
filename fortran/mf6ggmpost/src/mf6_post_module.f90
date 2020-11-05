@@ -599,8 +599,8 @@ module mf6_post_module
     type(tBb), pointer :: sbb => null()
     type(tBb), pointer :: mbb => null()
     type(tPostMod), pointer :: m => null()
-    character(len=mxslen) :: f
-    integer(i4b) :: i, il, ic, ir, jc, jr, gic, gir
+    character(len=mxslen) :: f, fbb
+    integer(i4b) :: i, il, ic, ir, jc, jr, gic, gir, iu
     integer(i4b), dimension(:,:), allocatable :: si4wk
     real(r8b) :: t, xmin, ymin
     real(r8b), dimension(:), allocatable :: totimmod
@@ -670,6 +670,12 @@ module mf6_post_module
           f = mf6_post_get_out_pref(this%solname, t, il, this%gen)
           xmin = gxmin + (sbb%ic0-1)*gcs
           ymin = gymin + (gnrow-sbb%ir1)*gcs
+          !
+          fbb = trim(f)//'.bb.asc'
+          call logmsg('Writing '//trim(fbb)//'...')
+          call open_file(fbb, iu, 'w')
+          write(iu,'(a)') ta((/sbb%ic0, sbb%ic1, sbb%ir0, sbb%ir1/))
+          close(iu)
           !
           select case(this%gen%i_out)
             case(i_out_asc)
