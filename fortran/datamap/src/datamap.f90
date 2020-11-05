@@ -109,15 +109,23 @@ program datamap
   ! count the arguments
   
   na = nargs() - 1
+  call getarg(1,s); read(s,*) sea_opt
+  !
+  if (sea_opt == 1) then
+    call logmsg("***** Using exclusive sea option *****")
+  else
+    call logmsg("***** Using inclusive sea option *****")
+  end if
+  !
   !1             2                     3                       4                                                5                                         6
   !.\map_ireland ..\hydrosheds\cat.idf ..\hydrosheds\d_top.idf ..\hydrosheds\make_clonemap\128\tile\rcb_128.txt ..\hydrosheds\make_clonemap\128\tile\rcb_ ireland.gen
   !1             2                     3                       4                                                5                                         6     7     8     9
   !.\map_ireland ..\hydrosheds\cat.idf ..\hydrosheds\d_top.idf ..\hydrosheds\make_clonemap\128\tile\rcb_128.txt ..\hydrosheds\make_clonemap\128\tile\rcb_ 12230 13880 26780 27660
   linitpol = .false.
   iread = 1
-  if (na > 5) then
+  if (na > 6) then
     iread = 0
-    call getarg(6,f)
+    call getarg(7,f)
     read(f,*,iostat=ios) idum
     if (ios /= 0) then
       call logmsg('Reading '//trim(f)//'...')
@@ -125,18 +133,18 @@ program datamap
       linitpol = .true.
     end if
     if (.not.linitpol) then
-      call getarg(6,s); read(s,*) gir0
-      call getarg(7,s); read(s,*) gir1
-      call getarg(8,s); read(s,*) gic0
-      call getarg(9,s); read(s,*) gic1
+      call getarg(7,s); read(s,*) gir0
+      call getarg(8,s); read(s,*) gir1
+      call getarg(9,s); read(s,*) gic0
+      call getarg(10,s); read(s,*) gic1
       write(*,'(a,4(i5.5,a))') &
         '*** Processing for global bounding box (gir0,gir1,gic0,gic1) = (', &
       gir0,',',gir1,',',gic0,',',gic1,')...'
     end if
   end if
   !
-  call getarg(1,out_pref)
-  call getarg(2,f)
+  call getarg(2,out_pref)
+  call getarg(3,f)
   if (iread == 1) write(*,'(a)') 'Reading entire '//trim(f)//'...'
   if (.not.idfread(idf, f, iread)) then
     call errmsg('Could not read '//trim(f))
@@ -190,7 +198,7 @@ program datamap
   end do
   !
   ! remove catchment outside of polygon(s)
-  if (linitpol .and. (na == 6)) then
+  if (linitpol .and. (na == 7)) then
     do ir = 1, nr
       do ic = 1, nc
         xid(ic,ir) = abs(xid(ic,ir))
@@ -249,15 +257,15 @@ program datamap
       gcs, 0.D0); stop
   end if
   !
-  if (linitpol .and. (na > 6)) then
-    call getarg(7,f)
+  if (linitpol .and. (na > 7)) then
+    call getarg(8,f)
     if (.not.idfread(idf2, f, 0)) then
       call errmsg('Could not read '//trim(f))
     end if
-    call getarg(8,f); read(f,*) n
+    call getarg(9,f); read(f,*) n
     allocate(i4wk1d1(n))
     do i = 1, n
-      call getarg(8+i,f); read(f,*) i4wk1d1(i)
+      call getarg(9+i,f); read(f,*) i4wk1d1(i)
     end do
     call readidf_block(idf2, gir0, gir1, gic0, gic1, xid2)
     do ir = 1, nr
@@ -270,38 +278,68 @@ program datamap
             end if
           end do
           if (.not.lfound) then
-            xid(ic,ir) = -xid(ic,ir)
+            xid(ic,ir) = 0
           end if
         end if  
       end do
     end do
     call idfdeallocatex(idf2)
     deallocate(i4wk1d1)
-    n = maxval(abs(xid))
-    allocate(i4wk1d1(n))
-    do i = 1, n
-      i4wk1d1(i) = 0
-    end do
-    do ir = 1, nr
-      do ic = 1, nc
-        id = xid(ic,ir)
-        if (id > 0) i4wk1d1(abs(id)) = 1
-      end do
-    end do
-    do ir = 1, nr
-      do ic = 1, nc
-        id = abs(xid(ic,ir))
-        if (id > 0) then
-          if (i4wk1d1(id) == 1) then
-            xid(ic,ir) = abs(xid(ic,ir))
-          else
-            xid(ic,ir) = 0
-          end if
-        end if
-      end do
-    end do
-    deallocate(i4wk1d1)
   end if
+  !
+  !if (linitpol .and. (na > 7)) then
+  !  call getarg(8,f)
+  !  if (.not.idfread(idf2, f, 0)) then
+  !    call errmsg('Could not read '//trim(f))
+  !  end if
+  !  call getarg(9,f); read(f,*) n
+  !  allocate(i4wk1d1(n))
+  !  do i = 1, n
+  !    call getarg(9+i,f); read(f,*) i4wk1d1(i)
+  !  end do
+  !  call readidf_block(idf2, gir0, gir1, gic0, gic1, xid2)
+  !  do ir = 1, nr
+  !    do ic = 1, nc
+  !      if (xid(ic,ir) /= 0) then
+  !        lfound = .false.
+  !        do i = 1, n
+  !          if (xid2(ic,ir) == i4wk1d1(i)) then
+  !            lfound = .true.
+  !          end if
+  !        end do
+  !        if (.not.lfound) then
+  !          xid(ic,ir) = -xid(ic,ir)
+  !        end if
+  !      end if  
+  !    end do
+  !  end do
+  !  call idfdeallocatex(idf2)
+  !  deallocate(i4wk1d1)
+  !  n = maxval(abs(xid))
+  !  allocate(i4wk1d1(n))
+  !  do i = 1, n
+  !    i4wk1d1(i) = 0
+  !  end do
+  !  do ir = 1, nr
+  !    do ic = 1, nc
+  !      id = xid(ic,ir)
+  !      if (id > 0) i4wk1d1(abs(id)) = 1
+  !    end do
+  !  end do
+  !  do ir = 1, nr
+  !    do ic = 1, nc
+  !      id = abs(xid(ic,ir))
+  !      if (id > 0) then
+  !        if (i4wk1d1(id) == 1) then
+  !          xid(ic,ir) = abs(xid(ic,ir))
+  !        else
+  !          xid(ic,ir) = 0
+  !        end if
+  !      end if
+  !    end do
+  !  end do
+  !  deallocate(i4wk1d1)
+  !end if
   !
   if (.false.) then
     call writeidf('tmp.idf', xid, nc, nr, &
@@ -312,7 +350,7 @@ program datamap
   call idfdeallocatex(idf)
   !
   allocate(nlay(nc,nr))
-  call getarg(3,f)
+  call getarg(4,f)
   if (iread == 1) write(*,'(a)') 'Reading entire '//trim(f)//'...'
   if (.not.idfread(idf, f, iread)) then
     call errmsg('Could not read '//trim(f))
@@ -347,15 +385,9 @@ program datamap
   end if
   call idfdeallocatex(idf)
   !
-  ! determine the sea option
-  if (minval(xid) < 0) then
-    sea_opt = 2
-    call logmsg("***** Using inclusive sea option *****")
-  end if
-  !
   ! label the sea cells
   if (sea_opt == 1) call addboundary(xid, nc, nr)
-  
+  !
   do ir = 1, nr
     do ic = 1, nc
       if (xid(ic,ir) < 0) then !labeled as CHD
@@ -367,6 +399,7 @@ program datamap
       end if
     end do
   end do
+  !
   if (.false.) then
     do ir = 1, nr
       do ic = 1, nc
@@ -801,10 +834,10 @@ program datamap
       itile(ic,ir) = 0
     end do
   end do  
-  call getarg(4, f); call chkexist(f)
+  call getarg(5, f); call chkexist(f)
   call open_file(f, iu, 'r')
   read(iu,*) ntile
-  call getarg(5, tile_pref)
+  call getarg(6, tile_pref)
   !
   do i = 1, ntile
     read(iu,*) ic0, ic1, ir0, ir1
@@ -838,20 +871,30 @@ program datamap
     do ir = 1, idf%nrow
       do ic = 1, idf%ncol
         jc = ic0 + ic - 1; jr = ir0 + ir - 1 ! global
-        !if ((jc == 174).and.(jr == 4483)) then
+        kc = jc - gic0 + 1; kr = jr - gir0 + 1
+        !if ((jc == 14995).and.(jr == 8943)) then
         !  write(*,*) '@@@@'
         !end if
-        kc = jc - gic0 + 1; kr = jr - gir0 + 1
         if ((kc >= 1).and.(kc <= nc).and.(kr >= 1).and.(kr <= nr)) then
           r4val = idf%x(ic,ir)
+          !if ((r4val /= idf%nodata) .and.(r4val > 0.)) then
+          !  itile(kc,kr) = i
+          !  if (landmask(kc,kr) == 2) then
+          !    if ((r4val /= idf%nodata) .and.(r4val < 0.).and.(i4wk2d(kc,kr) <= 0.)) then
+          !      i4wk2d(kc,kr) = i
+          !    else
+          !      i4wk2d(kc,kr) = -i
+          !    end if
+          !  end if
+          !end if
           if ((r4val /= idf%nodata) .and.(r4val > 0.)) then
             itile(kc,kr) = i
-            if (landmask(kc,kr) == 2) then
-              if ((r4val /= idf%nodata) .and.(r4val < 0.).and.(i4wk2d(kc,kr) <= 0.)) then
-                i4wk2d(kc,kr) = i
-              else
-                i4wk2d(kc,kr) = -i
-              end if
+          end if
+          if ((landmask(kc,kr) == 2).and.(sea_opt == 1)) then
+            if ((r4val /= idf%nodata) .and.(r4val < 0.).and.(i4wk2d(kc,kr) <= 0.)) then
+              i4wk2d(kc,kr) = i
+            else
+              i4wk2d(kc,kr) = -i
             end if
           end if
         end if
