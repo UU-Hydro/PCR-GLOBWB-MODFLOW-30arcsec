@@ -40,7 +40,9 @@ module mf6_module
   integer(i4b), parameter :: i_prim_sto          = 23
   integer(i4b), parameter :: i_ghb_bhead         = 24
   integer(i4b), parameter :: i_ghb_cond          = 25
-  integer(i4b), parameter :: nkey                = i_ghb_cond
+  integer(i4b), parameter :: i_ghb2_bhead        = 26
+  integer(i4b), parameter :: i_ghb2_cond         = 27
+  integer(i4b), parameter :: nkey                = i_ghb2_cond
   !  
   character(len=20), dimension(nkey) :: keys
             !12345678901234567890    12345678901234567890
@@ -57,7 +59,8 @@ module mf6_module
              'inner_maximum      ', 'inner_hclose        ', &
              'inner_rclose       ', 'relaxation_factor   ', &
              'prim_sto           ',                         &
-             'ghb_bhead          ', 'ghb_cond            '/
+             'ghb_bhead          ', 'ghb_cond            ', &
+             'ghb2_bhead         ', 'ghb2_cond           '/
   
   ! parameters
   integer(i4b),          parameter :: mxslen = 1024
@@ -81,34 +84,35 @@ module mf6_module
   integer(i4b), parameter :: irch  = 12
   integer(i4b), parameter :: iwel  = 13
   integer(i4b), parameter :: ighb  = 14
-  integer(i4b), parameter :: npck = ighb
+  integer(i4b), parameter :: ighb2 = 15
+  integer(i4b), parameter :: npck = ighb2
   character(len=4), dimension(npck) :: pck
   data pck/'nam ', 'tdis', 'disu', 'ic  ', 'oc  ', 'npf ', 'sto ', 'chd ', 'chd ',&
-           'drn ', 'riv ', 'rch ', 'wel ', 'ghb '/
+           'drn ', 'riv ', 'rch ', 'wel ', 'ghb ', 'ghb2'/
   integer(i4b), dimension(npck) :: pckact
   
   integer(i4b), parameter :: maxrun = 6
   character(len=10), dimension(npck,maxrun) :: pr
   integer(i4b), parameter :: irun0ss = 1, irun1ss = 3, irun0tr = 4, irun1tr = 6
   !
-    !------------------------------------------------------------------------------------------------------
-    ! ss/tr |run| nam      | tdis | disu | ic  | oc | npf| sto | chd1 | chd2 | drn | riv | rch | wel | ghb
-    !------------------------------------------------------------------------------------------------------
-    ! ss    | 1 | chd_intf | #    | #    | #   | sm | #  | #   | #    | intf | #   | #   | #   | #   | #   |
-    ! ss    | 2 | ic_sm    | #    | #    | sm  | #  | #  | #   | #    | -    | #   | #   | #   | #   | #   |
-    ! ss    | 3 | ic_sh0   | #    | #    | #   | #  | #  | #   | #    | -    | #   | #   | #   | #   | #   |
-    ! tr    | 1 | spu      | spu  | #    | ss  | spu| #  | #   | #    | -    | spu | spu | spu | spu | spu |
-    ! tr    | 2 | ic_spu   | #    | #    | spu | #  | #  | #   | #    | -    | #   | #   | #   | #   | #   |
-    ! tr    | 3 | ic_ss    | #    | #    | ss  | #  | #  | #   | #    | -    | #   | #   | #   | #   | #   |
+    !------------------------------------------------------------------------------------------------------------
+    ! ss/tr |run| nam      | tdis | disu | ic  | oc | npf| sto | chd1 | chd2 | drn | riv | rch | wel | ghb | ghb2|
+    !------------------------------------------------------------------------------------------------------------
+    ! ss    | 1 | chd_intf | #    | #    | #   | sm | #  | #   | #    | intf | #   | #   | #   | #   | #   | #   |
+    ! ss    | 2 | ic_sm    | #    | #    | sm  | #  | #  | #   | #    | -    | #   | #   | #   | #   | #   | #   |
+    ! ss    | 3 | ic_sh0   | #    | #    | #   | #  | #  | #   | #    | -    | #   | #   | #   | #   | #   | #   |
+    ! tr    | 1 | spu      | spu  | #    | ss  | spu| #  | #   | #    | -    | spu | spu | spu | spu | spu | spu |
+    ! tr    | 2 | ic_spu   | #    | #    | spu | #  | #  | #   | #    | -    | #   | #   | #   | #   | #   | #   |
+    ! tr    | 3 | ic_ss    | #    | #    | ss  | #  | #  | #   | #    | -    | #   | #   | #   | #   | #   | #   |
   !
-  !       inam         itdis        idisu        iic          ioc         inpf          isto         ichd1        ichd2        idrn         iriv         irch         iwel         ighb      
-  !       1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890
-  data pr/'.chd_intf ','          ','          ','          ','.sm       ','          ','          ','          ','.intf     ','          ','          ','          ','          ','          ', &
-          '.ic_sm    ','          ','          ','.sm       ','          ','          ','          ','          ','-         ','          ','          ','          ','          ','          ', &
-          '.ic_sh0   ','          ','          ','          ','          ','          ','          ','          ','-         ','          ','          ','          ','          ','          ', &
-          '.spu      ','.spu      ','          ','.ss       ','.spu      ','          ','          ','          ','-         ','.spu      ','.spu      ','.spu      ','.spu      ','.spu      ', &
-          '.ic_spu   ','          ','          ','.spu      ','          ','          ','          ','          ','-         ','          ','          ','          ','          ','          ', &
-          '.ic_ss    ','          ','          ','.ss       ','          ','          ','          ','          ','-         ','          ','          ','          ','          ','          '/
+  !       inam         itdis        idisu        iic          ioc         inpf          isto         ichd1        ichd2        idrn         iriv         irch         iwel         ighb         ighb2        
+  !       1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890
+  data pr/'.chd_intf ','          ','          ','          ','.sm       ','          ','          ','          ','.intf     ','          ','          ','          ','          ','          ','          ', &
+          '.ic_sm    ','          ','          ','.sm       ','          ','          ','          ','          ','-         ','          ','          ','          ','          ','          ','          ', &
+          '.ic_sh0   ','          ','          ','          ','          ','          ','          ','          ','-         ','          ','          ','          ','          ','          ','          ', &
+          '.spu      ','.spu      ','          ','.ss       ','.spu      ','          ','          ','          ','-         ','.spu      ','.spu      ','.spu      ','.spu      ','.spu      ','.spu      ', &
+          '.ic_spu   ','          ','          ','.spu      ','          ','          ','          ','          ','-         ','          ','          ','          ','          ','          ','          ', &
+          '.ic_ss    ','          ','          ','.ss       ','          ','          ','          ','          ','-         ','          ','          ','          ','          ','          ','          '/
   !
   ! stencil
   integer(i4b), parameter :: jp = 1
@@ -2679,6 +2683,7 @@ module mf6_module
     pckact(iriv) = raw%geti('act_riv',idef=1)
     pckact(iwel) = raw%geti('act_wel',idef=1)
     pckact(ighb) = raw%geti('act_ghb',idef=0)
+    pckact(ighb2) = raw%geti('act_ghb2',idef=0)
     !
     call this%write_disu(lbin, lbinpos)
     call this%write_ic(lbin, lbinpos)
@@ -2688,7 +2693,8 @@ module mf6_module
     call this%write_chd(lbin, lbinpos)
     call this%write_drn(lbin, lbinpos)
     call this%write_riv(lbin, lbinpos)
-    call this%write_ghb(lbin, lbinpos)
+    call this%write_ghb(lbin, lbinpos, ighb)
+    call this%write_ghb(lbin, lbinpos, ighb2)
     call this%write_rch(lbin, lbinpos)
     call this%write_wel(lbin, lbinpos)
     call this%write_nam()
@@ -2717,7 +2723,7 @@ module mf6_module
     ! -- local
     !
     character(len=mxslen) :: f, mn
-    integer(i4b) :: iu, irun, irun0, irun1, ipck
+    integer(i4b) :: iu, irun, irun0, irun1, ipck, jpck
 ! ------------------------------------------------------------------------------
     !
     if (ltransient) then
@@ -2748,7 +2754,12 @@ module mf6_module
         if (trim(pr(ipck,irun)) == '-') cycle
         f = trim(this%rootdir)//trim(mn)//trim(pr(ipck,irun))//'.'//trim(pck(ipck))
         call swap_slash(f)
-        write(iu,'(2x,a)') trim(change_case(pck(ipck),'u'))//'6 '//trim(f)
+        if (ipck == ighb2) then
+          jpck = ighb
+        else
+          jpck = ipck
+        end if
+        write(iu,'(2x,a)') trim(change_case(pck(jpck),'u'))//'6 '//trim(f)
       end do
       write(iu,'(   a)') 'END PACKAGES'
       close(iu)
@@ -3377,7 +3388,7 @@ module mf6_module
     return
   end subroutine mf6_mod_write_drn
   
-  subroutine mf6_mod_write_ghb(this, lbin, lbinpos)
+  subroutine mf6_mod_write_ghb(this, lbin, lbinpos, ipack)
 ! ******************************************************************************
 ! ******************************************************************************
 !
@@ -3388,14 +3399,25 @@ module mf6_module
     class(tMf6_mod) :: this
     logical, intent(in) :: lbin
     logical, intent(in) :: lbinpos
+    integer(i4b), intent(in) :: ipack
     ! -- local
     character(len=mxslen), dimension(:), allocatable :: cwk
-    character(len=mxslen) :: p, pb, f
+    character(len=mxslen) :: p, pb, f, packstr
     integer(i4b) :: i, n, iu, nbound, maxbound, iper, jper, nper, nperspu
+    integer(i4b) :: j_ghb_bhead, j_ghb_cond
     integer(i4b), dimension(gnlay) :: nbound_lay
     logical, dimension(:), allocatable :: lact
 ! ------------------------------------------------------------------------------
-    if (pckact(ighb) == 0) return
+    if (pckact(ipack) == 0) return
+    !
+    packstr = '.'//trim(pck(ipack))
+    if (ipack == ighb) then
+      j_ghb_bhead = i_ghb_bhead
+      j_ghb_cond  = i_ghb_cond
+    else
+      j_ghb_bhead = i_ghb2_bhead
+      j_ghb_cond  = i_ghb2_cond
+    end if
     !
     call clear_wrk()
     !
@@ -3411,10 +3433,10 @@ module mf6_module
     allocate(cwk(nper), lact(nper))
     maxbound = 0
     do iper = 1, nper
-      call this%get_array(i_ghb_bhead, 1, iper, 1, i1wrk, r8wrk, ib_in=2) !i_ghb_bhead_l1
-      if (gnlay == 2) call this%get_array(i_ghb_bhead, 2, iper, 2, i1wrk, r8wrk, ib_in=2) !i_ghb_bhead_l1
-      call this%get_array(i_ghb_cond, 1, iper, 1, i1wrk, r8wrk2, ib_in=2)
-      if (gnlay == 2) call this%get_array(i_ghb_cond, 2, iper, 2, i1wrk, r8wrk2, ib_in=2)
+      call this%get_array(j_ghb_bhead, 1, iper, 1, i1wrk, r8wrk, ib_in=2) !j_ghb_bhead_l1
+      if (gnlay == 2) call this%get_array(j_ghb_bhead, 2, iper, 2, i1wrk, r8wrk, ib_in=2) !j_ghb_bhead_l1
+      call this%get_array(j_ghb_cond, 1, iper, 1, i1wrk, r8wrk2, ib_in=2)
+      if (gnlay == 2) call this%get_array(j_ghb_cond, 2, iper, 2, i1wrk, r8wrk2, ib_in=2)
       !
       ! filter for zero conductance
       n = 0
@@ -3438,7 +3460,7 @@ module mf6_module
         call logmsg('No general-head boundaries found.')
       else
         lact(iper) = .true.
-        f = trim(pb)//'.ghb.sp'//ta((/iper/),3)
+        f = trim(pb)//trim(packstr)//'.sp'//ta((/iper/),3)
         call this%write_list(iu, 4, f, i1wrk, r8wrk, r8wrk2, lbin, lbinpos, cwk(iper))
       end if
       call clear_wrk()
@@ -3446,11 +3468,11 @@ module mf6_module
     !
     if (maxbound == 0) then
       call logmsg('No general-head boundaries found.')
-      pckact(ighb) = 0
+      pckact(ipack) = 0
       return
     end if
     !
-    f = trim(p)//'.ghb'
+    f = trim(p)//trim(packstr)
     call open_file(f, iu, 'w')
     write(iu,'(   a)') 'BEGIN OPTIONS'
     write(iu,'(   a)') 'END OPTIONS'
@@ -3467,7 +3489,7 @@ module mf6_module
     close(iu)
     !
     if (ltransient) then
-      f = trim(p)//trim(pr(idrn,irun0tr))//'.ghb'
+      f = trim(p)//trim(pr(idrn,irun0tr))//trim(packstr)
       call open_file(f, iu, 'w')
       write(iu,'(   a)') 'BEGIN OPTIONS'
       write(iu,'(   a)') 'END OPTIONS'
