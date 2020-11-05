@@ -137,7 +137,12 @@ program mergemap2idf
     end do
   end do !iact
   !
-  call writeidf(fo, gx, nc, nr, dble(gxll), dble(gyll), dble(gcs), dble(gmv))
+  if (index(fo,'.idf',back=.true.) > 0) then
+    call writeidf(fo, gx, nc, nr, dble(gxll), dble(gyll), dble(gcs), dble(gmv))
+  elseif (index(fo,'.asc',back=.true.) > 0) then
+    call writeasc(fo, gx, nc, nr, dble(gxll), dble(gyll), dble(gcs), dble(gmv))
+  end if
+  !
   if (lwritetile) then
     call writeidf("tile.idf", itile, nc, nr, dble(gxll), dble(gyll), dble(gcs), DZERO)
     call writeasc("tile.asc", itile, nc, nr, dble(gxll), dble(gyll), dble(gcs), DZERO)
