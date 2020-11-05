@@ -136,6 +136,8 @@ module mf6_module
     type(tDistIDF), pointer :: distidf => null()
     type(tMap),     pointer :: map     => null()
     type(tDistMap), pointer :: distmap => null()
+    real(r8b)               :: r8mult = DONE
+    real(r8b)               :: r8add = DZERO
   end type tData
   
   type tRaw
@@ -270,7 +272,6 @@ module mf6_module
     type(tExchange), dimension(:), pointer :: xch         => null()
     integer(i4b), dimension(:),    pointer :: layer_nodes => null()
     logical,                       pointer :: chd_sea     => null()
-    logical,                       pointer :: wel         => null()
     character(len=mxslen),         pointer :: fbin        => null()
     integer(i4b),                  pointer :: iubin       => null()
   contains
@@ -414,6 +415,27 @@ module mf6_module
              end if
           endif
           !
+          if (nw > 3) then
+            s = change_case(words(4), 'u')
+            if (trim(s) == '*') then
+              call logmsg('**** Multiplication factor found **** ')
+              read(words(5),*) dat%r8mult
+            end if
+            if (trim(s) == '+') then
+              call logmsg('**** Addition factor found **** ')
+              read(words(5),*) dat%r8add
+            end if
+            if (nw > 5) then
+              s = change_case(words(6), 'u')
+              if (trim(s) == '*') then
+                read(words(7),*) dat%r8mult
+              end if
+              if (trim(s) == '+') then
+                read(words(7),*) dat%r8add
+              end if
+            end if
+          end if
+          !
           ! allocate and read header
           select case(dat%file_type)
           case(i_idf)
@@ -423,30 +445,30 @@ module mf6_module
             end if 
           case(i_distidf)
             allocate(dat%distidf)
-            if (nw > 3) then
-              allocate(dat%distidf%r8def, dat%distidf%larea)
-              read(words(4),*) dat%distidf%r8def
-              dat%distidf%larea = .false.
-              if (nw > 4) then
-                if (words(5) == 'AREA') then
-                  dat%distidf%larea = .true.
-                end if
-              end if
-             end if
+            !if (nw > 3) then
+            !  allocate(dat%distidf%r8def, dat%distidf%larea)
+            !  read(words(4),*) dat%distidf%r8def
+            !  dat%distidf%larea = .false.
+            !  if (nw > 4) then
+            !    if (words(5) == 'AREA') then
+            !      dat%distidf%larea = .true.
+            !    end if
+            !  end if
+            ! end if
           case(i_map)
             allocate(dat%map)
           case(i_distmap)
             allocate(dat%distmap)
-            if (nw > 3) then
-              allocate(dat%distmap%r4def, dat%distmap%larea)
-              read(words(4),*) dat%distmap%r4def
-              dat%distmap%larea = .false.
-              if (nw > 4) then
-                if (words(5) == 'AREA') then
-                  dat%distmap%larea = .true.
-                end if
-              end if
-             end if
+            !if (nw > 3) then
+            !  allocate(dat%distmap%r4def, dat%distmap%larea)
+            !  read(words(4),*) dat%distmap%r4def
+            !  dat%distmap%larea = .false.
+            !  if (nw > 4) then
+            !    if (words(5) == 'AREA') then
+            !      dat%distmap%larea = .true.
+            !    end if
+            !  end if
+            ! end if
           end select
         end if
       end if
@@ -524,15 +546,20 @@ module mf6_module
     integer(I4B) :: ind
     ! -- local
     integer :: i, j, il_min, il_max, ip_min, ip_max
-    character(len=mxslen) :: s
+    character(len=mxslen) :: s, lckey
     logical :: lilay, liper
 ! ------------------------------------------------------------------------------
+    !
+    lckey = change_case(key, 'l')
+    !
     ind = 0
     do i = 1, this%nraw
       s = this%raw(i)%key
-      j = max(index(s,'_P'),index(s,'_L'))
-      if (j > 0) s = s(1:j-1)
-      if (index(s, trim(key)) > 0) then
+      j = max(index(s,'_p'),index(s,'_l'))
+      if (j > 0) then
+        s = s(1:j-1)
+      end if
+      if (index(s, trim(lckey)) > 0) then
         il_min = this%raw(i)%ilay_min; il_max = this%raw(i)%ilay_max
         ip_min = this%raw(i)%iper_min; ip_max = this%raw(i)%iper_max
         lilay = .false.; liper = .false.
@@ -1190,8 +1217,10 @@ module mf6_module
         write(iu,'(a)')
         write(iu,'(   a)') 'BEGIN SOLUTIONGROUP 1'
         if (this%lmm) then
-          write(iu,'(2x,a)') 'IMS6_CGC '//trim(d)//trim(this%solname)//'.ims FILEIN '//trim(d)// &
+          write(iu,'(2x,a)') '# IMS6_CGC '//trim(d)//trim(this%solname)//'.ims FILEIN '//trim(d)// &
             trim(this%solname)//'.cgc.solmodels.wrp.asc'
+          write(iu,'(2x,a)') 'IMS6 '//trim(d)//trim(this%solname)//'.ims FILEIN '//trim(d)// &
+            trim(this%solname)//'.solmodels.wrp.asc'
         else
           write(iu,'(2x,a)') 'IMS6 '//trim(d)//trim(this%solname)//'.ims FILEIN '//trim(d)// &
             trim(this%solname)//'.solmodels.wrp.asc'
@@ -1224,7 +1253,7 @@ module mf6_module
           else
             write(iu,'(a)') 'echo Serial run complete. Press any key to continue.'
           end if
-          write(iu,'(a)') 'pause>nul'
+          write(iu,'(a)') '::pause>nul'
           close(iu)
         end if
       end do
@@ -1349,33 +1378,146 @@ module mf6_module
     character(len=mxslen) :: f
     integer(i4b) :: iu
     logical :: lcomplex
+    !
+    integer(i4b), parameter :: nnlvar = 11
+    integer(i4b), parameter :: nlvar  = 10
+    !
+    type tCompl
+      character(len=mxslen) :: name = ''
+      character(mxslen), dimension(2,nnlvar) :: nlvar
+      character(mxslen), dimension(2,nlvar)  :: lvar
+    end type tCompl
+    !
+    type(tCompl), pointer :: c => null()
+    type(tCompl), dimension(:), pointer :: compl => null()
+    integer(i4b) :: ncompl, i, j
+    character(mxslen) :: cname, rclose_option
 ! ------------------------------------------------------------------------------
+    !
+    ! define the complexities
+    ncompl = 3
+    allocate(compl(ncompl))
+    !
+    ! SIMPLE
+    i = 1; c => compl(i); c%name = 'SIMPLE'
+    j =     1; c%nlvar(:,j) = (/'OUTER_HCLOSE'                  , '0.001'/)
+    j = j + 1; c%nlvar(:,j) = (/'OUTER_MAXIMUM '                , '25'/)
+    j = j + 1; c%nlvar(:,j) = (/'UNDER_RELAXATION '             , 'NONE'/)
+    j = j + 1; c%nlvar(:,j) = (/'UNDER_RELAXATION_THETA '       , '0.0'/)
+    j = j + 1; c%nlvar(:,j) = (/'UNDER_RELAXATION_KAPPA '       , '0.0'/)
+    j = j + 1; c%nlvar(:,j) = (/'UNDER_RELAXATION_GAMMA '       , '0.0'/)
+    j = j + 1; c%nlvar(:,j) = (/'UNDER_RELAXATION_MOMENTUM '    , '0.0'/)
+    j = j + 1; c%nlvar(:,j) = (/'BACKTRACKING_NUMBER '          , '0'/)
+    j = j + 1; c%nlvar(:,j) = (/'BACKTRACKING_TOLERANCE '       , '0.0'/)
+    j = j + 1; c%nlvar(:,j) = (/'BACKTRACKING_REDUCTION_FACTOR ', '0.0'/)
+    j = j + 1; c%nlvar(:,j) = (/'BACKTRACKING_RESIDUAL_LIMIT '  , '0.0'/)
+    !
+    j =     1; c%lvar(:,j) = (/'INNER_MAXIMUM'                 , '50'/)
+    j = j + 1; c%lvar(:,j) = (/'INNER_HCLOSE'                  , '0.001'/)
+    j = j + 1; c%lvar(:,j) = (/'INNER_RCLOSE'                  , '0.1'/)
+    j = j + 1; c%lvar(:,j) = (/'LINEAR_ACCELERATION'           , 'CG'/)
+    j = j + 1; c%lvar(:,j) = (/'RELAXATION_FACTOR'             , '0.0'/)
+    j = j + 1; c%lvar(:,j) = (/'PRECONDITIONER_LEVELS'         , '0'/)
+    j = j + 1; c%lvar(:,j) = (/'PRECONDITIONER_DROP_TOLERANCE' , '0.0'/)
+    j = j + 1; c%lvar(:,j) = (/'NUMBER_ORTHOGONALIZATIONS'     , '0'/)
+    j = j + 1; c%lvar(:,j) = (/'SCALING_METHOD'                , 'NONE'/)
+    j = j + 1; c%lvar(:,j) = (/'REORDERING_METHOD'             , 'NONE'/)
+    !
+    ! MODERATE
+    i = 2; c => compl(i); c%name = 'MODERATE'
+    j =     1; c%nlvar(:,j) = (/'OUTER_HCLOSE'                  , '0.01'/)
+    j = j + 1; c%nlvar(:,j) = (/'OUTER_MAXIMUM '                , '50'/)
+    j = j + 1; c%nlvar(:,j) = (/'UNDER_RELAXATION '             , 'DBD'/)
+    j = j + 1; c%nlvar(:,j) = (/'UNDER_RELAXATION_THETA '       , '0.9'/)
+    j = j + 1; c%nlvar(:,j) = (/'UNDER_RELAXATION_KAPPA '       , '0.0001'/)
+    j = j + 1; c%nlvar(:,j) = (/'UNDER_RELAXATION_GAMMA '       , '0.0'/)
+    j = j + 1; c%nlvar(:,j) = (/'UNDER_RELAXATION_MOMENTUM '    , '0.0'/)
+    j = j + 1; c%nlvar(:,j) = (/'BACKTRACKING_NUMBER '          , '0'/)
+    j = j + 1; c%nlvar(:,j) = (/'BACKTRACKING_TOLERANCE '       , '0.0'/)
+    j = j + 1; c%nlvar(:,j) = (/'BACKTRACKING_REDUCTION_FACTOR ', '0.0'/)
+    j = j + 1; c%nlvar(:,j) = (/'BACKTRACKING_RESIDUAL_LIMIT '  , '0.0'/)
+    !
+    j =     1; c%lvar(:,j) = (/'INNER_MAXIMUM'                 , '100'/)
+    j = j + 1; c%lvar(:,j) = (/'INNER_HCLOSE'                  , '0.01'/)
+    j = j + 1; c%lvar(:,j) = (/'INNER_RCLOSE'                  , '0.1'/)
+    j = j + 1; c%lvar(:,j) = (/'LINEAR_ACCELERATION'           , 'BICGSTAB'/)
+    j = j + 1; c%lvar(:,j) = (/'RELAXATION_FACTOR'             , '0.97'/)
+    j = j + 1; c%lvar(:,j) = (/'PRECONDITIONER_LEVELS'         , '0'/)
+    j = j + 1; c%lvar(:,j) = (/'PRECONDITIONER_DROP_TOLERANCE' , '0.0'/)
+    j = j + 1; c%lvar(:,j) = (/'NUMBER_ORTHOGONALIZATIONS'     , '0'/)
+    j = j + 1; c%lvar(:,j) = (/'SCALING_METHOD'                , 'NONE'/)
+    j = j + 1; c%lvar(:,j) = (/'REORDERING_METHOD'             , 'NONE'/)
+    !
+    ! COMPLEX
+    i = 3; c => compl(i); c%name = 'COMPLEX'
+    j =     1; c%nlvar(:,j) = (/'OUTER_HCLOSE'                  , '0.1'/)
+    j = j + 1; c%nlvar(:,j) = (/'OUTER_MAXIMUM '                , '100'/)
+    j = j + 1; c%nlvar(:,j) = (/'UNDER_RELAXATION '             , 'DBD'/)
+    j = j + 1; c%nlvar(:,j) = (/'UNDER_RELAXATION_THETA '       , '0.8'/)
+    j = j + 1; c%nlvar(:,j) = (/'UNDER_RELAXATION_KAPPA '       , '0.0001'/)
+    j = j + 1; c%nlvar(:,j) = (/'UNDER_RELAXATION_GAMMA '       , '0.0'/)
+    j = j + 1; c%nlvar(:,j) = (/'UNDER_RELAXATION_MOMENTUM '    , '0.0'/)
+    j = j + 1; c%nlvar(:,j) = (/'BACKTRACKING_NUMBER '          , '20'/)
+    j = j + 1; c%nlvar(:,j) = (/'BACKTRACKING_TOLERANCE '       , '1.05'/)
+    j = j + 1; c%nlvar(:,j) = (/'BACKTRACKING_REDUCTION_FACTOR ', '0.1'/)
+    j = j + 1; c%nlvar(:,j) = (/'BACKTRACKING_RESIDUAL_LIMIT '  , '0.002'/)
+    !
+    j =     1; c%lvar(:,j) = (/'INNER_MAXIMUM'                 , '500'/)
+    j = j + 1; c%lvar(:,j) = (/'INNER_HCLOSE'                  , '0.1'/)
+    j = j + 1; c%lvar(:,j) = (/'INNER_RCLOSE'                  , '0.1'/)
+    j = j + 1; c%lvar(:,j) = (/'LINEAR_ACCELERATION'           , 'BICGSTAB'/)
+    j = j + 1; c%lvar(:,j) = (/'RELAXATION_FACTOR'             , '0.0'/)
+    j = j + 1; c%lvar(:,j) = (/'PRECONDITIONER_LEVELS'         , '5'/)
+    j = j + 1; c%lvar(:,j) = (/'PRECONDITIONER_DROP_TOLERANCE' , '0.0001'/)
+    j = j + 1; c%lvar(:,j) = (/'NUMBER_ORTHOGONALIZATIONS'     , '2'/)
+    j = j + 1; c%lvar(:,j) = (/'SCALING_METHOD'                , 'NONE'/)
+    j = j + 1; c%lvar(:,j) = (/'REORDERING_METHOD'             , 'NONE'/)
+    !
+    cname = raw%getc('complexity',cdef='SIMPLE')
+    select case (cname)
+    case('SIMPLE')
+      c => compl(1)
+    case('MODERATE')
+      c => compl(2)
+    case('COMPLEX')
+      c => compl(3)
+    case default
+      call errmsg("Invalid complexity: "//trim(cname))
+    end select
+    !
+    ! overwrite the defaults
+    do j = 1, nnlvar
+      c%nlvar(2,j) = raw%getc(trim(c%nlvar(1,j)),cdef=trim(c%nlvar(2,j)))
+    end do
+    do j = 1, nlvar
+      c%lvar(2,j) = raw%getc(trim(c%lvar(1,j)),cdef=trim(c%lvar(2,j)))
+    end do
+    rclose_option = raw%getc('rclose_option',cdef='')
+    if (len_trim(rclose_option) > 0) then
+      c%lvar(2,3) = trim(c%lvar(2,3))//' '//trim(rclose_option)
+    end if
+    !
     f = trim(this%solname)//'.ims'
     call open_file(f, iu, 'w')
     !
-    if (raw%getc('complexity',cdef='SIMPLE') == 'COMPLEX') then
-      lcomplex = .true.
-    else
-      lcomplex = .false.
-    end if
-    !
     write(iu,'(   a)') 'BEGIN OPTIONS'
     write(iu,'(2x,a)') 'PRINT_OPTION '//raw%getc('print_option',cdef='ALLITER')
-    write(iu,'(2x,a)') 'COMPLEXITY '//raw%getc('complexity',cdef='SIMPLE')
     write(iu,'(   a)') 'END OPTIONS'
     write(iu,'(a)')
     write(iu,'(   a)') 'BEGIN NONLINEAR'
-    if (.not.lcomplex) write(iu,'(2x,a)') 'OUTER_HCLOSE '//raw%getc('outer_hclose',cdef='0.001')
-    write(iu,'(2x,a)') 'OUTER_MAXIMUM '//raw%getc('outer_maximum',cdef='100')
+    do j = 1, nnlvar
+      write(iu,'(2x,a)') trim(c%nlvar(1,j))//' '//trim(trim(c%nlvar(2,j)))
+    end do
     write(iu,'(   a)') 'END NONLINEAR'
     write(iu,'(a)')
     write(iu,'(   a)') 'BEGIN LINEAR'
-    write(iu,'(2x,a)') 'INNER_MAXIMUM '//raw%getc('inner_maximum',cdef='100')
-    if (.not.lcomplex) write(iu,'(2x,a)') 'INNER_HCLOSE '//raw%getc('inner_hclose',cdef='0.001')
-    if (.not.lcomplex) write(iu,'(2x,a)') 'INNER_RCLOSE '//raw%getc('inner_rclose',cdef='1000.')
-    if (.not.lcomplex) write(iu,'(2x,a)') 'RELAXATION_FACTOR '//raw%getc('relaxation_factor',cdef='0.98')
+    do j = 1, nlvar
+      write(iu,'(2x,a)') trim(c%lvar(1,j))//' '//trim(trim(c%lvar(2,j)))
+    end do
     write(iu,'(   a)') 'END LINEAR'
     close(iu)
+    !
+    deallocate(compl)
     !
     return
   end subroutine mf6_sol_write_ims
@@ -1492,6 +1634,8 @@ module mf6_module
         r8val = real(r4val,r8b)
     end select
     !
+    r8val = r8val *dat%r8mult + dat%r8add
+      
     return
   end function mf6_mod_get_val_r8
   
@@ -1587,6 +1731,9 @@ module mf6_module
             case(0) ! all cells including sea cells
               n = reg%nodmap(jc,jr,ilay_tgt)
               n = abs(n)
+              !if (n == 116498) then
+              !  write(*,*) '@@@@'
+              !end if
             case(1) ! sea cells only
               n = reg%nodmap(jc,jr,ilay_tgt)
               if (n < 0) then
@@ -1696,7 +1843,7 @@ module mf6_module
                 call errmsg('mf6_mod_get_array_r8: program error 3 '//ta((/ib/))//' '//&
                   ta((/n/))//' '//ta((/arrsiz/)))
               end if
-              arr(n) = r8val
+              arr(n) = r8val * dat%r8mult + dat%r8add
               arrflg(n) = 1
             end if
           end if
@@ -2598,7 +2745,6 @@ module mf6_module
       do ipck = 3, npck
         if (pckact(ipck) == 0) cycle
         if ((ipck == ichd1).and.(.not.this%chd_sea)) cycle
-        if ((ipck == iwel).and.(.not.this%wel)) cycle
         if (trim(pr(ipck,irun)) == '-') cycle
         f = trim(this%rootdir)//trim(mn)//trim(pr(ipck,irun))//'.'//trim(pck(ipck))
         call swap_slash(f)
@@ -2625,7 +2771,7 @@ module mf6_module
     ! -- local
     character(len=mxslen) :: p, pb, f
     integer(i4b) :: iu, i, j, n, m
-    real(r8b) :: tn, bn, tm, bm
+    real(r8b) :: tn, bn, tm, bm, d
     type(tDisu), pointer :: disu
 ! ------------------------------------------------------------------------------
     if (pckact(idisu) == 0) return
@@ -2670,15 +2816,20 @@ module mf6_module
     do i = 1, disu%nodes
       n = disu%ja(i4wrk1d(i))
       tn = r8wrk(n); bn = r8wrk2(n)
-      if (tn < -1000D0) then
-        call errmsg('Program error mf6_mod_write_disu: top(n) = nodata')
-      end if
-      if (bn < -1000D0) then
-        call errmsg('Program error mf6_mod_write_disu: bot(n) = nodata')
-      end if
+      !if (tn < -1000D0) then
+        !call errmsg('Program error mf6_mod_write_disu: top(n) = nodata')
+      !end if
+      !if (bn < -1000D0) then
+        !call errmsg('Program error mf6_mod_write_disu: bot(n) = nodata')
+      !end if
       if (bn > tn) then
         call errmsg('Program error mf6_mod_write_disu: bot(n) > top(n)')
       end if
+      d = tn - bn
+      if (d <= DZERO) then
+        call errmsg('Program error mf6_mod_write_disu: top(n) - bot(n) <= 0')
+      end if
+        
       do j = i4wrk1d(i)+1, i4wrk1d(i+1)-1
         m =  disu%ja(j)
         tm = r8wrk(m); bm = r8wrk2(m)
@@ -2931,7 +3082,7 @@ module mf6_module
     write(iu,'(a)')
     write(iu,'(   a)') 'BEGIN GRIDDATA'
     write(iu,'(2x,a)') 'ICELLTYPE'
-    icelltype = raw%geti('icelltype')
+    icelltype = raw%geti('icelltype',idef=0)
     write(iu,'(4x,a)') 'CONSTANT '//ta((/icelltype/))
     write(iu,'(2x,a)') 'K'
     call this%get_array(i_k, 1, 0, 1, i1wrk, r8wrk) !i_k_l1
@@ -3177,6 +3328,12 @@ module mf6_module
       call clear_wrk()
     end do
     !
+    if (maxbound == 0) then
+      call logmsg('No drains found.')
+      pckact(idrn) = 0
+      return
+    end if
+    
     f = trim(p)//'.drn'
     call open_file(f, iu, 'w')
     write(iu,'(   a)') 'BEGIN OPTIONS'
@@ -3286,6 +3443,12 @@ module mf6_module
       end if
       call clear_wrk()
     end do
+    !
+    if (maxbound == 0) then
+      call logmsg('No general-head boundaries found.')
+      pckact(ighb) = 0
+      return
+    end if
     !
     f = trim(p)//'.ghb'
     call open_file(f, iu, 'w')
@@ -3407,6 +3570,12 @@ module mf6_module
       call clear_wrk()
     end do 
     !
+    if (maxbound == 0) then
+      call logmsg('No rivers found.')
+      pckact(iriv) = 0
+      return
+    end if
+    !
     f = trim(p)//'.riv'
     call open_file(f, iu, 'w')
     write(iu,'(   a)') 'BEGIN OPTIONS'
@@ -3518,6 +3687,12 @@ module mf6_module
       call clear_wrk()
     end do
     !
+    if (maxbound == 0) then
+      call errmsg('No recharge found.')
+      pckact(irch) = 0
+      return
+    end if
+    !
     f = trim(p)//'.rch'
     call open_file(f, iu, 'w')
     write(iu,'(   a)') 'BEGIN OPTIONS'
@@ -3597,9 +3772,6 @@ module mf6_module
     allocate(cwk(nper), lact(nper))
     maxbound = 0
     !
-    allocate(this%wel)
-    this%wel = .true.
-    !
     do iper = 1, nper
       call this%get_array(i_wel, 1, iper, 1, i1wrk, r8wrk, ib_in=2)
       call this%get_array(i_wel, 2, iper, 2, i1wrk, r8wrk, ib_in=2)
@@ -3628,8 +3800,8 @@ module mf6_module
     end do
     !
     if (maxbound == 0) then
-      this%wel = .false.
       call logmsg('No wells found')
+      pckact(iwel) = 0
       return
     end if
     !
