@@ -38,8 +38,8 @@ module mf6_module
   integer(i4b), parameter :: i_inner_rclose      = 21
   integer(i4b), parameter :: i_relaxation_factor = 22
   integer(i4b), parameter :: i_prim_sto          = 23
-  integer(i4b), parameter :: i_ghb_bhead         = 24
-  integer(i4b), parameter :: i_ghb_cond          = 25
+  integer(i4b), parameter :: i_ghb1_bhead        = 24
+  integer(i4b), parameter :: i_ghb1_cond         = 25
   integer(i4b), parameter :: i_ghb2_bhead        = 26
   integer(i4b), parameter :: i_ghb2_cond         = 27
   integer(i4b), parameter :: nkey                = i_ghb2_cond
@@ -83,12 +83,12 @@ module mf6_module
   integer(i4b), parameter :: iriv  = 11
   integer(i4b), parameter :: irch  = 12
   integer(i4b), parameter :: iwel  = 13
-  integer(i4b), parameter :: ighb  = 14
+  integer(i4b), parameter :: ighb1 = 14
   integer(i4b), parameter :: ighb2 = 15
   integer(i4b), parameter :: npck = ighb2
   character(len=4), dimension(npck) :: pck
   data pck/'nam ', 'tdis', 'disu', 'ic  ', 'oc  ', 'npf ', 'sto ', 'chd ', 'chd ',&
-           'drn ', 'riv ', 'rch ', 'wel ', 'ghb ', 'ghb2'/
+           'drn ', 'riv ', 'rch ', 'wel ', 'ghb ', 'ghb '/
   integer(i4b), dimension(npck) :: pckact
   
   integer(i4b), parameter :: maxrun = 6
@@ -107,12 +107,12 @@ module mf6_module
   !
   !       inam         itdis        idisu        iic          ioc         inpf          isto         ichd1        ichd2        idrn         iriv         irch         iwel         ighb         ighb2        
   !       1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890   1234567890
-  data pr/'.chd_intf ','          ','          ','          ','.sm       ','          ','          ','          ','.intf     ','          ','          ','          ','          ','          ','          ', &
-          '.ic_sm    ','          ','          ','.sm       ','          ','          ','          ','          ','-         ','          ','          ','          ','          ','          ','          ', &
-          '.ic_sh0   ','          ','          ','          ','          ','          ','          ','          ','-         ','          ','          ','          ','          ','          ','          ', &
-          '.spu      ','.spu      ','          ','.ss       ','.spu      ','          ','          ','          ','-         ','.spu      ','.spu      ','.spu      ','.spu      ','.spu      ','.spu      ', &
-          '.ic_spu   ','          ','          ','.spu      ','          ','          ','          ','          ','-         ','          ','          ','          ','          ','          ','          ', &
-          '.ic_ss    ','          ','          ','.ss       ','          ','          ','          ','          ','-         ','          ','          ','          ','          ','          ','          '/
+  data pr/'.chd_intf ','          ','          ','          ','.sm       ','          ','          ','.sea      ','.intf     ','          ','          ','          ','          ','.1        ','.2        ', &
+          '.ic_sm    ','          ','          ','.sm       ','          ','          ','          ','.sea      ','-         ','          ','          ','          ','          ','.1        ','.2        ', &
+          '.ic_sh0   ','          ','          ','          ','          ','          ','          ','.sea      ','-         ','          ','          ','          ','          ','.1        ','.2        ', &
+          '.spu      ','.spu      ','          ','.ss       ','.spu      ','          ','          ','.sea      ','-         ','.spu      ','.spu      ','.spu      ','.spu      ','.1.spu    ','.2.spu    ', &
+          '.ic_spu   ','          ','          ','.spu      ','          ','          ','          ','.sea      ','-         ','          ','          ','          ','          ','.1        ','.2        ', &
+          '.ic_ss    ','          ','          ','.ss       ','          ','          ','          ','.sea      ','-         ','          ','          ','          ','          ','.1        ','.2        '/
   !
   ! stencil
   integer(i4b), parameter :: jp = 1
@@ -275,7 +275,7 @@ module mf6_module
     integer(i4b),                  pointer :: nxch        => null()
     type(tExchange), dimension(:), pointer :: xch         => null()
     integer(i4b), dimension(:),    pointer :: layer_nodes => null()
-    logical,                       pointer :: chd_sea     => null()
+
     character(len=mxslen),         pointer :: fbin        => null()
     integer(i4b),                  pointer :: iubin       => null()
   contains
@@ -2682,18 +2682,21 @@ module mf6_module
     pckact(isto) = raw%geti('act_sto',idef=1)
     pckact(iriv) = raw%geti('act_riv',idef=1)
     pckact(iwel) = raw%geti('act_wel',idef=1)
-    pckact(ighb) = raw%geti('act_ghb',idef=0)
+    pckact(ighb1) = raw%geti('act_ghb',idef=0)
     pckact(ighb2) = raw%geti('act_ghb2',idef=0)
+    pckact(ichd1) = raw%geti('act_chd',idef=1)
+    pckact(ichd2) = raw%geti('act_chd2',idef=1)
     !
     call this%write_disu(lbin, lbinpos)
     call this%write_ic(lbin, lbinpos)
     call this%write_oc()
     call this%write_npf(lbin, lbinpos)
     call this%write_sto(lbin, lbinpos)
-    call this%write_chd(lbin, lbinpos)
+    call this%write_chd(lbin, lbinpos, ichd1)
+    call this%write_chd(lbin, lbinpos, ichd2)
     call this%write_drn(lbin, lbinpos)
     call this%write_riv(lbin, lbinpos)
-    call this%write_ghb(lbin, lbinpos, ighb)
+    call this%write_ghb(lbin, lbinpos, ighb1)
     call this%write_ghb(lbin, lbinpos, ighb2)
     call this%write_rch(lbin, lbinpos)
     call this%write_wel(lbin, lbinpos)
@@ -2750,16 +2753,10 @@ module mf6_module
       write(iu,'(   a)') 'BEGIN PACKAGES'
       do ipck = 3, npck
         if (pckact(ipck) == 0) cycle
-        if ((ipck == ichd1).and.(.not.this%chd_sea)) cycle
         if (trim(pr(ipck,irun)) == '-') cycle
         f = trim(this%rootdir)//trim(mn)//trim(pr(ipck,irun))//'.'//trim(pck(ipck))
         call swap_slash(f)
-        if (ipck == ighb2) then
-          jpck = ighb
-        else
-          jpck = ipck
-        end if
-        write(iu,'(2x,a)') trim(change_case(pck(jpck),'u'))//'6 '//trim(f)
+        write(iu,'(2x,a)') trim(change_case(pck(ipck),'u'))//'6 '//trim(f)
       end do
       write(iu,'(   a)') 'END PACKAGES'
       close(iu)
@@ -3173,7 +3170,7 @@ module mf6_module
     return
   end subroutine mf6_mod_write_sto
   
-  subroutine mf6_mod_write_chd(this, lbin, lbinpos)
+  subroutine mf6_mod_write_chd(this, lbin, lbinpos, ipack)
 ! ******************************************************************************
 ! ******************************************************************************
 !
@@ -3184,12 +3181,21 @@ module mf6_module
     class(tMf6_mod) :: this
     logical, intent(in) :: lbin
     logical, intent(in) :: lbinpos
+    integer(i4b), intent(in) :: ipack
     ! -- local
-    character(len=mxslen) :: p, pb, f
-    integer(i4b) :: iu, maxbound, i
+    character(len=mxslen) :: p, pb, f, chd_type, packstr
+    integer(i4b) :: iu, maxbound, i, pack_ib_in
     integer(i4b), dimension(gnlay) :: nbound_lay
 ! ------------------------------------------------------------------------------
-    if ((pckact(ichd1) == 0).and.(pckact(ichd2) == 0)) return
+    if (pckact(ipack) == 0) return
+    if (ltransient.and.(ipack == ichd2)) return
+    !
+    packstr = trim(pr(ipack,irun0ss))//'.chd' !.sea .intf
+    if (ipack == ichd1) then
+      pack_ib_in = 1
+    elseif (ipack == ichd2) then
+      pack_ib_in = 3
+    end if
     !
     call clear_wrk()
     !
@@ -3200,15 +3206,12 @@ module mf6_module
       pb = p
     end if
     !
-    ! external boundaries (sea)
-    call this%get_array(i_strt, 1, 0, 1, i1wrk, r8wrk, ib_in=1) !i_strt_l1
-    if (gnlay == 2) call this%get_array(i_strt, 2, 0, 2, i1wrk, r8wrk, ib_in=1) !i_strt_l2
+    call this%get_array(i_strt, 1, 0, 1, i1wrk, r8wrk, ib_in=pack_ib_in) !i_strt_l1
+    if (gnlay == 2) call this%get_array(i_strt, 2, 0, 2, i1wrk, r8wrk, ib_in=pack_ib_in) !i_strt_l2
     nbound_lay = this%count_i1a(i1wrk); maxbound = sum(nbound_lay)
     !
-    allocate(this%chd_sea)
     if (maxbound > 0) then
-      this%chd_sea = .true.
-      f = trim(p)//'.chd'
+      f = trim(p)//trim(packstr)
       call open_file(f, iu, 'w')
       !
       write(iu,'(   a)') 'BEGIN OPTIONS'
@@ -3219,48 +3222,24 @@ module mf6_module
       write(iu,'(   a)') 'END DIMENSIONS'
       write(iu,'(a)')
       write(iu,'(   a)') 'BEGIN PERIOD 1'
-      if (raw%geti('force_sea',idef=0) == 1) then
+      if ((ipack == ichd1).and.(raw%geti('force_sea',idef=0) == 1)) then
         call logmsg('***** Forcing zero head sea-level! *****')
         do i = 1, size(r8wrk)
           r8wrk(i) = DZERO
         end do
       end if
-      f = trim(pb)//'.chd'
+      f = trim(pb)//trim(packstr)
       call this%write_list(iu, 2, f, i1wrk, r8wrk, lbin, lbinpos)
       write(iu,'(   a)') 'END PERIOD'
       close(iu)
-    else
-      call logmsg("*** no CHD sea boundary found ***")
-      this%chd_sea = .false.
     end if
     call clear_wrk()
     !
-    if (.not.ltransient) then !SS only
-      ! internal boundaries (partitions)
-      call this%get_array(i_strt, 1, 0, 1, i1wrk, r8wrk, ib_in=3) !i_strt_l1
-      if (gnlay == 2) call this%get_array(i_strt, 2, 0, 2, i1wrk, r8wrk, ib_in=3) !i_strt_l2
-      nbound_lay = this%count_i1a(i1wrk); maxbound = sum(nbound_lay)
-      if (maxbound > 0) then
-        f = trim(p)//trim(pr(ichd2,irun0ss))//'.chd'
-        !
-        call open_file(f, iu, 'w')
-        !
-        write(iu,'(   a)') 'BEGIN OPTIONS'
-        write(iu,'(   a)') 'END OPTIONS'
-        write(iu,'(a)')
-        write(iu,'(   a)') 'BEGIN DIMENSIONS'
-        write(iu,'(2x,a)') 'MAXBOUND '//ta((/maxbound/))
-        write(iu,'(   a)') 'END DIMENSIONS'
-        write(iu,'(a)')
-        write(iu,'(   a)') 'BEGIN PERIOD 1'
-        f = trim(pb)//trim(pr(ichd2,irun0ss))//'.chd'
-        call this%write_list(iu, 4, f, i1wrk, r8wrk, lbin, lbinpos)
-        write(iu,'(   a)') 'END PERIOD'
-        close(iu)
-      end if
+    if (maxbound == 0) then
+      call logmsg('No constant-head boundaries found: '//trim(pr(ipack,irun0ss)))
+      pckact(ipack) = 0
+      return
     end if
-    !
-    call clear_wrk()
     !
     return
   end subroutine mf6_mod_write_chd
@@ -3410,11 +3389,11 @@ module mf6_module
 ! ------------------------------------------------------------------------------
     if (pckact(ipack) == 0) return
     !
-    packstr = '.'//trim(pck(ipack))
-    if (ipack == ighb) then
-      j_ghb_bhead = i_ghb_bhead
-      j_ghb_cond  = i_ghb_cond
-    else
+    packstr = trim(pr(ipack,irun0ss))//'.ghb' 
+    if (ipack == ighb1) then
+      j_ghb_bhead = i_ghb1_bhead
+      j_ghb_cond  = i_ghb1_cond
+    elseif(ipack == ighb2) then
       j_ghb_bhead = i_ghb2_bhead
       j_ghb_cond  = i_ghb2_cond
     end if
@@ -3467,7 +3446,7 @@ module mf6_module
     end do
     !
     if (maxbound == 0) then
-      call logmsg('No general-head boundaries found.')
+      call logmsg('No general-head boundaries found: '//trim(pr(ipack,irun0ss)))
       pckact(ipack) = 0
       return
     end if
@@ -3489,7 +3468,7 @@ module mf6_module
     close(iu)
     !
     if (ltransient) then
-      f = trim(p)//trim(pr(idrn,irun0tr))//trim(packstr)
+      f = trim(p)//trim(pr(ipack,irun0tr))//trim(packstr)
       call open_file(f, iu, 'w')
       write(iu,'(   a)') 'BEGIN OPTIONS'
       write(iu,'(   a)') 'END OPTIONS'
