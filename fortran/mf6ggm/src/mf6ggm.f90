@@ -2,7 +2,7 @@ program mf6ggm
   ! modules
   use pcrModule, only: tMap
   use utilsmod, only: i1b, i2b, i4b, i8b, r4b, r8b, mxslen, open_file, chkexist, errmsg, &
-    quicksort_d, label_node, tBB, DZERO, writeidf, create_dir, swap_slash, &
+    logmsg, quicksort_d, label_node, tBB, DZERO, writeidf, create_dir, swap_slash, &
     change_work_dir, get_work_dir, ta, fileexist, writeasc
   use metis_module, only: tMetis, tolimbal
   use mf6_module, only:  tMf6_sol, tMf6_mod, tReg, raw, tDistMap, tExchange, ntile, tilebb, &
@@ -43,6 +43,7 @@ program mf6ggm
     integer(i4b) :: gmodid = 0
     integer(i4b) :: ncat  = 0
     integer(i4b) :: nreg  = 0
+    integer(i4b) :: ncell = 0
     integer(i4b),  dimension(:), pointer :: lcatid => null()
     integer(i4b),  dimension(:), pointer :: gcatid => null()
     integer(i4b),  dimension(:), pointer :: regid  => null()
@@ -54,7 +55,8 @@ program mf6ggm
     integer(i4b) :: iwrite_modid = 0
     logical      :: lmm = .false. ! T: multi-model; F: single-model
     integer(i4b) :: ncat = 0
-    integer(i4b) :: np = 1
+    integer(i4b) :: nmod = 1
+    integer(i4b) :: np   = 1
     type(tMod), dimension(:), pointer :: mod => null()
   end type tSol
   integer(i4b), parameter :: iureg  = 1
@@ -70,7 +72,7 @@ program mf6ggm
   type(tSol), pointer :: s => null()
   type(tMf6_sol), pointer :: ms => null()
   type(tSol), dimension(:), pointer :: sol => null()
-  type(tMetis), pointer :: m => null()
+  type(tMetis), pointer :: m => null(), mm => null()
   type(tMetis), dimension(:), pointer :: solmet => null()
   type(tMod), pointer :: md => null()
   type(tMf6_mod), pointer :: mmd => null(), mmd2 => null()
@@ -160,9 +162,13 @@ program mf6ggm
   do i = 1, nsol_mm
     sol(i)%lmm = .true.
     read(iu,'(a)') str
-    read(str,*,iostat=ios) sol(i)%iact, sol(i)%np, sol(i)%iwrite_modid
+    read(str,*,iostat=ios) sol(i)%iact, sol(i)%nmod, sol(i)%np, sol(i)%iwrite_modid
     if (ios /= 0) then
-      read(str,*,iostat=ios) sol(i)%iact, sol(i)%np
+      read(str,*,iostat=ios) sol(i)%iact, sol(i)%nmod, sol(i)%np
+    end if
+    if (ios /= 0) then
+      read(str,*,iostat=ios) sol(i)%iact, sol(i)%nmod
+      sol(i)%np = sol(i)%nmod
     end if
     sol(i)%iact = max(sol(i)%iact, 0)
   end do
@@ -175,9 +181,9 @@ program mf6ggm
   do i = 1, nsol
     s => sol(i)
     if (s%iact == 1) then
-      allocate(s%mod(s%np))
+      allocate(s%mod(s%nmod))
     end if
-    do j = 1, s%np
+    do j = 1, s%nmod
       modid = modid + 1
       if (s%iact == 1) then
         nmod = nmod + 1
@@ -235,7 +241,7 @@ program mf6ggm
     end do
     !
     m => solmet(i)
-    allocate(m%nparts); m%nparts = sol(i)%np
+    allocate(m%nparts); m%nparts = sol(i)%nmod
     allocate(m%nvtxs); m%nvtxs = solncat
     allocate(m%vwgt(m%nvtxs), m%vsize(m%nvtxs)); m%vsize = 1
     allocate(m%part(m%nvtxs)); m%part = 0
@@ -286,9 +292,10 @@ program mf6ggm
     ! count and allocate
     do j = 1, solncat
       ipart = m%part(j) + 1
-      s%mod(ipart)%ncat = s%mod(ipart)%ncat + 1
+      s%mod(ipart)%ncat  = s%mod(ipart)%ncat + 1
+      s%mod(ipart)%ncell = s%mod(ipart)%ncell + int(m%vwgt(j),i4b)
     end do
-    do j = 1, s%np
+    do j = 1, s%nmod
       n = s%mod(j)%ncat; md => s%mod(j)
       allocate(md%lcatid(max(n,1)), md%gcatid(max(n,1)))
       md%ncat = 0
@@ -371,7 +378,7 @@ program mf6ggm
   do i = 1, nsol
     s => sol(i)
     if (s%iact == 0) cycle
-    do j = 1, s%np
+    do j = 1, s%nmod
       md => s%mod(j)
       allocate(i4wk1d(md%ncat),r8wk1d(md%ncat))
       do k = 1, md%ncat
@@ -402,7 +409,7 @@ program mf6ggm
     end do
     do i = 1, 1
       s => sol(i)
-      do j = 1, s%np
+      do j = 1, s%nmod
         md => s%mod(j); ipart = md%gmodid
         do k = 1, md%ncat
           lid = md%lcatid(k); gid = md%gcatid(k)
@@ -449,7 +456,7 @@ program mf6ggm
   do isol = 1, nsol
     s => sol(isol)
     if (s%iact == 0) cycle
-    do ipart = 1, s%np
+    do ipart = 1, s%nmod
       md => s%mod(ipart)
       do i = 1, mxlid
         catlid(i) = 0
@@ -544,7 +551,7 @@ program mf6ggm
   do i = 1, nsol
     s => sol(i)
     if (s%iact == 0) cycle
-    do j = 1, s%np
+    do j = 1, s%nmod
       md => s%mod(j); mmd => smod(md%lmodid)
       allocate(mmd%isol); mmd%isol = i
       mmd%imod = md%gmodid
@@ -592,7 +599,7 @@ program mf6ggm
   do isol = 1, nsol
     s => sol(isol)
     if (s%iact == 0) cycle
-    do ipart = 1, s%np
+    do ipart = 1, s%nmod
       md => s%mod(ipart)
       do i = 1, md%ncat
         lid = md%lcatid(i)
@@ -605,7 +612,7 @@ program mf6ggm
   do isol = 1, nsol
     s => sol(isol)
     if (s%iact == 0) cycle
-    do ipart = 1, s%np
+    do ipart = 1, s%nmod
       md => s%mod(ipart); mmd => smod(md%lmodid); mbb => mmd%bb
       do ireg = 1, md%nreg
         mr => md%reg(ireg)
@@ -681,7 +688,7 @@ program mf6ggm
   do i = 1, nsol
     s => sol(i)
     if (s%iact == 0) cycle
-    do j = 1, s%np
+    do j = 1, s%nmod
       md => s%mod(j); mmd => smod(md%lmodid)
       allocate(mmd%rootdir, mmd%bindir)
       !mmd%rootdir = trim(out_dir)//'models\'//trim(mmd%modelname)//'\'
@@ -705,9 +712,6 @@ program mf6ggm
     bb%nrow = bb%ir1 - bb%ir0 + 1
   end do
   close(iu)
-  !allocate(distmap)
-  !call distmap%init(i_top)
-  !r4v = distmap%getval(38699,13345,126)
   
   ! initialize for the interfaces
   if (allocated(i4wk1d)) deallocate(i4wk1d)
@@ -715,7 +719,7 @@ program mf6ggm
   do isol = 1, nsol ! BEGIN loop over all solutions
     s => sol(isol)
     if (s%iact == 0) cycle
-    do ipart = 1, s%np ! BEGIN loop over models
+    do ipart = 1, s%nmod ! BEGIN loop over models
       do i = 1, nmod
         i4wk1d(i) = 0
       end do
@@ -853,7 +857,7 @@ program mf6ggm
       if (.not.associated(sbb)) then
          allocate(sbb)
       end if
-      do ipart = 1, s%np ! BEGIN loop over models
+      do ipart = 1, s%nmod ! BEGIN loop over models
         md => s%mod(ipart); modid = md%lmodid; mmd => smod(modid)
         do ireg = 1, md%nreg
           r => mmd%reg(ireg); bb => r%bb
@@ -874,7 +878,7 @@ program mf6ggm
       end do
     end if 
     !
-    do ipart = 1, s%np ! BEGIN loop over models
+    do ipart = 1, s%nmod ! BEGIN loop over models
       md => s%mod(ipart); modid = md%lmodid; mmd => smod(modid)
       !
       call create_dir(mmd%rootdir,.true.)
@@ -1140,6 +1144,9 @@ program mf6ggm
     end do ! END loop over all models
     !
     if (s%iwrite_modid == 1) then
+      call logmsg('**************************************************************')
+      call logmsg('***** Writing model IDs... *****')
+      call logmsg('**************************************************************')
       f = '..\post_mappings\s'//ta((/isol/),2)//'.asc'
       call swap_slash(f)
       xmin = gxmin + (sbb%ic0-1)*gcs
@@ -1160,11 +1167,15 @@ program mf6ggm
     stop 0
   end if
   !
+  call logmsg('**************************************************************')
+  call logmsg('***** Writing exchange files... *****')
+  call logmsg('**************************************************************')
+  !
   ! determine the symmetric interfaces
   do isol = 1, nsol ! BEGIN loop over all solutions
     s => sol(isol)
     if (s%iact == 0) cycle
-    do ipart = 1, s%np ! BEGIN loop over models
+    do ipart = 1, s%nmod ! BEGIN loop over models
       md => s%mod(ipart); modid = md%lmodid; mmd => smod(modid)
       do ixch = 1, mmd%nxch
         xch => mmd%xch(ixch)
@@ -1185,7 +1196,7 @@ program mf6ggm
     s => sol(isol)
     if (s%iact == 0) cycle
     nintf = 0
-    do ipart = 1, s%np ! BEGIN loop over models
+    do ipart = 1, s%nmod ! BEGIN loop over models
       md => s%mod(ipart); modid = md%lmodid; mmd => smod(modid)
       do ixch = 1, mmd%nxch
         xch => mmd%xch(ixch)
@@ -1232,7 +1243,7 @@ program mf6ggm
   !
   if (.false.) then !!! DEBUG OUTPUT !!!
     s => sol(1)
-    do i = 1, s%np ! loop over models
+    do i = 1, s%nmod ! loop over models
       md => s%mod(i); mmd => smod(md%lmodid); mbb => mmd%bb
       nc = mbb%ncol; nr = mbb%nrow
       allocate(r4wk3d(nc,nr,gnlay))
@@ -1272,7 +1283,7 @@ program mf6ggm
     if (.not.s%lmm) cycle
     write(f,'(a,i2.2,a)') 's', isol, '.exchanges.asc'
     call open_file(f, iu, 'w')
-    do i = 1, s%np ! loop over models
+    do i = 1, s%nmod ! loop over models
       md => s%mod(i); mmd => smod(md%lmodid)
       call mmd%write_exchanges(iu)
     end do
@@ -1281,17 +1292,74 @@ program mf6ggm
   !
   ! write the solutions
   do isol = 1, nsol ! BEGIN loop over all solutions
+    call logmsg('**************************************************************')
+    call logmsg('***** Writing solution '//ta((/isol/))//'... *****')
+    call logmsg('**************************************************************')
     s => sol(isol)
     if (s%iact == 0) cycle
     allocate(ms)
     ms%isol = isol
     allocate(ms%solname); write(ms%solname,'(a,i2.2)') 's', isol
     allocate(ms%lmm); ms%lmm = s%lmm
-    allocate(ms%nmod); ms%nmod = s%np
-    allocate(ms%mod_id(ms%nmod))
-    do i = 1, s%np
+    allocate(ms%nmod); ms%nmod = s%nmod
+    allocate(ms%mod_id(ms%nmod), ms%mod_part(ms%nmod))
+    allocate(ms%npart); ms%npart = s%np 
+    allocate(ms%mod_part(ms%nmod))
+    do i = 1, s%nmod
       ms%mod_id(i) = s%mod(i)%gmodid
+      ms%mod_part(i) = 0
+      if (ms%npart == 1) ms%mod_part(i) = 1
+      if (ms%npart == s%nmod) ms%mod_part(i) = i
     end do
+    !
+    ! METIS
+    if ((ms%npart > 1).and.(ms%npart < ms%nmod)) then
+      call logmsg('Solution: '//ta((/isol/))//' dividing '//ta((/ms%nmod/))//&
+        ' models into '//ta((/ms%npart/))//' parts...')
+      m => solmet(isol)
+      !
+      allocate(mm)
+      allocate(mm%nparts); mm%nparts = ms%npart
+      allocate(mm%nvtxs); mm%nvtxs = ms%nmod
+      allocate(mm%vwgt(mm%nvtxs), mm%vsize(mm%nvtxs)); mm%vsize = 1
+      allocate(mm%part(mm%nvtxs)); mm%part = 0
+      allocate(mm%xadj(mm%nvtxs+1))
+      !
+      nja = 0
+      do i = 1, s%nmod
+        md => s%mod(i); mmd => smod(md%lmodid)
+        mm%vwgt(i) = int(md%ncell,i8b)
+        nja = nja + mmd%nxch
+      end do
+      !
+      allocate(mm%adjncy(nja), mm%adjwgt(nja), mm%ncon); mm%ncon = 1
+      allocate(mm%tpwgts(mm%nparts*m%ncon)); mm%tpwgts = 1./real(mm%nparts)
+      allocate(mm%ubvec(mm%ncon)); mm%ubvec(1) = tolimbal
+      !
+      mm%xadj(1) = 0; nja = 0
+      do i = 1, s%nmod
+        md => s%mod(i); mmd => smod(md%lmodid)
+        mm%xadj(i+1) = mm%xadj(i)
+        do j = 1, mmd%nxch
+          nja = nja + 1
+          mm%adjncy(nja) = int(mmd%xch(j)%m2mod - 1,i8b) ! convert to local number
+          mm%adjwgt(nja) = int(mmd%xch(j)%nexg,i8b)
+          mm%xadj(i+1) = mm%xadj(i+1) + 1
+        end do
+      end do
+      !
+      call mm%set_opts()
+      call mm%recur()
+      !
+      do i = 1, s%nmod
+        ipart = int(mm%part(i),i4b)
+        ms%mod_part(i) = ipart + 1
+      end do
+      !
+      ! clean up:
+      call mm%clean(); deallocate(mm); mm => null()
+    end if
+    !
     call ms%write()
     call ms%clean()
     deallocate(ms)

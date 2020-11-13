@@ -320,10 +320,12 @@ module mf6_module
   
   type tMf6_sol
     integer(i4b)                          :: isol = -1
-    character(len=mxslen),        pointer :: solname => null()
-    logical,                      pointer :: lmm     => null()
-    integer(i4b),                 pointer :: nmod    => null() !number of models/partitions
-    integer(i4b), dimension(:),   pointer :: mod_id  => null() !model ids
+    character(len=mxslen),        pointer :: solname  => null()
+    logical,                      pointer :: lmm      => null()
+    integer(i4b),                 pointer :: nmod     => null() !number of models
+    integer(i4b), dimension(:),   pointer :: mod_id   => null() !model ids
+    integer(i4b),                 pointer :: npart    => null() !number of partitions
+    integer(i4b), dimension(:),   pointer :: mod_part => null() !model partition numbers
   contains
     procedure :: write           => mf6_sol_write
     procedure :: write_tdis      => mf6_sol_write_tdis
@@ -992,15 +994,19 @@ module mf6_module
     ! -- local
 ! ------------------------------------------------------------------------------
     !
-    if (associated(this%solname)) deallocate(this%solname)
-    if (associated(this%lmm))     deallocate(this%lmm)
-    if (associated(this%nmod))    deallocate(this%nmod)
-    if (associated(this%mod_id))  deallocate(this%mod_id)
+    if (associated(this%solname))  deallocate(this%solname)
+    if (associated(this%lmm))      deallocate(this%lmm)
+    if (associated(this%nmod))     deallocate(this%nmod)
+    if (associated(this%mod_id))   deallocate(this%mod_id)
+    if (associated(this%npart))    deallocate(this%npart)
+    if (associated(this%mod_part)) deallocate(this%mod_part)
     !
-    this%solname => null()
-    this%lmm     => null()
-    this%nmod    => null()
-    this%mod_id  => null()
+    this%solname  => null()
+    this%lmm      => null()
+    this%nmod     => null()
+    this%mod_id   => null()
+    this%npart    => null()
+    this%mod_part => null()
     !
     return
   end subroutine mf6_sol_clean
@@ -1050,7 +1056,7 @@ module mf6_module
             '\'//trim(ms)//trim(pr(inam,irun))//'.nam '//trim(ms)
           call swap_slash(s)
           if (icpu == ipar) then
-            write(iu,'(a)') trim(s)//' '//ta((/i/))
+            write(iu,'(a)') trim(s)//' '//ta((/this%mod_part(i)/))
           else
             write(iu,'(a)') trim(s)
           end if
@@ -1202,7 +1208,7 @@ module mf6_module
         call open_file(nam, iu, 'w')
         write(iu,'(   a)') 'BEGIN OPTIONS'
         write(iu,'(2x,a)') 'MEMORY_PRINT_OPTION SUMMARY'
-        if (icpu == ipar) write(iu,'(2x,a)') 'DOMAIN_DECOMPOSITION '//ta((/this%nmod/))
+        if (icpu == ipar) write(iu,'(2x,a)') 'DOMAIN_DECOMPOSITION '//ta((/this%npart/))
         write(iu,'(   a)') 'END OPTIONS'
         write(iu,'(a)')
         write(iu,'(   a)') 'BEGIN TIMING'
@@ -1241,7 +1247,7 @@ module mf6_module
           write(iu,'(a)') 'set nam=..\run_input\'//trim(nam)
           if (icpu == ipar) then
             write(iu,'(a)') 'set mpi="'//trim(mpi_exe)//'"'
-            write(iu,'(a)') 'set np='//ta((/this%nmod/))
+            write(iu,'(a)') 'set np='//ta((/this%npart/))
           end if
           write(iu,'(a)')
           write(iu,'(a)') '@echo off'
@@ -3170,7 +3176,7 @@ module mf6_module
     return
   end subroutine mf6_mod_write_sto
   
-  subroutine mf6_mod_write_chd(this, lbin, lbinpos, ipack)
+ subroutine mf6_mod_write_chd(this, lbin, lbinpos, ipack)
 ! ******************************************************************************
 ! ******************************************************************************
 !
