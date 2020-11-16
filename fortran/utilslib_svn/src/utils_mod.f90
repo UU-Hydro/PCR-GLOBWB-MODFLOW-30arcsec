@@ -362,7 +362,7 @@ module utilsmod
     ! -- arguments
     type(tPol), dimension(:), intent(in) :: p
     integer(i1b), dimension(:,:), intent(inout) :: i1a
-    real(r4b), intent(in) :: xmin, ymin, cs
+    real(r8b), intent(in) :: xmin, ymin, cs
     integer(i1b) :: i1mv
     ! -- locals
     integer(i4b) :: nc, nr, i, ic0, ic1, ir0, ir1, ir, ic
