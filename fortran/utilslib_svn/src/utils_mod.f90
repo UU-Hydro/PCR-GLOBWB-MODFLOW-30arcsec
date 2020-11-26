@@ -98,6 +98,7 @@ module utilsmod
     module procedure :: ta_i8
     module procedure :: ta_r4
     module procedure :: ta_r8
+    module procedure :: ta_c
   end interface
   private :: ta_i4, ta_i8, ta_r4, ta_r8
 
@@ -160,10 +161,189 @@ module utilsmod
     integer, dimension(:,:), allocatable :: bndmap
   end type tUnp
 
+  type tTimeSeries
+    logical, pointer                    :: act    => null()
+    logical, pointer                    :: read  => null()
+    character(len=mxslen), pointer      :: rawhdr => null()
+    character(len=mxslen), pointer      :: raw    => null()
+    character(len=mxslen), pointer      :: id     => null()
+    real(r8b), pointer                  :: x      => null()
+    real(r8b), pointer                  :: y      => null()
+    integer(i4b), pointer               :: ic     => null()
+    integer(i4b), pointer               :: ir     => null()
+    integer(i4b), pointer               :: im     => null()
+    integer(i4b), dimension(:), pointer :: nod    => null()
+    real(r8b), dimension(:,:), pointer  :: val    => null()
+  contains
+    procedure :: clean => timeseries_clean
+  end type tTimeSeries
+  
   save
 
   contains
 
+ subroutine timeseries_clean(this)
+! ******************************************************************************  
+    ! -- arguments
+    class(tTimeSeries) :: this
+! ------------------------------------------------------------------------------
+    if (associated(this%act))    deallocate(this%act)
+    if (associated(this%read))   deallocate(this%read)
+    if (associated(this%rawhdr)) deallocate(this%rawhdr)
+    if (associated(this%raw))    deallocate(this%raw)
+    if (associated(this%id))     deallocate(this%id)
+    if (associated(this%x))      deallocate(this%x)
+    if (associated(this%y))      deallocate(this%y)
+    if (associated(this%ic))     deallocate(this%ic)
+    if (associated(this%ir) )    deallocate(this%ir)
+    if (associated(this%im) )    deallocate(this%im)
+    if (associated(this%nod))    deallocate(this%nod)
+    if (associated(this%val))    deallocate(this%val)
+    !
+    this%act    => null()
+    this%rawhdr => null()
+    this%raw    => null()
+    this%id     => null()
+    this%x      => null()
+    this%y      => null()
+    this%ic     => null()
+    this%ir     => null()
+    this%im     => null()
+    this%nod    => null()
+    this%val    => null()
+    !
+    return
+  end subroutine timeseries_clean
+  
+  subroutine remove_tab(s)
+! ******************************************************************************
+    ! -- arguments
+    character(len=*), intent(inout) :: s
+    
+    ! -- locals
+    integer(i4b) :: i
+! ------------------------------------------------------------------------------
+    !
+    do i = 1, len_trim(s)
+      if (s(i:i) == achar(9)) then
+        s(i:i) = ' '
+      end if
+    end do
+    !
+    return
+  end subroutine remove_tab
+
+  subroutine insert_tab(s)
+! ******************************************************************************
+    ! -- arguments
+    character(len=*), intent(inout) :: s
+    
+    ! -- locals
+    integer(i4b) :: i
+! ------------------------------------------------------------------------------
+    !
+    do i = 1, len_trim(s)
+      if (s(i:i) == ' ') then
+        s(i:i) = achar(9)
+      end if
+    end do
+    !
+    return
+  end subroutine insert_tab
+  
+  subroutine parse_line(s, sa, token_in)
+! ******************************************************************************
+    ! -- arguments
+    character(len=*), intent(in) :: s
+    character(len=mxslen), dimension(:), allocatable, intent(inout) :: sa
+    character(len=1), intent(in), optional :: token_in
+    
+    ! -- locals
+    character(len=1) :: token
+    character(len=mxslen) :: st
+    integer(i4b) :: n, m, i, iact
+! ------------------------------------------------------------------------------
+    if (present(token_in)) then
+      token = token_in
+    else
+      token = ' '
+    end if
+    !
+    if (allocated(sa)) deallocate(sa)
+    !
+    do iact = 1, 2
+      n = 0; st = adjustl(s)
+      call remove_tab(st)
+      do while(.true.)
+        m = len_trim(st)
+        if (m == 0) then
+          exit
+        else
+          n = n + 1
+        end if
+        i = index(st,token)
+        if ((i < 0)) then
+          exit
+        end if
+        if (iact == 2) then
+          sa(n) = st(1:i-1)
+        end if
+        st = adjustl(st(i:))
+      end do
+      if (iact == 1) then
+        if (n > 0) then
+          allocate(sa(n))
+        end if
+      end if
+    end do
+    !
+    if (n == 0) then
+      call errmsg('parse_line: empty string')
+    end if
+    !
+    return
+  end subroutine parse_line
+  
+  subroutine linear_regression(x, y, slope, yint, corr)
+! ******************************************************************************
+    ! -- arguments
+    real(r8b), dimension(:), intent(in) :: x
+    real(r8b), dimension(:), intent(in) :: y
+    real(r8b), intent(out) :: slope
+    real(r8b), intent(out) :: yint
+    real(r8b), intent(out) :: corr
+    !
+    ! -- locals
+    integer(i4b) :: i, n
+    real(r8b) :: r8n, sumx, sumx2, sumxy, sumy, sumy2
+! ------------------------------------------------------------------------------
+    sumx  = DZERO  ! sum of x
+    sumx2 = DZERO  ! sum of x**2
+    sumxy = DZERO  ! sum of x * y
+    sumy  = DZERO  ! sum of y
+    sumy2 = DZERO  ! sum of y**2
+    
+    n = size(x); r8n = real(n,r8b)
+    if (n /= size(y)) then
+      call errmsg('linear_regression: size of x and y do not match.')
+    end if
+    !
+    do i = 1, n
+      sumx  = sumx  + x(i)
+      sumx2 = sumx2 + x(i)*x(i)
+      sumxy = sumxy + x(i)*y(i)
+      sumy  = sumy  + y(i)
+      sumy2 = sumy2 + y(i)*y(i)
+    end do
+    
+    slope = (r8n  * sumxy -  sumx * sumy)  / (r8n * sumx2 - sumx**2) ! slope
+    yint  = (sumy * sumx2 -  sumx * sumxy) / (r8n * sumx2 - sumx**2) ! y-intercept
+    corr  = (sumxy - sumx * sumy / r8n) / &                          ! correlation coefficient
+            sqrt((sumx2 - sumx**2/r8n) * (sumy2 - sumy**2/r8n))
+    !
+    return
+  end subroutine linear_regression
+  
   recursive subroutine label_node(ia, ja, id1, i4wk1d, ireg)
 ! ******************************************************************************
     ! -- arguments
@@ -557,6 +737,33 @@ module utilsmod
     !
     return
   end function ta_r8
+  
+  function ta_c(arr, add_quotes) result(s)
+! ******************************************************************************
+    ! -- arguments
+    character(len=*), dimension(:), intent(in) :: arr
+    logical, optional, intent(in) :: add_quotes
+    character(len=:), allocatable :: s
+    ! -- locals
+    integer(i4b) :: i
+    character(len=1) :: q
+    character(len=mxslen) :: w
+! ------------------------------------------------------------------------------
+    if (present(add_quotes)) then
+      q = '"'
+    else
+      q =''
+    end if
+    !
+    w = arr(1)
+    s = trim(q)//trim(adjustl(w))//trim(q)
+    do i = 2, size(arr)
+      w = arr(i)
+      s = s//' '//trim(q)//trim(adjustl(w))//trim(q)
+    end do
+    !
+    return
+  end function ta_c
 
   subroutine swap_slash(s)
 ! ******************************************************************************
@@ -793,7 +1000,7 @@ module utilsmod
       open(unit=iu, file=f, form='formatted', access='sequential', action='write', status='replace')
     else if ((act == 'r') .and.(lbin)) then
       call logmsg('Reading binary file '//trim(f)//'...')
-      open(unit=iu, file=f, form='unformatted', access='stream', action='read', status='old',share='denynone')
+      open(unit=iu, file=f, form='unformatted', access='stream', action='readwrite', status='old',share='denynone')
     else if ((act == 'w') .and.(lbin)) then
       call logmsg('Writing binary file '//trim(f)//'...')
       open(unit=iu, file=f, form='unformatted', access='stream', action='write', status='replace')

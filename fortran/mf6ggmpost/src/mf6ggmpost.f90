@@ -1,16 +1,20 @@
 program mf6ggmpost
   ! -- modules
-  use utilsmod, only: i4b, mxslen, open_file, logmsg, ta
-  use mf6_post_module, only: tPostSol, tPostMod, &
+  use utilsmod, only: i4b, mxslen, open_file, logmsg, ta, parse_line
+  use mf6_post_module, only: tPostSol, tPostSer, &
     gncol, gnrow, gnlay, gxmin, gymin, gcs, &
-    sdate, tilebb, top
+    sdate, tilebb, top, comment, mask, maskmap
   !
   implicit none
   !
   ! -- locals
   type(tPostSol), pointer :: postsol => null()
-  integer(i4b) :: iu, i, npost
-  character(len=mxslen) :: f, s
+  type(tPostSer), pointer :: postser => null()
+  character(len=1) :: cdum, ssol
+  character(len=mxslen) :: f, s, in_dir
+  character(len=mxslen), dimension(:), allocatable :: sa
+  logical :: lex, lok
+  integer(i4b) :: iu, i, npost, na
 ! ------------------------------------------------------------------------------
   
   call getarg(1, f)
@@ -18,15 +22,41 @@ program mf6ggmpost
   read(iu,*) gncol, gnrow, gnlay, gxmin, gymin, gcs
   read(iu,*) sdate
   read(iu,'(a)') tilebb
+  read(iu,'(a)') mask
   read(iu,'(a)') top
   read(iu,*) npost
-  allocate(postsol)
+  !
+  ! read the mask file
+  inquire(file=mask, exist=lex)
+  if (lex) then
+    allocate(maskmap)
+    lok = maskmap%init(mask)
+  end if
+  !
+  allocate(postsol, postser)
   do i = 1, npost
     call logmsg('***** Processing '//ta((/i/))//'/'//ta((/npost/))//'...')
     read(iu,'(a)') s
-    call postsol%init(s)
-    call postsol%write()
-    call postsol%clean()
+    !
+    !return in case of comment
+    if (s(1:1) == comment) then
+      call logmsg('Skipping...')
+      cycle
+    end if
+    !
+    call parse_line(s, sa)
+    !
+    select case(sa(2))
+      case('s','smodid')
+        call postsol%init(sa)
+        call postsol%write()
+        call postsol%clean()
+      case('t')
+        call postser%init(sa)
+        call postser%write()
+        call postser%write_summary()
+        call postser%clean()
+    end select
   end do
   close(iu)
   !
