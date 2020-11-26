@@ -519,6 +519,8 @@ program datamap
       bb => cat(i)%lbb
       ir0 = bb%ir0; ir1 = bb%ir1; ic0 = bb%ic0; ic1 = bb%ic1 !BB
       !write(*,'(a)') ta((/i/))//'('//ta((/id1/))//')/'//ta((/mxlid/))//': ('//ta((/ic0,ic1,ir0,ir1/))//')'
+      call logmsg('Processing for catchment '//ta((/i/))//'/'//&
+        ta((/mxlid/))//', (nc,nr)=('//ta((/bb%ncol/))//','//ta((/bb%nrow/))//')')
       !
       ! label the neighboring cells
       nbr = 0 ! initialize number of neighbors
