@@ -1,6 +1,10 @@
 # packages needed and clear all available existing objects:
 require('psych'); require('RColorBrewer'); require('timeSeries'); require('topmodel'); require('zoo');
 
+most_consecutive_val = function(x, val = 1) {
+  with(rle(x), max(lengths[values == val]))
+}
+
 # plotting function
 plot_comparison <- function(outpltfl, model_measu, date, y_min, y_max) {
   tss_dataframe = model_measu
@@ -29,7 +33,7 @@ R2      <- function(obs, pred) summary(lm(obs ~ pred))$r.squared
 R2ad    <- function(obs, pred) summary(lm(obs ~ pred))$adj.r.squared
 
 QRE7525 <- function(obs, pred) {
-# pecentile value that we used
+# percentile value that we used
   pairs      = length(pred[which(!is.na(obs))])
   percentius = c(0.25,0.75)
 # calculate model and data percentile
@@ -38,8 +42,8 @@ QRE7525 <- function(obs, pred) {
   dtpr       = quantile(as.numeric(obs ),probs=percentius,na.rm=T)
   dtpr7525   = as.numeric(dtpr[which(percentius==0.75)] - dtpr[which(percentius==0.25)])
   QRE7525    = (mdpr7525-dtpr7525)/dtpr7525
-#~   return(c(QRE7525,dtpr7525,pairs))
-  return(QRE7525)
+  return(c(QRE7525,mdpr7525,dtpr7525))
+#  return(QRE7525)
 }
 
 NSeff <- function (Qobs, Qsim)
@@ -60,8 +64,8 @@ NSeff <- function (Qobs, Qsim)
 plot_timeseries = FALSE
 
 #region = "ADES"
-region = "DINO"
-#region = "USGS"
+#region = "DINO"
+region = "USGS"
 
 # input files:
 if (region == "ADES"){
@@ -85,6 +89,8 @@ output_folder = "f:/models/pcr-globwb-30arcsec/model_new/validation/statistics/"
 # period of interest
 startDate = "1960-01-31"
 endDate   = "2015-12-31"
+minYear   = 5
+minAmp    = 1.0 
 
 ########################################################################################################################################
 ########################################################################################################################################
@@ -101,6 +107,10 @@ station_with_xy = read.table(station_with_xy_file, header =T)
 # list of the months that we want to use
 monthly_used = unique(substr(as.character(seq(as.Date(startDate,"%Y-%m-%d"),as.Date(endDate,"%Y-%m-%d"),1)),1,7))
 
+datseq = seq(as.Date(startDate,"%Y-%m-%d"),as.Date(endDate,"%Y-%m-%d"),1)
+quarter_used = substr(quarters(as.Date(datseq)),2,2)
+quarter_used = unique(paste(substr(monthly_used,1,4),quarter_used,sep="-"))
+
 if (region == "ADES"){
  sites =  station_with_xy$EC		
 }else if (region == "DINO"){
@@ -109,8 +119,9 @@ if (region == "ADES"){
  sites = station_with_xy$site_no
 }
 
-#for (is in 1:1) {
+#for (is in 1:10) {
 for (is in 1:length(sites)) {
+
 
  #################################################################################################################################################################
  # read measurement file
@@ -158,15 +169,29 @@ for (is in 1:length(sites)) {
 
  # converting to monthly time series
  if (length(readmsfile) > 2) {
-  mongw_head  =   mat.or.vec(length(monthly_used),1)	  ; mongw_head[] = NA
- for (im in 1:length(monthly_used))     		  {
-  mongw_head[im] = mean(as.numeric(readmsfile[which(substr(readmsfile[,1],1,7) == monthly_used[im]),2]),na.rm=T)
+  mongw_head  = mat.or.vec(length(monthly_used),1); mongw_head[] = NA
+  quargw_head = mat.or.vec(length(quarter_used),1); quargw_head[] = NA
+  for (im in 1:length(monthly_used)){
+   mongw_head[im] = mean(as.numeric(readmsfile[which(substr(readmsfile[,1],1,7) == monthly_used[im]),2]),na.rm=T)
   }
- measured_data = data.frame(paste(as.character(monthly_used),"-15",sep=""),mongw_head)
- names(measured_data)[1] <- "date"
- names(measured_data)[2] <- "measurement"
- measured_data$date = as.Date(measured_data$date,"%Y-%m-%d")
+  quarter_meas = paste(substr(readmsfile[,1],1,4),substr(quarters(as.Date(readmsfile[,1])),2,2),sep='-')
+  for (iq in 1:length(quarter_used)){
+   quargw_head[iq] = mean(as.numeric(readmsfile[which(quarter_meas == quarter_used[iq]),2]),na.rm=T)
+  }
+  quargw_head[!is.nan(quargw_head)] <- 1
+  quargw_head[is.nan(quargw_head)] <- 0
+  measured_data = data.frame(paste(as.character(monthly_used),"-15",sep=""),mongw_head)
+  names(measured_data)[1] <- "date"
+  names(measured_data)[2] <- "measurement"
+  measured_data$date = as.Date(measured_data$date,"%Y-%m-%d")
  }
+
+ # skip in case 
+ ny = most_consecutive_val(quargw_head)/4
+ if (ny < minYear){
+  print(paste("Skipping for:",sites[is],', number of years found:',ny,sep=" "))
+  next
+ }  
 
  #################################################################################################################################################################
  # read model file
@@ -230,7 +255,19 @@ for (is in 1:length(sites)) {
  MAE___month_nb =   mae(month_msdata-avg_msmonth,month_modelo-avg_momonth); # print(paste("MAE___month_nb",MAE___month_nb,sep=" "))
  BIAS__month_nb =  bias(month_msdata-avg_msmonth,month_modelo-avg_momonth); # print(paste("BIAS__month_nb",BIAS__month_nb,sep=" "))
  #
- QRE7525_evalua = QRE7525(month_msdata,month_modelo); # print(paste("QRE7525_evalua",QRE7525_evalua,sep=" "))
+ 
+ QRE7525_evalua_all = QRE7525(month_msdata,month_modelo); # print(paste("QRE7525_evalua",QRE7525_evalua,sep=" "))
+ QRE7525_evalua  = QRE7525_evalua_all[1]
+ IQ7525_moevalua = QRE7525_evalua_all[2]
+ IQ7525_msevalua = QRE7525_evalua_all[3] 
+
+ if (abs(IQ7525_msevalua) < minAmp){
+  print(paste("Skipping for:",sites[is],', minmimum meas. amp found:',abs(IQ7525_msevalua),sep=" "))
+  next
+ }
+
+ print(paste("IQ7525_msevalua:",IQ7525_msevalua,sep=" "))
+
  } # end if (length(readmsfile) > 2)
 
  #################################################################################################################################################################
