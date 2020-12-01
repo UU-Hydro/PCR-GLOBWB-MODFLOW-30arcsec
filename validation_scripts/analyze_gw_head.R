@@ -68,12 +68,12 @@ if (region == "ADES"){
  input_folder         = "f:/basis_data/Rhine-Meuse/gw_head_data_rhine-meuse-master/database/groundwater_head_rhine_meuse_basin/03_FRANCE_ADES/"
  station_with_xy_file = "./ADES/station_list_ades_sel.csv"
  measurement_folder   = paste(input_folder,"data_withdepth/",sep="")
- modelresults_folder  = "f:/models/pcr-globwb-30arcsec/model_new/results_cartesius/transient/post_ts_ADES_txt_l2/"
+ modelresults_folder  = "f:/models/pcr-globwb-30arcsec/model_new/results_cartesius/transient/post_ts_ADES_txt_from_top/"
 }else if (region == "DINO"){
  input_folder         = "f:/basis_data/Rhine-Meuse/gw_head_data_rhine-meuse-master/database/groundwater_head_rhine_meuse_basin/11_DINO/"
  station_with_xy_file = "./DINO/dino_station_only_filtno1_sel_used.csv"
  measurement_folder   = paste(input_folder,"data_withdepth/",sep="")
- modelresults_folder  = "f:/models/pcr-globwb-30arcsec/model_new/results_cartesius/transient/post_ts_DINO_txt_l2/"
+ modelresults_folder  = "f:/models/pcr-globwb-30arcsec/model_new/results_cartesius/transient/post_ts_DINO_txt_from_top/"
 }else{
  input_folder = "f:/models/pcr-globwb-30arcsec/model_new/validation/download_nwis/USGS/"
  measurement_folder = input_folder
@@ -183,17 +183,15 @@ for (is in 1:length(sites)) {
  }
 
  # converting to monthly time series
- if (length(readmofile) > 2) {
-  mongw_head = mat.or.vec(length(monthly_used),1)
-  mongw_head[] = NA
-  for (im in 1:length(monthly_used)){
-   mongw_head[im] = mean(as.numeric(readmofile[which(substr(readmofile[,1],1,7) == monthly_used[im]),2]),na.rm=T)
-  }
-  model_result = data.frame(paste(as.character(monthly_used),"-15",sep=""),mongw_head)
-  names(model_result)[1] <- "date"
-  names(model_result)[2] <- "model_result"
-  model_result$date = as.Date(model_result$date,"%Y-%m-%d")
+ mongw_head = mat.or.vec(length(monthly_used),1)
+ mongw_head[] = NA
+ for (im in 1:length(monthly_used)){
+  mongw_head[im] = mean(as.numeric(readmofile[which(substr(readmofile[,1],1,7) == monthly_used[im]),2]),na.rm=T)
  }
+ model_result = data.frame(paste(as.character(monthly_used),"-15",sep=""),mongw_head)
+ names(model_result)[1] <- "date"
+ names(model_result)[2] <- "model_result"
+ model_result$date = as.Date(model_result$date,"%Y-%m-%d")
 
  #################################################################################################################################################################
  # merging model and measurement 
@@ -204,7 +202,7 @@ for (is in 1:length(sites)) {
  #names(model_result)[2] <- "model_result"
 
  if (length(readmsfile) > 2) {
- merged_date = merge(measured_data, model_result, by = c("date"), all = TRUE)
+  merged_date = merge(measured_data, model_result, by = c("date"), all = TRUE)
  }
  
  #################################################################################################################################################################
@@ -290,4 +288,4 @@ for (is in 1:length(sites)) {
  } # end if (length(readmsfile) > 2)
 
 } # end for (is in 1:length(station_with_xy$station))
-
+print("***** Done *****")
