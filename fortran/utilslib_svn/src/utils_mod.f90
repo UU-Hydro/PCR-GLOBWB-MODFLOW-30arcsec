@@ -173,6 +173,7 @@ module utilsmod
     integer(i4b), pointer               :: ir     => null()
     integer(i4b), pointer               :: im     => null()
     integer(i4b), dimension(:), pointer :: nod    => null()
+    real(r8b), pointer                  :: glev   => null()
     real(r8b), dimension(:,:), pointer  :: val    => null()
   contains
     procedure :: clean => timeseries_clean
@@ -181,8 +182,8 @@ module utilsmod
   save
 
   contains
-
- subroutine timeseries_clean(this)
+  
+  subroutine timeseries_clean(this)
 ! ******************************************************************************  
     ! -- arguments
     class(tTimeSeries) :: this
@@ -198,6 +199,7 @@ module utilsmod
     if (associated(this%ir) )    deallocate(this%ir)
     if (associated(this%im) )    deallocate(this%im)
     if (associated(this%nod))    deallocate(this%nod)
+    if (associated(this%glev))   deallocate(this%glev)
     if (associated(this%val))    deallocate(this%val)
     !
     this%act    => null()
@@ -210,6 +212,7 @@ module utilsmod
     this%ir     => null()
     this%im     => null()
     this%nod    => null()
+    this%glev   => null()
     this%val    => null()
     !
     return
@@ -261,6 +264,7 @@ module utilsmod
     ! -- locals
     character(len=1) :: token
     character(len=mxslen) :: st
+    logical :: ltab
     integer(i4b) :: n, m, i, iact
 ! ------------------------------------------------------------------------------
     if (present(token_in)) then
@@ -269,11 +273,25 @@ module utilsmod
       token = ' '
     end if
     !
+    ! find tabs and overule token
+    ltab = .false.
+    do i = 1, len_trim(s)
+      if (s(i:i) == achar(9)) then
+        ltab = .true.
+      end if
+    end do
+    if (ltab) then
+      token = achar(9)
+    end if
+    !
     if (allocated(sa)) deallocate(sa)
     !
     do iact = 1, 2
       n = 0; st = adjustl(s)
-      call remove_tab(st)
+      m = len_trim(st)
+      if (st(m+1:m+1) /= token) then
+        st(m+1:m+1) = token
+      end if
       do while(.true.)
         m = len_trim(st)
         if (m == 0) then
@@ -282,13 +300,16 @@ module utilsmod
           n = n + 1
         end if
         i = index(st,token)
-        if ((i < 0)) then
+        if ((i <= 0)) then
           exit
         end if
         if (iact == 2) then
           sa(n) = st(1:i-1)
         end if
         st = adjustl(st(i:))
+        if (st(1:1) == achar(9)) then
+          st = adjustl(st(2:))
+        end if
       end do
       if (iact == 1) then
         if (n > 0) then
@@ -303,6 +324,23 @@ module utilsmod
     !
     return
   end subroutine parse_line
+  
+  function get_args() result(args)
+! ******************************************************************************
+    ! -- arguments
+    character(len=mxslen), dimension(:), allocatable :: args
+    ! -- locals
+    integer(i4b) :: na, i
+! ------------------------------------------------------------------------------
+    na = nargs()-1
+    if (allocated(args)) deallocate(args)
+    allocate(args(na))
+    do i = 1, na
+      call getarg(i, args(i))
+    end do
+    !
+    return
+  end function get_args
   
   subroutine linear_regression(x, y, slope, yint, corr)
 ! ******************************************************************************
@@ -630,109 +668,145 @@ module utilsmod
     return
   end function tas
 
-  function ta_i4(arr, ndig) result(s)
+  function ta_i4(arr, fmt_in) result(s)
 ! ******************************************************************************
     ! -- arguments
     integer(i4b), dimension(:), intent(in) :: arr
     character(len=:), allocatable :: s
-    integer(i4b), intent(in), optional :: ndig
+    character(len=*), intent(in), optional :: fmt_in
     ! -- locals
     logical :: lfmt
     integer(i4b) :: i
     character(len=mxslen) :: w, fmt
 ! ------------------------------------------------------------------------------
-    if (present(ndig)) then
+    lfmt = .false.
+    if (present(fmt_in)) then
+      fmt = fmt_in
       lfmt = .true.
-      write(fmt,'(a,i2,a,i2,a)') '(i',ndig,'.',ndig,')'
-    else
-      lfmt = .false.
     end if
     if (lfmt) then
       write(w,fmt) arr(1)
+      s = trim(w)
     else
       write(w,*) arr(1)
+      s = trim(adjustl(w))
     end if
-    s = trim(adjustl(w))
     do i = 2, size(arr)
       if (lfmt) then
         write(w,fmt) arr(i)
+        s = s//' '//trim(w)
       else
         write(w,*) arr(i)
+        s = s//' '//trim(adjustl(w))
       end if
-      s = s//' '//trim(adjustl(w))
     end do
     !
     return
   end function ta_i4
 
-  function ta_i8(arr, ndig) result(s)
+  function ta_i8(arr, fmt_in) result(s)
 ! ******************************************************************************
     ! -- arguments
     integer(i8b), dimension(:), intent(in) :: arr
     character(len=:), allocatable :: s
-    integer(i4b), intent(in), optional :: ndig
+    character(len=*), intent(in), optional :: fmt_in
     ! -- locals
     logical :: lfmt
     integer(i4b) :: i
     character(len=mxslen) :: w, fmt
 ! ------------------------------------------------------------------------------
-    if (present(ndig)) then
+    lfmt = .false.
+    if (present(fmt_in)) then
+      fmt = fmt_in
       lfmt = .true.
-      write(fmt,'(a,i2,a,i2,a)') '(i',ndig,'.',ndig,')'
-    else
-      lfmt = .false.
     end if
     if (lfmt) then
       write(w,fmt) arr(1)
+      s = trim(w)
     else
       write(w,*) arr(1)
+      s = trim(adjustl(w))
     end if
-    s = trim(adjustl(w))
     do i = 2, size(arr)
       if (lfmt) then
         write(w,fmt) arr(i)
+        s = s//' '//trim(w)
       else
         write(w,*) arr(i)
+        s = s//' '//trim(adjustl(w))
       end if
-      s = s//' '//trim(adjustl(w))
     end do
     !
     return
   end function ta_i8
   
-  function ta_r4(arr) result(s)
+  function ta_r4(arr, fmt_in) result(s)
 ! ******************************************************************************
     ! -- arguments
     real(r4b), dimension(:), intent(in) :: arr
     character(len=:), allocatable :: s
+    character(len=*), intent(in), optional :: fmt_in
     ! -- locals
+    logical :: lfmt
     integer(i4b) :: i
-    character(len=mxslen) :: w
+    character(len=mxslen) :: w, fmt
 ! ------------------------------------------------------------------------------
-    write(w,*) arr(1)
-    s = trim(adjustl(w))
+    lfmt = .false.
+    if (present(fmt_in)) then
+      fmt = fmt_in
+      lfmt = .true.
+    end if
+    if (lfmt) then
+      write(w,fmt) arr(1)
+      s = trim(w)
+    else
+      write(w,*) arr(1)
+      s = trim(adjustl(w))
+    end if
     do i = 2, size(arr)
-      write(w,*) arr(i)
-      s = s//' '//trim(adjustl(w))
+      if (lfmt) then
+        write(w,fmt) arr(i)
+        s = s//' '//trim(w)
+      else
+        write(w,*) arr(i)
+        s = s//' '//trim(adjustl(w))
+      end if
     end do
     !
     return
   end function ta_r4
 
-  function ta_r8(arr) result(s)
+  function ta_r8(arr, fmt_in) result(s)
 ! ******************************************************************************
     ! -- arguments
     real(r8b), dimension(:), intent(in) :: arr
     character(len=:), allocatable :: s
+    character(len=*), intent(in), optional :: fmt_in
     ! -- locals
+    logical :: lfmt
     integer(i4b) :: i
-    character(len=mxslen) :: w
+    character(len=mxslen) :: w, fmt
 ! ------------------------------------------------------------------------------
-    write(w,*) arr(1)
-    s = trim(adjustl(w))
+    lfmt = .false.
+    if (present(fmt_in)) then
+      fmt = fmt_in
+      lfmt = .true.
+    end if
+    if (lfmt) then
+      write(w,fmt) arr(1)
+      s = trim(w)
+    else
+      write(w,*) arr(1)
+      s = trim(adjustl(w))
+    end if
     do i = 2, size(arr)
-      write(w,*) arr(i)
-      s = s//' '//trim(adjustl(w))
+      if (lfmt) then
+        write(w,fmt) arr(i)
+        s = s//' '//trim(w)
+      else
+        write(w,*) arr(i)
+        s = s//' '//trim(adjustl(w))
+      end if
     end do
     !
     return

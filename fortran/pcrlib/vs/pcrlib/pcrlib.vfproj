@@ -50,5 +50,8 @@
 		<Filter Name="Source Files" Filter="f90;for;f;fpp;ftn;def;odl;idl">
 		<File RelativePath="..\..\src\pcrlib.f90"/>
 		<File RelativePath="..\..\src\test.f90"/>
-		<File RelativePath="..\..\src\utils.f90"/></Filter></Files>
+		<File RelativePath="..\..\src\utils.f90"/>
+		<File RelativePath="..\..\..\utilslib_svn\src\utils_mod.f90">
+			<FileConfiguration Name="Debug|x64">
+				<Tool Name="VFFortranCompilerTool" Preprocess="preprocessYes" AdditionalIncludeDirectories="IFORT"/></FileConfiguration></File></Filter></Files>
 	<Globals/></VisualStudioProject>

@@ -144,6 +144,63 @@ module mf6_post_module
   
   contains
   !
+  subroutine init_top()
+! ******************************************************************************  
+    ! -- arguments
+    ! --- local
+    type(tBB), pointer :: bb => null()
+    character(len=mxslen) :: f
+    logical :: lex, lok
+    integer(i4b) :: i, iu
+! ------------------------------------------------------------------------------
+    !
+    allocate(topmap)
+    call open_file(tilebb, iu, 'r')
+    allocate(topmap%ntile)
+    read(iu,*) topmap%ntile
+    allocate(topmap%tilebb(topmap%ntile))
+    do i = 1, topmap%ntile
+      bb => topmap%tilebb(i)
+      read(iu,*) bb%ic0, bb%ic1, bb%ir0, bb%ir1
+      bb%ncol = bb%ic1 - bb%ic0 + 1
+      bb%nrow = bb%ir1 - bb%ir0 + 1
+    end do
+    close(iu)
+    allocate(topmap%i_type)
+    if (index(top,'.map',back=.true.) > 0) then
+      topmap%i_type = i_map
+    else if (index(top,'.idf',back=.true.) > 0) then
+      topmap%i_type = i_idf
+    else
+      call errmsg("Unrecognize top file format.")
+    end if
+    if (topmap%i_type == i_map) then
+      allocate(topmap%maps(topmap%ntile))
+    else
+      allocate(topmap%idfs(topmap%ntile))
+    end if
+    do i = 1, topmap%ntile
+      f = top
+      call replacetoken(f, '?', i)
+      call swap_slash(f)
+      inquire(file=f,exist=lex)
+      if (.not.lex) then
+        call logmsg("Could not find "//trim(f))
+      else
+        if (topmap%i_type == i_map) then
+          lok = topmap%maps(i)%init(f, 1)
+        else
+          lok = idfread(topmap%idfs(i), f, 0)
+        end if
+        if (.not.lok) then
+          call errmsg('Initializing top.')
+        end if
+      end if
+    end do
+    !
+    return
+  end subroutine init_top
+
 ! ==============================================================================
 ! subroutines/functions type tPostSeries
 ! ==============================================================================
@@ -154,6 +211,22 @@ module mf6_post_module
     class(tPostSer) :: this
     character(len=*), dimension(:), intent(in) :: opt
     ! --- local
+    integer(i4b), parameter :: i_in_dir   =  1
+    integer(i4b), parameter :: i_f_in     =  3
+    integer(i4b), parameter :: i_idcol    =  4
+    integer(i4b), parameter :: i_xcol     =  5
+    integer(i4b), parameter :: i_ycol     =  6
+    integer(i4b), parameter :: i_isol_beg =  7
+    integer(i4b), parameter :: i_isol_end =  8
+    integer(i4b), parameter :: i_in_postf =  9
+    integer(i4b), parameter :: i_itype    = 10
+    integer(i4b), parameter :: i_il_min   = 11
+    integer(i4b), parameter :: i_il_max   = 12
+    integer(i4b), parameter :: i_date_beg = 13
+    integer(i4b), parameter :: i_date_end = 14
+    integer(i4b), parameter :: i_i_out    = 15
+    integer(i4b), parameter :: i_out_dir  = 16
+    !
     type(tBB), pointer :: tsbb => null()
     type(tGen), pointer :: gen => null()
     type(tTimeSeries), pointer :: ts => null()
@@ -170,23 +243,23 @@ module mf6_post_module
 ! ------------------------------------------------------------------------------
     ! general parameters
     allocate(this%gen); gen => this%gen
-    allocate(gen%itype); gen%itype = 99999
-    allocate(gen%in_dir); read(opt(1),'(a)') gen%in_dir
+    allocate(gen%itype); read(opt(i_itype),*) gen%itype
+    allocate(gen%in_dir); read(opt(i_in_dir),'(a)') gen%in_dir
     allocate(gen%gic0); gen%gic0 = 1
     allocate(gen%gic1); gen%gic1 = gncol
     allocate(gen%gir0); gen%gir0 = 1
     allocate(gen%gir1); gen%gir1 = gnrow
-    allocate(gen%ltop); gen%ltop = .false.
-    read(opt(7),*) isol_beg
-    read(opt(8),*) isol_end
-    allocate(gen%in_postf); gen%in_postf = opt(9)
-    allocate(gen%il_min); read(opt(11),*) gen%il_min
-    allocate(this%writets); this%writets = .false. !TODO
-    allocate(gen%il_max); read(opt(12),*) gen%il_max
-    allocate(gen%date_beg); read(opt(13),*) gen%date_beg
-    allocate(gen%date_end); read(opt(14),*) gen%date_end
+    allocate(gen%ltop); gen%ltop = .true.; call init_top()
+    read(opt(i_isol_beg),*) isol_beg
+    read(opt(i_isol_end),*) isol_end
+    allocate(gen%in_postf); gen%in_postf = opt(i_in_postf)
+    allocate(gen%il_min); read(opt(i_il_min),*) gen%il_min
+    allocate(this%writets); this%writets = .true. !TODO
+    allocate(gen%il_max); read(opt(i_il_max),*) gen%il_max
+    allocate(gen%date_beg); read(opt(i_date_beg),*) gen%date_beg
+    allocate(gen%date_end); read(opt(i_date_end),*) gen%date_end
     allocate(gen%i_out)
-    select case(trim(opt(15)))
+    select case(trim(opt(i_i_out)))
       case('txt')
         gen%i_out = i_out_txt
       case('ipf')
@@ -194,7 +267,7 @@ module mf6_post_module
       case default
         call errmsg('mf6_post_ser_init')
     end select    
-    allocate(gen%out_dir); read(opt(16),'(a)') gen%out_dir
+    allocate(gen%out_dir); read(opt(i_out_dir),'(a)') gen%out_dir
     call create_dir(gen%out_dir, .true.)
     !
     read(sdate(1:4),*) ys; read(sdate(5:6),*) mns
@@ -207,10 +280,10 @@ module mf6_post_module
     allocate(gen%kper_end); gen%kper_end = kper_end
     
     allocate(this%f_in)
-    this%f_in = opt(3)
-    read(opt(4),*) idcol
-    read(opt(5),*) xcol
-    read(opt(6),*) ycol
+    this%f_in = opt(i_f_in)
+    read(opt(i_idcol),*) idcol
+    read(opt(i_xcol),*) xcol
+    read(opt(i_ycol),*) ycol
     !
     ! read the station file
     call this%read_stat(idcol, xcol, ycol)
@@ -485,7 +558,7 @@ module mf6_post_module
         this%nts = this%nts + 1
         if (iact == 2) then
           ts => this%ts(this%nts)
-          allocate(ts%act, ts%read, ts%rawhdr, ts%raw, ts%id, ts%x, ts%y)
+          allocate(ts%act, ts%read, ts%rawhdr, ts%raw, ts%id, ts%x, ts%y, ts%glev)
           ts%act = .true.
           ts%read = .false.
           ts%rawhdr = hdr
@@ -493,6 +566,7 @@ module mf6_post_module
           read(sa(idcol),*) ts%id
           read(sa(xcol),*) ts%x
           read(sa(ycol),*) ts%y
+          ts%glev = huge(DZERO)
         end if
       end do
       if (iact == 1) then
@@ -526,6 +600,7 @@ module mf6_post_module
     !
     nper =  this%gen%kper_end - this%gen%kper_beg + 1
     !
+    ! read raster first
     do i = 1, size(this%tsmod)
       tsm => this%tsmod(i)
       if ((tsm%nts > 0).and.(tsm%nts > mxnodread)) then
@@ -539,6 +614,9 @@ module mf6_post_module
           do il = this%gen%il_min, this%gen%il_max
             nod = ts%nod(il)
             if (nod > 0) then
+              if (associated(m%top)) then
+                ts%glev = m%top(nod)
+              end if
               do kper = 1, nper
                 ts%val(il,kper) = m%r8buff2d(kper,nod)
               end do
@@ -550,6 +628,7 @@ module mf6_post_module
       end if
     end do
     !
+    ! read point directly
     n = 0
     do i = 1, this%nts
       ts => this%ts(i)
@@ -568,6 +647,9 @@ module mf6_post_module
             call logmsg('Reading data for time series ('//ta((/i/))//'/'// &
               ta((/this%nts/))//') layer '//ta((/il/))//' node '//ta((/nod/))// &
               ' from model '//ta((/m%modid/))//'...')
+            if (associated(m%top)) then
+              ts%glev = m%top(nod)
+            end if
             call m%read_nod(nod, ts%val(il,:))
             !call m%read_nod(nod, r8wk2d)
           end if
@@ -595,9 +677,9 @@ module mf6_post_module
     character(len=1) :: datsep
     character(len=mxslen) :: f, s, s1, s2, s3, laystr
     character(len=mxslen), dimension(:), allocatable :: datestr
-    logical :: lfirst, lipf
+    logical :: lfirst, lipf, lwtd, lwrite
     integer(i4b) :: iper, nper, i, j, il, ys, mns, date, y, m, ye, me, de, iu, n
-    real(r8b) :: jd
+    real(r8b) :: jd, head, wtd
 ! --!----------------------------------------------------------------------------
     !
     if (.not.ts%act) return
@@ -625,9 +707,21 @@ module mf6_post_module
       write(datestr(iper),'(i4,2(a,i2.2))') ye, trim(datsep) , me, trim(datsep), de
     end do
     !
+    if (associated(ts%glev)) then
+      lwtd = .true.
+    else
+      lwtd = .true.
+    end if
+    !
+    lwrite = .false.
     do il = gen%il_min, gen%il_max
       if ((ts%nod(il) > 0)) then
-        if (gen%il_min == gen%il_max) then
+        if ((gen%itype == 4).and.lwrite) then ! top only for itype == 4
+          ts%nod(il) = 0 ! label nodes for lower layers zero
+          cycle
+        end if
+        lwrite = .true.
+        if ((gen%il_min == gen%il_max).or.(gen%itype == 4)) then
           laystr = ''
         else
           laystr = '_l'//ta((/il/))
@@ -636,10 +730,21 @@ module mf6_post_module
           case(i_out_txt)
             f = trim(gen%out_dir)//trim(ts%id)//trim(laystr)//'.txt'
             call open_file(f, iu, 'w')
-            s = 'date head'; call insert_tab(s)
+            if (lwtd) then
+              s = 'date head wtd'
+            else
+              s = 'date head'
+            end if
+            call insert_tab(s)
             write(iu,'(a)') trim(s)
             do j = 1, nper
-              s = trim(datestr(j))//' '//ta((/ts%val(il,j)/)); call insert_tab(s)
+              head = ts%val(il,j)
+              if (lwtd) then
+                s = trim(datestr(j))//' '//ta((/head, ts%glev-head/))
+              else
+                s = trim(datestr(j))//' '//ta((/head/))
+              end if
+              call insert_tab(s)
               write(iu,'(a)') trim(s)
             end do
             close(iu)
@@ -647,11 +752,23 @@ module mf6_post_module
             f = trim(gen%out_dir)//trim(ts%id)//trim(laystr)//'.txt'
             call open_file(f, iu, 'w')
             write(iu,'(a)') ta((/nper/))
-            write(iu,'(a)') '2'
+            if (lwtd) then
+              write(iu,'(a)') '3,1'
+            else
+              write(iu,'(a)') '2,1'
+            end if
             write(iu,'(a)') 'date,-999999'
             write(iu,'(a)') 'head,-999999'
+            if (lwtd) then
+              write(iu,'(a)') 'wtd,-999999'
+            end if
             do j = 1, nper
-              s = trim(datestr(j))//' '//ta((/ts%val(il,j)/))
+              head = ts%val(il,j)
+              if (lwtd) then
+                s = trim(datestr(j))//' '//ta((/head, ts%glev-head/))
+              else
+                s = trim(datestr(j))//' '//ta((/head/))
+              end if
               write(iu,'(a)') trim(s)
             end do
             close(iu)
@@ -670,10 +787,14 @@ module mf6_post_module
     ! --- local
     type(tTimeSeries), pointer :: ts => null()
     character(len=1) :: datsep
+    character(len=3) :: ext
     character(len=mxslen) :: f, s, s1, s2, s3, laystr
     character(len=mxslen), dimension(:), allocatable :: datestr
-    logical :: lfirst, lipf
-    integer(i4b) :: iper, nper, i, j, il, ys, mns, date, y, m, ye, me, de, iu, n
+    logical :: lipf, lwrite
+    logical, dimension(:), allocatable :: lfirst
+    integer(i4b) :: iper, nper, i, j, il, jl, ys, mns, date, y, m, ye, me, de, iu
+    integer(i4b) :: n
+    integer(i4b), dimension(:), allocatable :: iuarr
     real(r8b) :: jd
     character(len=mxslen), dimension(:), allocatable :: sa
 ! --!----------------------------------------------------------------------------
@@ -684,8 +805,10 @@ module mf6_post_module
     select case(this%gen%i_out)
       case(i_out_txt)
         datsep = '-'
+        ext    = 'txt'
       case(i_out_ipf)
         datsep = ''
+        ext    = 'ipf'
     end select
     !
     read(this%gen%date_beg(1:4),*) ys; read(this%gen%date_beg(5:6),*) mns
@@ -701,68 +824,90 @@ module mf6_post_module
       write(datestr(iper),'(i4,2(a,i2.2))') ye, trim(datsep) , me, trim(datsep), de
     end do
     !
-    do il = this%gen%il_min, this%gen%il_min
+    allocate(iuarr(gnlay), lfirst(gnlay)); iuarr = 0
+    if (this%gen%itype == 4) then
+      f = trim(this%gen%out_dir)//'summary.'//ext
+      call open_file(f, iuarr(1), 'w')
+    else
       if (this%gen%il_min == this%gen%il_max) then
-        laystr = ''
+        il = this%gen%il_min
+        f = trim(this%gen%out_dir)//'summary.'//ext
+        call open_file(f, iuarr(il), 'w')
       else
-        laystr = '_l'//ta((/il/))
+        do il = this%gen%il_min, this%gen%il_max
+          f = trim(this%gen%out_dir)//'summary_l'//ta((/il/))//'.'//ext
+          call open_file(f, iuarr(il), 'w')
+        end do
       end if
-      select case(this%gen%i_out)
-        case(i_out_txt)
-          ! write the summary file
-          f = trim(this%gen%out_dir)//'summary'//trim(laystr)//'.txt'
-          call open_file(f, iu, 'w'); lfirst = .true.
-          do i = 1, this%nts
-            ts => this%ts(i)
+    end if
+    !
+    select case(this%gen%i_out)
+      case(i_out_txt)
+        do i = 1, this%nts
+          ts => this%ts(i)
+          do il = this%gen%il_min, this%gen%il_max
+            if (this%gen%itype == 4) then
+              jl = 1
+            else
+              jl = il
+            end if
             if (ts%act .and. (ts%nod(il) > 0)) then
-              if (lfirst) then
-                write(iu,'(a)') trim(ts%rawhdr); lfirst = .false.
+              if (lfirst(il)) then
+                write(iuarr(jl),'(a)') trim(ts%rawhdr); lfirst(il) = .false.
               end if
-              write(iu,'(a)') trim(ts%raw)
+              write(iuarr(jl),'(a)') trim(ts%raw)
             end if
           end do
-          close(iu)
-        case(i_out_ipf)
-          ! write the summary file
-          f = trim(this%gen%out_dir)//'summary'//trim(laystr)//'.ipf'
-          call open_file(f, iu, 'w'); lfirst = .true.
-          n = 0
-          do i = 1, this%nts
-            ts => this%ts(i)
+        end do
+      case(i_out_ipf)
+        n = 0
+        do i = 1, this%nts
+          ts => this%ts(i)
+          do il = this%gen%il_min, this%gen%il_max
             if (ts%act .and. (ts%nod(il) > 0)) then
               n = n + 1
             end if
           end do
-          write(iu,'(a)') ta((/n/))
-          n = 0
-          do i = 1, this%nts
-            ts => this%ts(i)
+        end do
+        write(iu,'(a)') ta((/n/))
+        n = 0
+        do i = 1, this%nts
+          ts => this%ts(i)
+          do il = this%gen%il_min, this%gen%il_max
+            if (this%gen%itype == 4) then
+              jl = 1
+            else
+              jl = il
+            end if
             if (ts%act .and. (ts%nod(il) > 0)) then
-              if (lfirst) then
+              if (lfirst(jl)) then
                 call parse_line(ts%rawhdr, sa)
-                write(iu,'(a)') ta((/size(sa)+3/))
-                write(iu,'(a)') 'x'
-                write(iu,'(a)') 'y'
-                write(iu,'(a)') 'head'
+                write(iuarr(jl),'(a)') ta((/size(sa)+3/))
+                write(iuarr(jl),'(a)') 'x'
+                write(iuarr(jl),'(a)') 'y'
+                write(iuarr(jl),'(a)') 'model_results'
                 do j = 1, size(sa)
                   write(iu,'(a)') '"'//trim(sa(j))//'"'
                 end do
-                write(iu,'(a)') '3,txt'
-                lfirst = .false.
+                write(iuarr(jl),'(a)') '3,txt'
+                lfirst(jl) = .false.
               end if
               !
               call parse_line(ts%raw, sa)
               s1 = ta((/ts%x, ts%y/))
-              s2 = trim(ts%id)//'_l'//ta((/il/))
+              s2 = trim(ts%id)//trim(laystr)
               s3 = ta(sa)
-              write(iu,'(a)') trim(s1)//' "'//trim(s2)//'" '//trim(s3)
+              write(iuarr(jl),'(a)') trim(s1)//' "'//trim(s2)//'" '//trim(s3)
             end if
           end do
-          close(iu)
-        end select
+        end do
+    end select
+    ! 
+    do il = 1, gnlay
+      if (iuarr(il) > 0) close(iuarr(il))
     end do
     !
-    deallocate(datestr)
+    deallocate(datestr, iuarr, lfirst)
     if (allocated(sa)) deallocate(sa)
     !
     return
@@ -773,6 +918,7 @@ module mf6_post_module
     ! -- arguments
     class(tPostSer) :: this
     ! --- local
+    type(tMap), pointer :: map => null()
     integer(i4b) :: i
 ! --!----------------------------------------------------------------------------
     !
@@ -784,6 +930,29 @@ module mf6_post_module
       deallocate(this%ts)
     end if
     if (associated(this%nts)) deallocate(this%nts)
+    !
+    if (associated(topmap)) then
+      if (associated(topmap%maps)) then
+        do i = 1, topmap%ntile
+          map => topmap%maps(i)
+          call map%clean()
+        end do
+        deallocate(topmap%maps)
+      end if
+      if (associated(topmap%idfs)) then
+        call idfdeallocate(topmap%idfs, topmap%ntile) 
+      end if
+      deallocate(topmap%ntile)
+      deallocate(topmap%tilebb)
+      deallocate(topmap); topmap => null()
+    end if
+    !
+    if (associated(this%gen)) then
+      call mf6_post_clean_gen(this%gen)
+      deallocate(this%gen)
+      this%gen => null()
+    end if
+    !
     if (associated(this%mod)) then
       do i = 1, size(this%mod)
         call this%mod(i)%clean()
@@ -814,25 +983,27 @@ module mf6_post_module
 ! subroutines/functions type tPostMod
 ! ==============================================================================
   
-  subroutine mf6_post_mod_init(this, lbbonly)
+  subroutine mf6_post_mod_init(this, lbbonly_in)
 ! ******************************************************************************
     ! -- arguments
     class(tPostMod) :: this
-    logical, intent(in), optional :: lbbonly
+    logical, intent(in), optional :: lbbonly_in
     ! --- local
-    logical :: lex
+    logical :: lex, lbbonly
     character(len=mxslen) :: f
 ! ------------------------------------------------------------------------------
+    if (present(lbbonly_in)) then
+      lbbonly = lbbonly_in
+    else
+      lbbonly = .false.
+    end if
+    !
     allocate(this%modname)
     write(this%modname,'(a,i5.5)') 'm', this%modid
     !
-    if (present(lbbonly)) then
-      call this%read_nodbin(lbbonly)
-    else
-      call this%read_nodbin()
-    end if
+    call this%read_nodbin(lbbonly)
     !
-    if (this%gen%ltop) then
+    if (this%gen%ltop .and. .not.lbbonly) then
       call this%read_top()
     end if
     !
@@ -1192,7 +1363,7 @@ module mf6_post_module
     class(tPostMod) :: this
     ! --- local
     integer(i4b) :: i, j, n
-    real(r8b) :: sumhead
+    real(r8b) :: sumhead, sumwtd
 ! ------------------------------------------------------------------------------
     !
     if (.not.associated(this%r8buff)) then
@@ -1201,13 +1372,23 @@ module mf6_post_module
     !
     n = size(this%r8buff2d,1)
     !
-    do i = 1, this%nodes
-      sumhead = DZERO
-      do j = 1, n
-        sumhead = sumhead + this%r8buff2d(j,i)
+    if (associated(this%top)) then ! water table depths
+      do i = 1, this%nodes ! loop over nodes
+        sumwtd = DZERO
+        do j = 1, n ! loop over periods
+          sumwtd = sumwtd + (this%top(i) - this%r8buff2d(j,i))
+        end do
+        this%r8buff(i) = sumwtd / n
       end do
-      this%r8buff(i) = sumhead / n
-    end do
+    else ! heads
+      do i = 1, this%nodes ! loop over nodes
+        sumhead = DZERO ! loop over periods
+        do j = 1, n
+          sumhead = sumhead + this%r8buff2d(j,i)
+        end do
+        this%r8buff(i) = sumhead / n
+      end do
+    end if
     !
     deallocate(this%r8buff2d)
     this%r8buff2d => null()
@@ -1232,7 +1413,7 @@ module mf6_post_module
     d = 1
     jd = get_jd(y, m, d) + totim - DONE
     call get_ymd_from_jd(jd, idum, y, m, d)
-    ts = ta((/y/))//ta((/m/),2)//ta((/d/),2)
+    ts = ta((/y/))//ta((/m/),'(i2.2)')//ta((/d/),'(i2.2)')
     
     f = trim(gen%out_dir)//trim(name)//'_'//trim(gen%out_pref)// &
       trim(ts)//'_l'//ta((/il/))
@@ -1468,7 +1649,7 @@ module mf6_post_module
     !
     gen%ltop = .false.
     select case(gen%itype)
-    case(1)
+    case(1, 7)
       gen%ltop = .true.
       allocate(topmap)
       call open_file(tilebb, iu, 'r')
@@ -1626,7 +1807,7 @@ module mf6_post_module
         if (this%gen%itype == 5) then
           call m%calc_slope(2)
         end if
-        if (this%gen%itype == 6) then
+        if ((this%gen%itype == 6).or.(this%gen%itype == 7)) then
           call m%calc_average()
         end if
         mintotimmod = min(mintotimmod, m%totim_read)

@@ -47,7 +47,7 @@ program mf6ggmpost
     call parse_line(s, sa)
     !
     select case(sa(2))
-      case('s','smodid')
+      case('m', 's','smodid')
         call postsol%init(sa)
         call postsol%write()
         call postsol%clean()
