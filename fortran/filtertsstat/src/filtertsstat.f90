@@ -1,6 +1,6 @@
 program filtertsstat
   ! -- modules
-  use utilsmod, only: i4b, r8b, get_args, mxslen, open_file, &
+  use utilsmod, only: i4b, r4b, r8b, get_args, mxslen, open_file, &
     errmsg, logmsg, ta, parse_line, DZERO, tBB
   !
   implicit none
@@ -13,6 +13,7 @@ program filtertsstat
     character(len=mxslen) :: raw = ''
     real(r8b)             :: rho = DZERO
     real(r8b)             :: qre = DZERO
+    integer(i4b)          :: iperf = 0
   end type tStat
   
   ! -- locals
@@ -22,9 +23,11 @@ program filtertsstat
   character(len=mxslen) :: f_in, f_out, hdr, s
   character(len=mxslen), dimension(:), allocatable :: args, sa
   integer(i4b) :: nsf, ns, na, iu, i, gnc, gnr, ic, ir, nc, nr
-  integer(i4b) :: ylat_ic, xlon_ic, rho_ic, qre_ic, iact, ios
-  real(r8b) :: gxmin, gxmax, gymin, gymax, gcs, x, y, rho, qre
+  integer(i4b) :: ylat_ic, xlon_ic, rho_ic, qre_ic, iact, ios, np
+  integer(i4b), dimension(4) :: nperf
   integer(i4b), dimension(:,:), allocatable :: si2d
+  real(r4b), dimension(4) :: pperf
+  real(r8b) :: gxmin, gxmax, gymin, gymax, gcs, x, y, rho, qre
   real(r8b), dimension(:,:), allocatable :: rho2d, qre2d
 ! ------------------------------------------------------------------------------
   !
@@ -57,7 +60,30 @@ program filtertsstat
           bb%ic0 = min(bb%ic0,ic); bb%ic1 = max(bb%ic1,ic)
           bb%ir0 = min(bb%ir0,ir); bb%ir1 = max(bb%ir1,ir)
           sd%ic = ic; sd%ir = ir
+          if ((trim(sa(rho_ic)) == 'NA').or.(trim(sa(rho_ic)) == 'Inf')) then
+            sd%act = .false.
+            cycle
+          end if
+          if ((trim(sa(qre_ic)) == 'NA').or.(trim(sa(qre_ic)) == 'Inf')) then
+            sd%act = .false.
+            cycle
+          end if
           read(sa(rho_ic),*) sd%rho; read(sa(qre_ic),*) sd%qre
+          if ((abs(sd%qre) <= 0.5d0).and.((sd%rho) >= 0.5d0)) then
+            sd%iperf = 1
+          end if
+          if ((abs(sd%qre)  > 0.5d0).and.((sd%rho) >= 0.5d0)) then
+            sd%iperf = 2
+          end if
+          if ((abs(sd%qre) <= 0.5d0).and.((sd%rho)  < 0.5d0)) then
+            sd%iperf = 3
+          end if
+          if ((abs(sd%qre)  > 0.5d0).and.((sd%rho)  < 0.5d0)) then
+            sd%iperf = 4
+          end if
+          if (sd%iperf == 0) then
+            call errmsg('Error classifying.')
+          end if
           sd%raw = trim(s)
         end if
       end if
@@ -86,6 +112,7 @@ program filtertsstat
   !
   do i = 1, ns
     sd => sdat(i)
+    if (.not.sd%act) cycle
     ic = sd%ic - bb%ic0 + 1; ir = sd%ir - bb%ir0 + 1 
     rho = sd%rho; qre = abs(sd%qre)
     if ((rho > rho2d(ic,ir)).and.(qre < qre2d(ic,ir))) then
@@ -96,27 +123,43 @@ program filtertsstat
   end do
   !
   ! label for writing
+  nperf = 0
   nsf = 0
   do ir = 1, nr
     do ic = 1, nc
       i = si2d(ic,ir)
       if (i > 0) then
+        sd => sdat(i)
         nsf = nsf + 1
-        sdat(i)%write = .true.
+        sd%write = .true.
+        nperf(sd%iperf) = nperf(sd%iperf) + 1
       end if
     end do
   end do
   !
   ! write the new stations
-  call logmsg('Writing '//trim(f_out)//' for '//ta((/nsf/))//'/'//ta((/ns/))//' stations...')
+  call logmsg('Writing '//trim(f_out)//'...')
   call open_file(f_out, iu, 'w')
-  write(iu,'(a)') trim(hdr)
+  write(iu,'(a)') trim(hdr)//'perf_class'
   do i = 1, ns
     sd => sdat(i)
     if (sd%write) then
-      write(iu,'(a)') trim(sd%raw)
+      if (len_trim(sd%raw) == 0) then
+        call errmsg('Program error')
+      end if
+      write(iu,'(a)') trim(sd%raw)//ta((/sd%iperf/))
     end if
   end do
   close(iu)
+  !
+  np = sum(nperf)
+  write(s,'(f10.2)') 100.*np/ns
+  do i = 1, 4
+    pperf(i) = 100.*nperf(i)/np
+  end do
+  call logmsg('Total # classified: '//ta((/np/))//'/'//ta((/ns/))//' ('//trim(adjustl(s))//' %)')
+  call logmsg('class            I         II        III         IV ')
+  call logmsg('%     : '//ta(pperf,'(f10.1)'))
+  call logmsg('Count : '//ta(nperf,'(i10)'))
   !
 end program
