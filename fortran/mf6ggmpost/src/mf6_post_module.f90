@@ -625,6 +625,7 @@ module mf6_post_module
           ts%read = .true.
           call mf6_post_ser_write_series(this%gen, ts)
         end do
+        call m%clean()
       end if
     end do
     !

@@ -31,6 +31,9 @@ program mf6ggmpost
   if (lex) then
     allocate(maskmap)
     lok = maskmap%init(mask)
+    call logmsg('***** Found mask! *****')
+  else
+    call logmsg('***** Could not find mask! *****')
   end if
   !
   allocate(postsol, postser)
