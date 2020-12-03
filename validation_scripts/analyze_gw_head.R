@@ -177,10 +177,10 @@ for (is in 1:length(sites)) {
    }
   }
 
-  if (use_wtd){
-   print(paste("Skipping wtd for:",sites[is],sep=" "))
-   next
-  }
+  #if (use_wtd){
+  # print(paste("Skipping wtd for:",sites[is],sep=" "))
+  # next
+  #}
 
   if (use_wtd){
    wtd_flag = TRUE
