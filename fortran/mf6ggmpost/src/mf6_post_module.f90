@@ -825,8 +825,10 @@ module mf6_post_module
       write(datestr(iper),'(i4,2(a,i2.2))') ye, trim(datsep) , me, trim(datsep), de
     end do
     !
-    allocate(iuarr(gnlay), lfirst(gnlay)); iuarr = 0
+    allocate(iuarr(gnlay), lfirst(gnlay))
+    iuarr = 0; lfirst = .true.
     if (this%gen%itype == 4) then
+      lfirst = .false.; lfirst(1) = .true.
       f = trim(this%gen%out_dir)//'summary.'//ext
       call open_file(f, iuarr(1), 'w')
     else
