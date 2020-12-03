@@ -34,8 +34,6 @@ plot_comparison <- function(outpltfl, model_measu, date, startDate, endDate, y_m
   outplott <- outplott + theme(axis.title.y = element_text(size = 10)) 
   outplott <- outplott + theme(plot.title = element_text(size = 10))
   ggsave(paste(outpltfl,sep=""), plot = outplott,width=27,height=7,units='cm')
-
-
   rm(outplott)
 }
 
@@ -76,12 +74,12 @@ NSeff <- function (Qobs, Qsim)
 ########################################################################################################################################
 ########################################################################################################################################
 
-plot_timeseries = FALSE
-#plot_timeseries = TRUE
+#plot_timeseries = FALSE
+plot_timeseries = TRUE
 
-#region = "ADES"
+region = "ADES"
 #region = "DINO"
-region = "USGS"
+#region = "USGS"
 startDate = "1960-01-01"
 endDate   = "2015-12-31"
 #startDate = "2000-01-01"
@@ -92,9 +90,9 @@ minAmp    = 0.0
 # input files:
 if (region == "ADES"){
  input_folder         = "f:/basis_data/Rhine-Meuse/gw_head_data_rhine-meuse-master/database/groundwater_head_rhine_meuse_basin/03_FRANCE_ADES/"
- station_with_xy_file = "./ADES/station_list_ades_sel.csv"
  measurement_folder   = paste(input_folder,"data_withdepth/",sep="")
  modelresults_folder  = "f:/models/pcr-globwb-30arcsec/model_new/results_cartesius/transient/post_ts_ADES_txt_from_top/"
+ station_with_xy_file = paste(modelresults_folder,"summary.txt",sep="")
 }else if (region == "DINO"){
  input_folder         = "f:/basis_data/Rhine-Meuse/gw_head_data_rhine-meuse-master/database/groundwater_head_rhine_meuse_basin/11_DINO/"
  station_with_xy_file = "./DINO/dino_station_only_filtno1_sel_used.csv"
@@ -379,21 +377,21 @@ for (is in 1:length(sites)) {
   longitude = as.character(station_with_xy$dec_long_va[is])
  }
  if (first){
-#  header = c("station_name",   "latitude",    "longitude",     "avg_msmonth",   "avg_momonth",   
-#             "RHO_p_month" ,   "R2____month", "R2adj_month",   "NSeff_month",   "RMSE__month", 
-#             "MAE___month",    "BIAS__month", "NSeff_month_nb","RMSE__month_nb","MAE___month_nb",
-#             "BIAS__month_nb", "QRE7525_evalua")
-  header = c("station_name",   "latitude",     "longitude",     "RHO_p_month",   "QRE7525_evalua")   
+  header = c("station_name",   "latitude",    "longitude",     "avg_msmonth",   "avg_momonth",   
+             "RHO_p_month" ,   "R2____month", "R2adj_month",   "NSeff_month",   "RMSE__month", 
+             "MAE___month",    "BIAS__month", "NSeff_month_nb","RMSE__month_nb","MAE___month_nb",
+             "BIAS__month_nb", "QRE7525_evalua", "performance")
+#  header = c("station_name",   "latitude",     "longitude",     "RHO_p_month",   "QRE7525_evalua", "performance")   
   cat(header,"\n",sep="\t",file=output_summary_txt,append=FALSE)
   first = FALSE
  }
 
  if (length(readmsfile) > 2) {
-#  summary = c(sites[is],      latitude,    longitude,      avg_msmonth,    avg_momonth,   
-#              RHO_p_month,    R2____month, R2adj_month,    NSeff_month,    RMSE__month,   
-#              MAE___month,    BIAS__month, NSeff_month_nb, RMSE__month_nb, MAE___month_nb,
-#              BIAS__month_nb, QRE7525_evalua)
-  summary = c(sites[is],      latitude,     longitude,      RHO_p_month,     QRE7525_evalua)
+  summary = c(sites[is],      latitude,    longitude,      avg_msmonth,    avg_momonth,   
+              RHO_p_month,    R2____month, R2adj_month,    NSeff_month,    RMSE__month,   
+              MAE___month,    BIAS__month, NSeff_month_nb, RMSE__month_nb, MAE___month_nb,
+              BIAS__month_nb, QRE7525_evalua, iperf)
+#  summary = c(sites[is],      latitude,     longitude,      RHO_p_month,     QRE7525_evalua)
   cat(summary,"\n",sep="\t",file=output_summary_txt,append=TRUE)
  } # end if (length(readmsfile) > 2)
 
