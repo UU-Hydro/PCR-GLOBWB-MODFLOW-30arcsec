@@ -6,20 +6,35 @@ most_consecutive_val = function(x, val = 1) {
 }
 
 # plotting function
-plot_comparison <- function(outpltfl, model_measu, date, y_min, y_max) {
-  tss_dataframe = model_measu
+plot_comparison <- function(outpltfl, model_measu, date, startDate, endDate, y_min, y_max, site, iqm, iqo, qre, rho, rmse, bias, yrev) {
+  tss_dfr = model_measu
   #y_min         = -10
   #y_max         =  5
 
   outplott <- ggplot()
   outplott <- outplott +
-    geom_point(data = tss_dataframe,aes(x = date, y = data ), shape=4,  colour =  "green") +
-    geom_line(data = tss_dataframe,aes(x = date, y = data ),   colour =  "green" , size = 0.90) +
-    geom_line(data = tss_dataframe,aes(x = date, y = model ),  colour =  "red", size = 0.35) +
+    geom_line(data = tss_dfr[!is.na(tss_dfr$data),], aes(x = date, y = data), colour =  "green" , size = 0.35, linetype = "solid") +
+    geom_point(data = tss_dfr, aes(x = date, y = data ), shape=1,  colour =  "green") +
+    geom_line(data = tss_dfr, aes(x = date, y = model ), colour =  "red", size = 0.35) +
     scale_y_continuous(limits=c(y_min,y_max)) +
-    scale_x_date('',limits=c(as.Date("1958-01-01","%Y-%m-%d"),as.Date("2015-12-31","%Y-%m-%d")))
-
+    scale_x_date('',limits=c(as.Date(startDate,"%Y-%m-%d"),as.Date(endDate,"%Y-%m-%d"))) +
+    ggtitle(paste("site ",site, 
+     "; iq_mod = ",sprintf(iqm,fmt='%#.2f'),
+     ", iq_obs = ",sprintf(iqo,fmt='%#.2f'),
+     ", qre = ",sprintf(qre,fmt='%#.2f'),
+     ", rho = ",sprintf(rho,fmt='%#.2f'),
+     ", rmse = ",sprintf(rmse,fmt='%#.2f'),
+     ", bias = ",sprintf(bias,fmt='%#.2f'),sep=""))
+  if (yrev){
+   outplott <- outplott + scale_y_reverse()
+   outplott <- outplott + ylab("Relative groundwater depth [m]")
+  }else{
+   outplott <- outplott + ylab("Relative groundwater head [m]")
+  }
+  outplott <- outplott + theme(axis.title.y = element_text(size = 10)) 
+  outplott <- outplott + theme(plot.title = element_text(size = 10))
   ggsave(paste(outpltfl,sep=""), plot = outplott,width=27,height=7,units='cm')
+
 
   rm(outplott)
 }
@@ -62,10 +77,17 @@ NSeff <- function (Qobs, Qsim)
 ########################################################################################################################################
 
 plot_timeseries = FALSE
+#plot_timeseries = TRUE
 
 #region = "ADES"
 #region = "DINO"
 region = "USGS"
+startDate = "1960-01-01"
+endDate   = "2015-12-31"
+#startDate = "2000-01-01"
+#endDate   = "2002-12-31"
+minYear   = 5
+minAmp    = 0.0
 
 # input files:
 if (region == "ADES"){
@@ -81,16 +103,10 @@ if (region == "ADES"){
 }else{
  input_folder = "f:/models/pcr-globwb-30arcsec/model_new/validation/download_nwis/USGS/"
  measurement_folder = input_folder
- modelresults_folder = "f:/models/pcr-globwb-30arcsec/model_new/results_cartesius/transient/post_ts_USGS_txt_l2/"
+ modelresults_folder = "f:/models/pcr-globwb-30arcsec/model_new/results_cartesius/transient/post_ts_usgs_txt_from_top/"
  station_with_xy_file = paste(modelresults_folder,"summary.txt",sep="")
 }
 output_folder = "f:/models/pcr-globwb-30arcsec/model_new/validation/statistics/"
-
-# period of interest
-startDate = "1960-01-31"
-endDate   = "2015-12-31"
-minYear   = 5
-minAmp    = 1.0 
 
 ########################################################################################################################################
 ########################################################################################################################################
@@ -99,6 +115,10 @@ output_folder = paste(output_folder,region,'/',sep="")
 output_folder_plots = paste(output_folder,"plots",sep="")
 dir.create(output_folder)
 dir.create(output_folder_plots)
+dir.create(paste(output_folder_plots,'/1/',sep=""))
+dir.create(paste(output_folder_plots,'/2/',sep=""))
+dir.create(paste(output_folder_plots,'/3/',sep=""))
+dir.create(paste(output_folder_plots,'/4/',sep=""))
 
 output_summary_txt = paste(output_folder,"summary.txt",sep="")
 
@@ -119,9 +139,10 @@ if (region == "ADES"){
  sites = station_with_xy$site_no
 }
 
-#for (is in 1:10) {
+first = TRUE
+#for (is in 1:100) {
 for (is in 1:length(sites)) {
-
+ print(paste("***** Station ",is,"/",length(sites),"..."))
 
  #################################################################################################################################################################
  # read measurement file
@@ -133,24 +154,59 @@ for (is in 1:length(sites)) {
  # throw away data without date
  readmsfile = readmsfile[(which(!is.na(readmsfile[,1]))),]		
 
- # throw away data without head
+ # throw away data without water depth or head
  if (region != "USGS"){
+  wtd_flag = FALSE
   readmsfile = readmsfile[(which(!is.na(readmsfile$head))),]
  }else{
-  readmsfile = readmsfile[(which(!is.na(readmsfile$lev_va))),] # water-level feet below land surface
+  n_wtd  = length(which(!is.na(readmsfile$lev_va)))
+  n_head = length(which(!is.na(readmsfile$sl_lev_va)))
+  if ((n_wtd == 0) & (n_head == 0)){
+   print(paste("Skipping for:",sites[is],sep=" "))
+   next
+  }
+  if (n_wtd > 0){
+   use_wtd = TRUE
+   if (n_head > n_wtd){
+    use_wtd = FALSE
+   }
+  }else{
+   use_wtd = FALSE
+   if (n_wtd > n_head){
+    use_wtd = TRUE
+   }
+  }
+
+  if (use_wtd){
+   print(paste("Skipping wtd for:",sites[is],sep=" "))
+   next
+  }
+
+  if (use_wtd){
+   wtd_flag = TRUE
+   readmsfile = readmsfile[(which(!is.na(readmsfile$lev_va))),] # water-level feet below land surface
+  }else{
+   wtd_flag = FALSE
+   readmsfile = readmsfile[(which(!is.na(readmsfile$sl_lev_va))),] # water-level feet above datum
+  }
  }
- 
+
  # using groundwater head data or depth
  if (region != "USGS"){
   readmsfile = cbind(as.character(readmsfile[,1]),as.numeric(readmsfile$head)) # use actual groundwater heads
  }else{
-  readmsfile = cbind(as.character(readmsfile[,4]),as.numeric(readmsfile$lev_va)*0.3048) # water table depth to meters
- }
- 
- if (length(readmsfile) <= 2){
-  next
+  if (wtd_flag){
+   readmsfile = cbind(as.character(readmsfile[,4]),as.numeric(readmsfile$lev_va)*0.3048) # water table depth to meters
+  }else{
+   readmsfile = cbind(as.character(readmsfile[,4]),as.numeric(readmsfile$sl_lev_va)*0.3048) # water-level feet above datum
+  }
  }
 	 
+ if (length(readmsfile) <= 2) {
+  print(paste("Skipping for:",sites[is]," for not having enough data",sep=" "))
+  next
+ }
+
  # sort-ordering data based on date 
  readmsfile = readmsfile[order(as.Date(readmsfile[,1],"%Y-%m-%d")),]
  
@@ -163,9 +219,11 @@ for (is in 1:length(sites)) {
   readmsfile  =	  readmsfile[(which(!is.na(readmsfile[,1]))),]
   readmsfile  =	  readmsfile[(which(!is.na(readmsfile[,2]))),]
  if (length(readmsfile) > 2) {
-  readmsfile  =	  readmsfile[(which(as.numeric(as.Date(readmsfile[,1],"%Y-%m-%d")) > (as.numeric(as.Date(startDate,"%Y-%m-%d")) - 1))),]}
+  readmsfile  =	  readmsfile[(which(as.numeric(as.Date(readmsfile[,1],"%Y-%m-%d")) > (as.numeric(as.Date(startDate,"%Y-%m-%d")) - 1))),]
+ }
  if (length(readmsfile) > 2) {
-  readmsfile  =	  readmsfile[(which(as.numeric(as.Date(readmsfile[,1],"%Y-%m-%d")) < (as.numeric(as.Date(  endDate,"%Y-%m-%d")) + 1))),]}}
+  readmsfile  =	  readmsfile[(which(as.numeric(as.Date(readmsfile[,1],"%Y-%m-%d")) < (as.numeric(as.Date(  endDate,"%Y-%m-%d")) + 1))),]}
+ }
 
  # converting to monthly time series
  if (length(readmsfile) > 2) {
@@ -200,11 +258,11 @@ for (is in 1:length(sites)) {
  namemofile = paste(modelresults_folder, sites[is],".txt", sep = "")		
  readmofile = read.table(namemofile,header=TRUE)		 		
  
- # throw away data without head/wtd
- if (region != "USGS"){
-  readmofile = subset(readmofile,select=-c(wtd) )
+ # throw away unused data
+ if (wtd_flag){
+  readmofile = subset(readmofile,select=-head) # throw away head
  }else{
-  readmofile = subset(readmofile,select=-c(head) )
+  readmofile = subset(readmofile,select=-wtd) # throw away wtd
  }
 
  # converting to monthly time series
@@ -261,6 +319,21 @@ for (is in 1:length(sites)) {
  IQ7525_moevalua = QRE7525_evalua_all[2]
  IQ7525_msevalua = QRE7525_evalua_all[3] 
 
+ # classify
+ if (abs(QRE7525_evalua) <= 0.5){
+  if (RHO_p_month > 0.5){
+   iperf = 1
+  }else{
+   iperf = 3
+  }
+ }else{
+  if (RHO_p_month > 0.5){
+   iperf = 2
+  }else{
+   iperf = 4
+  }
+ } 
+
  if (abs(IQ7525_msevalua) < minAmp){
   print(paste("Skipping for:",sites[is],', minmimum meas. amp found:',abs(IQ7525_msevalua),sep=" "))
   next
@@ -275,22 +348,21 @@ for (is in 1:length(sites)) {
  #################################################################################################################################################################
  if ((length(readmsfile) > 2) & plot_timeseries) {
   ## Plotting the chart !!!
-  if (region != "USGS"){
-   model = data.frame(merged_date$date,month_modelo - avg_momonth); names(model) = cbind("date","model")
-   measu = data.frame(merged_date$date,month_msdata - avg_msmonth); names(measu) = cbind("date", "data")
-   outpltfl = paste(output_folder_plots,"/",sites[is],"_gwhead.pdf",sep="")
+  model = data.frame(merged_date$date,month_modelo - avg_momonth); names(model) = cbind("date","model")
+  measu = data.frame(merged_date$date,month_msdata - avg_msmonth); names(measu) = cbind("date", "data")
+  if (wtd_flag){
+   outpltfl = paste(output_folder_plots,"/",iperf,"/",sites[is],"_gwtd.png",sep="")
   }else{
-   model = data.frame(merged_date$date,month_modelo - avg_momonth); names(model) = cbind("date","model")
-   measu = data.frame(merged_date$date,month_msdata - avg_msmonth); names(measu) = cbind("date", "data")
-   outpltfl = paste(output_folder_plots,"/",sites[is],"_gwtd.pdf",sep="")
+   outpltfl = paste(output_folder_plots,"/",iperf,"/",sites[is],"_gwhead.png",sep="")
   }
-  model_measu = merge(model,measu,by="date",all.x=TRUE)    			;
+  model_measu = merge(model,measu,by="date",all.x=TRUE)
 
   model_measu$date = as.Date(as.character(model_measu[,1]),"%Y-%m-%d")
   print(outpltfl)
   y_min = min(min(model_measu[,2],na.rm=T),min(model_measu[,3],na.rm=T))
   y_max = max(max(model_measu[,2],na.rm=T),max(model_measu[,3],na.rm=T))
-  plot_comparison(outpltfl, model_measu, date, y_min, y_max) 
+  plot_comparison(outpltfl, model_measu, date, startDate, endDate, y_min, y_max, sites[is], 
+   IQ7525_moevalua, IQ7525_msevalua, QRE7525_evalua, RHO_p_month, RMSE__month, BIAS__month, wtd_flag)
  } # end if (length(readmsfile) > 2)
 
  #################################################################################################################################################################
@@ -306,13 +378,14 @@ for (is in 1:length(sites)) {
   latitude  = as.character(station_with_xy$dec_lat_va[is])
   longitude = as.character(station_with_xy$dec_long_va[is])
  }
- if (is == 1){
+ if (first){
 #  header = c("station_name",   "latitude",    "longitude",     "avg_msmonth",   "avg_momonth",   
 #             "RHO_p_month" ,   "R2____month", "R2adj_month",   "NSeff_month",   "RMSE__month", 
 #             "MAE___month",    "BIAS__month", "NSeff_month_nb","RMSE__month_nb","MAE___month_nb",
 #             "BIAS__month_nb", "QRE7525_evalua")
   header = c("station_name",   "latitude",     "longitude",     "RHO_p_month",   "QRE7525_evalua")   
   cat(header,"\n",sep="\t",file=output_summary_txt,append=FALSE)
+  first = FALSE
  }
 
  if (length(readmsfile) > 2) {
