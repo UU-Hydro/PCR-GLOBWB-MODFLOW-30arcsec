@@ -77,15 +77,20 @@ NSeff <- function (Qobs, Qsim)
 #plot_timeseries = FALSE
 plot_timeseries = TRUE
 
-region = "ADES"
+#region = "ADES"
 #region = "DINO"
-#region = "USGS"
+#region = "DINOF"
+region = "USGS"
 startDate = "1960-01-01"
 endDate   = "2015-12-31"
 #startDate = "2000-01-01"
 #endDate   = "2002-12-31"
-minYear   = 5
+minYear   = 0
 minAmp    = 0.0
+smFilter  = TRUE
+smRhoMin  = 0.75
+smNcFileName= "./soil_moisture/monmean_sm_ESACCI-SOILMOISTURE-L3S-SSMV-COMBINED_1978-2019.nc3"
+smVarName= "sm"
 
 # input files:
 if (region == "ADES"){
@@ -98,6 +103,11 @@ if (region == "ADES"){
  station_with_xy_file = "./DINO/dino_station_only_filtno1_sel_used.csv"
  measurement_folder   = paste(input_folder,"data_withdepth/",sep="")
  modelresults_folder  = "f:/models/pcr-globwb-30arcsec/model_new/results_cartesius/transient/post_ts_DINO_txt_from_top/"
+}else if (region == "DINOF"){
+ input_folder         = "f:/basis_data/dinoloket/proc/"
+ measurement_folder   = paste(input_folder,"data_withdepth/",sep="")
+ modelresults_folder  = "f:/models/pcr-globwb-30arcsec/model_new/results_cartesius/transient/post_ts_DINO_full_txt_from_top/"
+ station_with_xy_file = paste(modelresults_folder,"summary.txt",sep="")
 }else{
  input_folder = "f:/models/pcr-globwb-30arcsec/model_new/validation/download_nwis/USGS/"
  measurement_folder = input_folder
@@ -132,6 +142,8 @@ quarter_used = unique(paste(substr(monthly_used,1,4),quarter_used,sep="-"))
 if (region == "ADES"){
  sites =  station_with_xy$EC		
 }else if (region == "DINO"){
+ sites = station_with_xy$stat_code
+}else if (region == "DINOF"){
  sites = station_with_xy$stat_code
 }else{
  sites = station_with_xy$site_no
@@ -248,6 +260,74 @@ for (is in 1:length(sites)) {
   print(paste("Skipping for:",sites[is],', number of years found:',ny,sep=" "))
   next
  }  
+
+ if (region == "ADES"){
+  latitude  = as.character(station_with_xy$ylatdeg[is])
+  longitude = as.character(station_with_xy$xlondeg[is])
+ }else if (region == "DINO"){
+  latitude  = as.character(station_with_xy$ylatdeg[is])
+  longitude = as.character(station_with_xy$xlondeg[is])
+ }else if (region == "DINOF"){
+  latitude  = as.character(station_with_xy$latitude[is])
+  longitude = as.character(station_with_xy$longitude[is])
+ }else{
+  latitude  = as.character(station_with_xy$dec_lat_va[is])
+  longitude = as.character(station_with_xy$dec_long_va[is])
+ }
+
+ #################################################################################################################################################################
+ # Apply soil moister filter
+ #################################################################################################################################################################
+ if (smFilter){
+  skip = FALSE
+  command_line = paste("get_value.bat ", latitude, longitude, 
+                       as.character(smNcFileName), as.character(smVarName), sep=" ")
+  tv = system(command_line, intern = TRUE); #print(tv)
+  smfile = read.table("tmp.txt",sep=";",header=F,na.strings="-9999.0")
+  # converting to monthly time series
+  mongw_sm = mat.or.vec(length(monthly_used),1)
+  mongw_sm[] = NA
+  for (im in 1:length(monthly_used)){
+   mongw_sm[im] = mean(as.numeric(smfile[which(substr(smfile[,1],1,7) == monthly_used[im]),2]),na.rm=T)
+  }
+  sm_data = data.frame(paste(as.character(monthly_used),"-15",sep=""),mongw_sm)
+  names(sm_data)[1] <- "date"
+  names(sm_data)[2] <- "soil_moisture"
+  sm_data$date = as.Date(sm_data$date,"%Y-%m-%d")
+  nsm = length(which(!is.na(sm_data$soil_moisture)))
+  if (nsm == 0){
+   print(paste("Skipping for ",sites[is],": no soil-moisture data found",sep=" "))
+   skip = TRUE
+  }else{  
+   # change sign in case measurement is a water depth
+   if (use_wtd){
+    sm_data[,2] <- sm_data[,2]*-1.0
+   }
+   #smRho = cor(as.numeric(measured_data$measurement),as.numeric(sm_data$soil_moisture),use="complete.obs");
+   smRho = cor(as.numeric(measured_data$measurement),as.numeric(sm_data$soil_moisture),use="na.or.complete");
+   if (is.na(smRho)){
+    print(paste("Skipping for",sites[is],": could not compute soil-moisture correlation",sep=" "))
+    skip = TRUE
+   }else{
+    if (smRho < smRhoMin){
+     print(paste("Skipping for",sites[is],": soil-moisture rho =",smRho,sep=" "))
+     skip = TRUE
+    }else{
+     print(paste("Using",sites[is],": soil-moisture rho =",smRho,sep=" "))
+    }
+   }
+   # cleanup
+   rm(smRho)
+  }
+  # cleanup
+  unlink("tmp.txt")
+  rm(smfile,sm_data,mongw_sm)
+ }else{
+  skip = FALSE
+ }
+ if (skip){
+  next
+ }
 
  #################################################################################################################################################################
  # read model file
@@ -366,16 +446,6 @@ for (is in 1:length(sites)) {
  #################################################################################################################################################################
  # summary
  #################################################################################################################################################################
- if (region == "ADES"){
-  latitude  = as.character(station_with_xy$ylatdeg[is])
-  longitude = as.character(station_with_xy$xlondeg[is])
- }else if (region == "DINO"){
-  latitude  = as.character(station_with_xy$ylatdeg[is])
-  longitude = as.character(station_with_xy$xlondeg[is])
- }else{
-  latitude  = as.character(station_with_xy$dec_lat_va[is])
-  longitude = as.character(station_with_xy$dec_long_va[is])
- }
  if (first){
   header = c("station_name",   "latitude",    "longitude",     "avg_msmonth",   "avg_momonth",   
              "RHO_p_month" ,   "R2____month", "R2adj_month",   "NSeff_month",   "RMSE__month", 
