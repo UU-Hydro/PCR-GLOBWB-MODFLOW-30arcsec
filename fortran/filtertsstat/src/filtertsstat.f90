@@ -1,7 +1,7 @@
 program filtertsstat
   ! -- modules
   use utilsmod, only: i4b, r4b, r8b, get_args, mxslen, open_file, &
-    errmsg, logmsg, ta, parse_line, DZERO, tBB
+    errmsg, logmsg, ta, parse_line, DZERO, tBB, insert_tab
   !
   implicit none
   !
@@ -10,6 +10,8 @@ program filtertsstat
     logical               :: write = .false.
     integer(i4b)          :: ic = 0
     integer(i4b)          :: ir = 0
+    real(r8b)             :: x = DZERO
+    real(r8b)             :: y = DZERO
     character(len=mxslen) :: raw = ''
     real(r8b)             :: rho = DZERO
     real(r8b)             :: qre = DZERO
@@ -17,12 +19,16 @@ program filtertsstat
   end type tStat
   
   ! -- locals
+  integer(i4b), parameter :: i_best = 1
+  integer(i4b), parameter :: i_mean = 2
   type(tBB), pointer :: bb => null()
   type(tStat), pointer :: sd => null()
   type(tStat), dimension(:), pointer :: sdat => null()
   character(len=mxslen) :: f_in, f_out, hdr, s
   character(len=mxslen), dimension(:), allocatable :: args, sa
-  integer(i4b) :: nsf, ns, na, iu, i, gnc, gnr, ic, ir, nc, nr
+  logical :: qre_crit, rho_crit
+  integer(i4b) :: filt_method
+  integer(i4b) :: nsf, ns, na, iu, i, gnc, gnr, ic, ir, nc, nr, n, nmax, np2cand, np3cand
   integer(i4b) :: ylat_ic, xlon_ic, rho_ic, qre_ic, iact, ios, np
   integer(i4b), dimension(4) :: nperf
   integer(i4b), dimension(:,:), allocatable :: si2d
@@ -33,11 +39,20 @@ program filtertsstat
   !
   ! read the command line arguments
   args = get_args(); na = len(args)
-  read(args(1:6),*) gnc, gnr, gxmin, gxmax, gymin, gymax
+  read(args(1:7),*) filt_method, gnc, gnr, gxmin, gxmax, gymin, gymax
+  select case(filt_method)
+    case(i_best)
+      call logmsg('Aplying best-cell statistics.')
+    case(i_mean)
+      call logmsg('Aplying mean-cell statistics.')
+    case default
+      call errmsg('Invalid filter method.')
+  end select
+  
   gcs = (gxmax-gxmin)/gnc
-  f_in = args(7) 
-  read(args(8:11),*) ylat_ic, xlon_ic, rho_ic, qre_ic
-  f_out = args(12)
+  f_in = args(8) 
+  read(args(9:12),*) ylat_ic, xlon_ic, rho_ic, qre_ic
+  f_out = args(13)
   !
   ! read the summary file
   call open_file(f_in, iu, 'r')
@@ -102,45 +117,130 @@ program filtertsstat
   !
   ! get the maximum rho and minumum qre
   allocate(si2d(nc,nr), rho2d(nc,nr), qre2d(nc,nr))
-  do ir = 1, nr
-    do ic = 1, nc
-      si2d(ic,ir) = 0
-      rho2d(ic,ir) = -huge(DZERO)
-      qre2d(ic,ir) =  huge(DZERO)
+  !
+  if (filt_method == i_best) then !best
+    do ir = 1, nr
+      do ic = 1, nc
+        si2d(ic,ir) = 0
+        rho2d(ic,ir) = -huge(DZERO)
+        qre2d(ic,ir) =  huge(DZERO)
+      end do
     end do
-  end do
-  !
-  do i = 1, ns
-    sd => sdat(i)
-    if (.not.sd%act) cycle
-    ic = sd%ic - bb%ic0 + 1; ir = sd%ir - bb%ir0 + 1 
-    rho = sd%rho; qre = abs(sd%qre)
-    if ((rho > rho2d(ic,ir)).and.(qre < qre2d(ic,ir))) then
-      si2d(ic,ir)  = i 
-      rho2d(ic,ir) = rho 
-      qre2d(ic,ir) = qre
-    end if
-  end do
-  !
-  ! label for writing
-  nperf = 0
-  nsf = 0
-  do ir = 1, nr
-    do ic = 1, nc
-      i = si2d(ic,ir)
-      if (i > 0) then
-        sd => sdat(i)
-        nsf = nsf + 1
-        sd%write = .true.
-        nperf(sd%iperf) = nperf(sd%iperf) + 1
+    do i = 1, ns
+      sd => sdat(i)
+      if (.not.sd%act) cycle
+      ic = sd%ic - bb%ic0 + 1; ir = sd%ir - bb%ir0 + 1 
+      rho = sd%rho; qre = abs(sd%qre)
+      if ((rho > rho2d(ic,ir)).and.(qre < qre2d(ic,ir))) then
+        si2d(ic,ir)  = i 
+        rho2d(ic,ir) = rho 
+        qre2d(ic,ir) = qre
       end if
     end do
-  end do
+    ! label for writing
+    nperf = 0
+    nsf = 0
+    do ir = 1, nr
+      do ic = 1, nc
+        i = si2d(ic,ir)
+        if (i > 0) then
+          sd => sdat(i)
+          nsf = nsf + 1
+          sd%write = .true.
+          nperf(sd%iperf) = nperf(sd%iperf) + 1
+        end if
+      end do
+    end do
+  else if (filt_method == i_mean) then
+    do ir = 1, nr
+      do ic = 1, nc
+        si2d(ic,ir) = 0
+        rho2d(ic,ir) = DZERO
+        qre2d(ic,ir) = DZERO
+      end do
+    end do
+    do i = 1, ns
+      sd => sdat(i)
+      if (.not.sd%act) cycle
+      ic = sd%ic - bb%ic0 + 1; ir = sd%ir - bb%ir0 + 1 
+      rho = sd%rho; qre = abs(sd%qre)
+      si2d(ic,ir)  = si2d(ic,ir) + 1
+      rho2d(ic,ir) = rho2d(ic,ir) + rho 
+      qre2d(ic,ir) = qre2d(ic,ir) + qre
+    end do
+    deallocate(sdat)
+    !
+    ! count
+    ns = 0
+    do ir = 1, nr
+      do ic = 1, nc
+        n = si2d(ic,ir)
+        if (n > 0) then
+          ns = ns + 1
+          rho2d(ic,ir) = rho2d(ic,ir)/n
+          qre2d(ic,ir) = qre2d(ic,ir)/n
+        end if
+      end do
+    end do
+    if (ns <= 0) then
+      call errmsg('No cells found.')
+    end if
+    allocate(sdat(ns))
+    if (allocated(sa)) deallocate(sa)
+    allocate(sa(6))
+    ns = 0; nperf = 0; nmax = 0; np2cand = 0; np3cand = 0
+    do ir = 1, nr
+      do ic = 1, nc
+        n = si2d(ic,ir)
+        if (n > 0) then
+          nmax = max(n,nmax)
+          ns = ns + 1
+          sd => sdat(ns)
+          sd%write = .true.
+          sd%ic = bb%ic0 + ic - 1 !global
+          sd%ir = bb%ir0 + ir - 1 !global;
+          sd%x = gxmin + sd%ic*gcs -gcs/2.d0
+          sd%y = gymax + sd%ir*gcs -gcs/2.d0
+          sd%rho = rho2d(ic,ir)
+          sd%qre = qre2d(ic,ir)
+          if ((abs(sd%qre) <= 0.5d0).and.(sd%rho >= 0.5d0)) then
+            sd%iperf = 1
+          end if
+          if ((abs(sd%qre)  > 0.5d0).and.(sd%rho >= 0.5d0)) then
+            sd%iperf = 2
+          end if
+          if ((abs(sd%qre) <= 0.5d0).and.(sd%rho  < 0.5d0)) then
+            sd%iperf = 3
+          end if
+          qre_crit = (abs(sd%qre) > 0.5d0)
+          rho_crit = (sd%rho  < 0.5d0)
+          if (qre_crit .and. rho_crit) then
+            sd%iperf = 4
+          end if
+          nperf(sd%iperf) = nperf(sd%iperf) + 1
+          write(sa(1),*) (sd%ir - 1)*gnc + sd%ic
+          write(sa(2),*) sd%x
+          write(sa(3),*) sd%y
+          write(sa(4),*) sd%rho
+          write(sa(5),*) sd%qre
+          write(sa(6),*) achar(9)
+          sd%raw = ta(sa(1:6))
+          call insert_tab(sd%raw)
+        end if
+      end do
+    end do
+  end if
   !
   ! write the new stations
   call logmsg('Writing '//trim(f_out)//'...')
   call open_file(f_out, iu, 'w')
-  write(iu,'(a)') trim(hdr)//'perf_class'
+  if (filt_method == i_mean) then !best
+    s = 'cell_id latitude longitude avg_rho avg_aqre perf_class'
+    call insert_tab(s)
+  else  
+    s = trim(hdr)//'perf_class'
+  end if
+  write(iu,'(a)') trim(s)
   do i = 1, ns
     sd => sdat(i)
     if (sd%write) then
@@ -161,5 +261,8 @@ program filtertsstat
   call logmsg('class            I         II        III         IV ')
   call logmsg('%     : '//ta(pperf,'(f10.1)'))
   call logmsg('Count : '//ta(nperf,'(i10)'))
+  if (filt_method == i_mean) then
+    call logmsg('Max count per cell : '//ta((/nmax/),'(i10)'))
+  end if
   !
 end program
