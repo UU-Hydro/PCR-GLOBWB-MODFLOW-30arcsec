@@ -77,8 +77,9 @@ module utilsmod
     module procedure :: addboundary_i
     module procedure :: addboundary_r
     module procedure :: addboundary_d
+    module procedure :: addboundary_i_list
   end interface
-  private :: addboundary_i, addboundary_r, addboundary_d
+  private :: addboundary_i, addboundary_r, addboundary_d, addboundary_i_list
 
   interface calc_unique
     module procedure :: calc_unique_i
@@ -307,8 +308,10 @@ module utilsmod
           sa(n) = st(1:i-1)
         end if
         st = adjustl(st(i:))
-        if (st(1:1) == achar(9)) then
-          st = adjustl(st(2:))
+        if (token /= ' ') then
+          if (st(1:1) == token) then
+            st = adjustl(st(2:))
+          end if
         end if
       end do
       if (iact == 1) then
@@ -839,6 +842,25 @@ module utilsmod
     return
   end function ta_c
 
+  function bb_overlap(bb1, bb2) result(loverlap)
+! ******************************************************************************
+    ! -- arguments
+    type(tBB), pointer, intent(in) :: bb1
+    type(tBB), pointer, intent(in) :: bb2
+    logical :: loverlap
+    ! -- locals
+! ------------------------------------------------------------------------------
+    loverlap = .true.
+    if ((bb1%ic0 >= bb2%ic1).or.(bb2%ic0 >= bb1%ic1)) then
+      loverlap = .false.
+    end if
+    if ((bb1%ir0 >= bb2%ir1).or.(bb2%ir0 >= bb1%ir1)) then
+      loverlap = .false.
+    end if
+    !
+    return
+  end function bb_overlap
+  
   subroutine swap_slash(s)
 ! ******************************************************************************
     ! -- arguments
@@ -877,8 +899,37 @@ module utilsmod
     end if
     !
     return
-  end function get_slash  
+  end function get_slash
 
+  function count_dir_files(d) result(n)
+! ******************************************************************************
+    ! -- arguments
+    character(len=*), intent(inout) :: d
+    integer(i4b) :: n
+    ! -- locals
+    character(len=mxslen) :: tf, s
+    integer(i4b) :: iu, ios
+! ------------------------------------------------------------------------------
+    tf = 'tmp.txt'
+    call swap_slash(d)
+    if (os == 1) then ! windows
+      call system('dir /b '//trim(d)//' > '//trim(tf))
+    else
+      call system('ls -1 '//trim(d)//' > '//trim(tf))
+    end if
+    !
+    n = 0
+    call open_file(tf, iu, 'r')
+    do while(.true.)
+      read(unit=iu,fmt='(a)',iostat=ios) s
+      if (ios /= 0) exit
+      n = n + 1
+    end do
+    close(iu,status='delete')
+    !
+    return
+  end function count_dir_files
+  
   subroutine get_rel_up(f, n)
 ! ******************************************************************************
     ! -- arguments
@@ -2394,7 +2445,7 @@ subroutine addboundary_i(wrk, ncol, nrow)
 
   integer :: icol, irow, jp
 
-  write(*,*) 'ADDING CONSTANT HEAD BOUNDARY!'
+  !write(*,*) 'ADDING CONSTANT HEAD BOUNDARY!'
   do irow = 1, nrow
     do icol = 1, ncol
       jp = wrk(icol,irow)
@@ -2437,6 +2488,57 @@ subroutine addboundary_i(wrk, ncol, nrow)
   return
 end subroutine addboundary_i
 
+subroutine addboundary_i_list(wrk, ncol, nrow, icir, nicir)
+! ******************************************************************************
+  integer, intent(in) :: ncol, nrow
+  integer, dimension(ncol,nrow), intent(inout) :: wrk
+  integer, intent(in) :: nicir
+  integer, dimension(:,:), intent(in) :: icir
+  
+  integer :: i, icol, irow, jp
+
+  !write(*,*) 'ADDING CONSTANT HEAD BOUNDARY!'
+  do i = 1, nicir
+    icol = icir(1,i); irow = icir(2,i)
+    jp = wrk(icol,irow)
+    if (jp > 0) then
+      ! N
+      if (irow > 1) then
+        if (wrk(icol,irow-1) == 0) then
+          wrk(icol,irow-1) = -jp
+        end if
+      end if
+      ! S
+      if (irow < nrow) then
+        if (wrk(icol,irow+1) == 0) then
+          wrk(icol,irow+1) = -jp
+        end if
+      end if
+      ! W
+      if (icol > 1) then
+        if (wrk(icol-1,irow) == 0) then
+          wrk(icol-1,irow) = -jp
+        end if
+      end if
+      ! E
+      if (icol < ncol) then
+        if (wrk(icol+1,irow) == 0) then
+          wrk(icol+1,irow) = -jp
+        end if
+      end if
+    end if
+  end do
+
+  !do irow = 1, nrow
+  !  do icol = 1, ncol
+  !    jp = wrk(icol,irow)
+  !    wrk(icol,irow) = abs(jp)
+  !  end do
+  !end do
+  !
+  return
+end subroutine addboundary_i_list
+
 subroutine addboundary_d(wrk, ncol, nrow, nodata)
 ! ******************************************************************************
   integer, intent(in) :: ncol, nrow
@@ -2445,7 +2547,7 @@ subroutine addboundary_d(wrk, ncol, nrow, nodata)
 
   integer :: icol, irow, jp
 
-  write(*,*) 'ADDING CONSTANT HEAD BOUNDARY!'
+  !write(*,*) 'ADDING CONSTANT HEAD BOUNDARY!'
   do irow = 1, nrow
     do icol = 1, ncol
       jp = int(wrk(icol,irow))
@@ -2497,7 +2599,7 @@ subroutine addboundary_r(wrk, nodata)
 
   ncol = size(wrk,1); nrow = size(wrk,2)
 
-  write(*,*) 'ADDING CONSTANT HEAD BOUNDARY!'
+  !write(*,*) 'ADDING CONSTANT HEAD BOUNDARY!'
   do irow = 1, nrow
     do icol = 1, ncol
       if (wrk(icol,irow) /= nodata) then

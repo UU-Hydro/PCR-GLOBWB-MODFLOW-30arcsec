@@ -2,7 +2,7 @@ program mf6ggmpost
   ! -- modules
   use utilsmod, only: i4b, mxslen, open_file, logmsg, ta, parse_line
   use mf6_post_module, only: tPostSol, tPostSer, &
-    gncol, gnrow, gnlay, gxmin, gymin, gcs, &
+    gncol, gnrow, gnlay, gxmin, gymin, gcs, gnsol, &
     sdate, tilebb, top, comment, mask, maskmap
   !
   implicit none
@@ -19,7 +19,7 @@ program mf6ggmpost
   
   call getarg(1, f)
   call open_file(f, iu, 'r')
-  read(iu,*) gncol, gnrow, gnlay, gxmin, gymin, gcs
+  read(iu,*) gncol, gnrow, gnlay, gxmin, gymin, gcs, gnsol
   read(iu,*) sdate
   read(iu,'(a)') tilebb
   read(iu,'(a)') mask
@@ -31,6 +31,7 @@ program mf6ggmpost
   if (lex) then
     allocate(maskmap)
     lok = maskmap%init(mask)
+    call maskmap%set_nodata()
     call logmsg('***** Found mask! *****')
   else
     call logmsg('***** Could not find mask! *****')
@@ -50,7 +51,7 @@ program mf6ggmpost
     call parse_line(s, sa)
     !
     select case(sa(2))
-      case('m', 's','smodid')
+      case('m', 's','smodid','r')
         call postsol%init(sa)
         call postsol%write()
         call postsol%clean()
