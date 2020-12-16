@@ -88,7 +88,7 @@ endDate   = "2015-12-31"
 minYear   = 0
 minAmp    = 0.0
 smFilter  = TRUE
-smRhoMin  = 0.75
+smRhoMin  = 0.5
 smNcFileName= "./soil_moisture/monmean_sm_ESACCI-SOILMOISTURE-L3S-SSMV-COMBINED_1978-2019.nc3"
 smVarName= "sm"
 
@@ -150,7 +150,7 @@ if (region == "ADES"){
 }
 
 first = TRUE
-#for (is in 1:100) {
+#for (is in 1:1) {
 for (is in 1:length(sites)) {
  print(paste("***** Station ",is,"/",length(sites),"..."))
 
@@ -309,6 +309,17 @@ for (is in 1:length(sites)) {
     print(paste("Skipping for",sites[is],": could not compute soil-moisture correlation",sep=" "))
     skip = TRUE
    }else{
+    # try to find the best correlation using lags
+    for (lag in -3:3){
+     if (lag == 0){
+      next
+     }
+     sm_data <- slide(sm_data, "soil_moisture", NewVar = "soil_moisture_lag", slideBy = lag)  
+     smRhoLag = cor(as.numeric(measured_data$measurement),as.numeric(sm_data$soil_moisture_lag),use="na.or.complete")
+     if (!is.na(smRhoLag)){
+      smRho = max(smRhoLag,smRho)
+     } 
+    }
     if (smRho < smRhoMin){
      print(paste("Skipping for",sites[is],": soil-moisture rho =",smRho,sep=" "))
      skip = TRUE
