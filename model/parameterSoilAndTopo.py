@@ -117,20 +117,27 @@ class SoilAndTopoParameters(object):
 
                 if input == "percolationImp": vars(self)[var] = pcr.cover(vars(self)[var], 0.0)
                 
-                # extrapolation 
-                # - TODO: Make a general extrapolation option as a function in the virtualOS.py 
-                vars(self)[var] = pcr.cover(vars(self)[var],
-                                  pcr.windowaverage(vars(self)[var], 0.75))
-                vars(self)[var] = pcr.cover(vars(self)[var],
-                                  pcr.windowaverage(vars(self)[var], 1.00))
-                vars(self)[var] = pcr.cover(vars(self)[var],
-                                  pcr.windowaverage(vars(self)[var], 1.00))
-                vars(self)[var] = pcr.cover(vars(self)[var],
-                                  pcr.windowaverage(vars(self)[var], 1.00))
-                vars(self)[var] = pcr.cover(vars(self)[var],
-                                  pcr.windowaverage(vars(self)[var], 1.00))
-                vars(self)[var] = pcr.cover(vars(self)[var],
-                                  pcr.windowaverage(vars(self)[var], 1.00))
+
+                extrapolate = True
+                if "noParameterExtrapolation" in iniItems.landSurfaceOptions.keys() and iniItems.landSurfaceOptions["noParameterExtrapolation"] == "True": extrapolate = False
+
+                if extrapolate:
+
+                    # extrapolation 
+                    # - TODO: Make a general extrapolation option as a function in the virtualOS.py 
+                    vars(self)[var] = pcr.cover(vars(self)[var],
+                                      pcr.windowaverage(vars(self)[var], 0.75))
+                    vars(self)[var] = pcr.cover(vars(self)[var],
+                                      pcr.windowaverage(vars(self)[var], 1.00))
+                    vars(self)[var] = pcr.cover(vars(self)[var],
+                                      pcr.windowaverage(vars(self)[var], 1.00))
+                    vars(self)[var] = pcr.cover(vars(self)[var],
+                                      pcr.windowaverage(vars(self)[var], 1.00))
+                    vars(self)[var] = pcr.cover(vars(self)[var],
+                                      pcr.windowaverage(vars(self)[var], 1.00))
+                    vars(self)[var] = pcr.cover(vars(self)[var],
+                                      pcr.windowaverage(vars(self)[var], 1.00))
+
                 vars(self)[var] = pcr.cover(vars(self)[var], 0.0)
 
         else:
@@ -144,20 +151,25 @@ class SoilAndTopoParameters(object):
 
                 if var == "percolationImp": vars(self)[var] = pcr.cover(vars(self)[var], 0.0)
 
-                # extrapolation 
-                # - TODO: Make a general extrapolation option as a function in the virtualOS.py 
-                vars(self)[var] = pcr.cover(vars(self)[var],
-                                  pcr.windowaverage(vars(self)[var], 0.75))
-                vars(self)[var] = pcr.cover(vars(self)[var],
-                                  pcr.windowaverage(vars(self)[var], 1.00))
-                vars(self)[var] = pcr.cover(vars(self)[var],
-                                  pcr.windowaverage(vars(self)[var], 1.00))
-                vars(self)[var] = pcr.cover(vars(self)[var],
-                                  pcr.windowaverage(vars(self)[var], 1.00))
-                vars(self)[var] = pcr.cover(vars(self)[var],
-                                  pcr.windowaverage(vars(self)[var], 1.00))
-                vars(self)[var] = pcr.cover(vars(self)[var],
-                                  pcr.windowaverage(vars(self)[var], 1.00))
+                extrapolate = True
+                if "noParameterExtrapolation" in iniItems.landSurfaceOptions.keys() and iniItems.landSurfaceOptions["noParameterExtrapolation"] == "True": extrapolate = False
+
+                if extrapolate:
+
+                    # extrapolation 
+                    # - TODO: Make a general extrapolation option as a function in the virtualOS.py 
+                    vars(self)[var] = pcr.cover(vars(self)[var],
+                                      pcr.windowaverage(vars(self)[var], 0.75))
+                    vars(self)[var] = pcr.cover(vars(self)[var],
+                                      pcr.windowaverage(vars(self)[var], 1.00))
+                    vars(self)[var] = pcr.cover(vars(self)[var],
+                                      pcr.windowaverage(vars(self)[var], 1.00))
+                    vars(self)[var] = pcr.cover(vars(self)[var],
+                                      pcr.windowaverage(vars(self)[var], 1.00))
+                    vars(self)[var] = pcr.cover(vars(self)[var],
+                                      pcr.windowaverage(vars(self)[var], 1.00))
+                    vars(self)[var] = pcr.cover(vars(self)[var],
+                                      pcr.windowaverage(vars(self)[var], 1.00))
 
                 vars(self)[var] = pcr.cover(vars(self)[var], 0.01)
             
@@ -208,20 +220,26 @@ class SoilAndTopoParameters(object):
                                             self.cloneMap,
                                             self.tmpDir,self.inputDir)
 
-                # extrapolation 
-                # - TODO: Make a general extrapolation option as a function in the virtualOS.py 
-                vars(self)[temp] = pcr.cover(vars(self)[temp],
-                                   pcr.windowaverage(vars(self)[temp], 0.75))
-                vars(self)[temp] = pcr.cover(vars(self)[temp],
-                                   pcr.windowaverage(vars(self)[temp], 1.05))
-                vars(self)[temp] = pcr.cover(vars(self)[temp],
-                                   pcr.windowaverage(vars(self)[temp], 1.05))
-                vars(self)[temp] = pcr.cover(vars(self)[temp],
-                                   pcr.windowaverage(vars(self)[temp], 1.05))
-                vars(self)[temp] = pcr.cover(vars(self)[temp],
-                                   pcr.windowaverage(vars(self)[temp], 1.05))
-                vars(self)[temp] = pcr.cover(vars(self)[temp],
-                                   pcr.windowaverage(vars(self)[temp], 1.05))
+                extrapolate = True
+                if "noParameterExtrapolation" in iniItems.landSurfaceOptions.keys() and iniItems.landSurfaceOptions["noParameterExtrapolation"] == "True": extrapolate = False
+
+                if extrapolate:
+
+                    # extrapolation 
+                    # - TODO: Make a general extrapolation option as a function in the virtualOS.py 
+                    vars(self)[temp] = pcr.cover(vars(self)[temp],
+                                       pcr.windowaverage(vars(self)[temp], 0.75))
+                    vars(self)[temp] = pcr.cover(vars(self)[temp],
+                                       pcr.windowaverage(vars(self)[temp], 1.05))
+                    vars(self)[temp] = pcr.cover(vars(self)[temp],
+                                       pcr.windowaverage(vars(self)[temp], 1.05))
+                    vars(self)[temp] = pcr.cover(vars(self)[temp],
+                                       pcr.windowaverage(vars(self)[temp], 1.05))
+                    vars(self)[temp] = pcr.cover(vars(self)[temp],
+                                       pcr.windowaverage(vars(self)[temp], 1.05))
+                    vars(self)[temp] = pcr.cover(vars(self)[temp],
+                                       pcr.windowaverage(vars(self)[temp], 1.05))
+                
                 vars(self)[temp] = pcr.cover(vars(self)[temp], 0.0)
 
         else:
@@ -233,20 +251,27 @@ class SoilAndTopoParameters(object):
                 vars(self)[temp] = vos.netcdf2PCRobjCloneWithoutTime(\
                                      soilPropertiesNC,var, \
                                      cloneMapFileName = self.cloneMap)
-                # extrapolation 
-                # - TODO: Make a general extrapolation option as a function in the virtualOS.py 
-                vars(self)[temp] = pcr.cover(vars(self)[temp],
-                                   pcr.windowaverage(vars(self)[temp], 0.75))
-                vars(self)[temp] = pcr.cover(vars(self)[temp],
-                                   pcr.windowaverage(vars(self)[temp], 1.05))
-                vars(self)[temp] = pcr.cover(vars(self)[temp],
-                                   pcr.windowaverage(vars(self)[temp], 1.05))
-                vars(self)[temp] = pcr.cover(vars(self)[temp],
-                                   pcr.windowaverage(vars(self)[temp], 1.05))
-                vars(self)[temp] = pcr.cover(vars(self)[temp],
-                                   pcr.windowaverage(vars(self)[temp], 1.05))
-                vars(self)[temp] = pcr.cover(vars(self)[temp],
-                                   pcr.windowaverage(vars(self)[temp], 1.05))
+
+                extrapolate = True
+                if "noParameterExtrapolation" in iniItems.landSurfaceOptions.keys() and iniItems.landSurfaceOptions["noParameterExtrapolation"] == "True": extrapolate = False
+
+                if extrapolate:
+
+                     # extrapolation 
+                     # - TODO: Make a general extrapolation option as a function in the virtualOS.py 
+                     vars(self)[temp] = pcr.cover(vars(self)[temp],
+                                        pcr.windowaverage(vars(self)[temp], 0.75))
+                     vars(self)[temp] = pcr.cover(vars(self)[temp],
+                                        pcr.windowaverage(vars(self)[temp], 1.05))
+                     vars(self)[temp] = pcr.cover(vars(self)[temp],
+                                        pcr.windowaverage(vars(self)[temp], 1.05))
+                     vars(self)[temp] = pcr.cover(vars(self)[temp],
+                                        pcr.windowaverage(vars(self)[temp], 1.05))
+                     vars(self)[temp] = pcr.cover(vars(self)[temp],
+                                        pcr.windowaverage(vars(self)[temp], 1.05))
+                     vars(self)[temp] = pcr.cover(vars(self)[temp],
+                                        pcr.windowaverage(vars(self)[temp], 1.05))
+                
                 vars(self)[temp] = pcr.cover(vars(self)[temp], 0.0)
 
         # layer thickness

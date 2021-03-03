@@ -855,33 +855,42 @@ class Groundwater(object):
             groundwater_abstraction = landSurface.nonFossilGroundwaterAbs + landSurface.fossilGroundwaterAbstr
             
 
-            # bankfull depth
-            try:
-                bankfull_depth      = routing.channelDepth                # m
-            except:
-                bankfull_depth      = routing.predefinedChannelDepth      # m
-            # TODO: FIX THIS (remove try and except)    
-
-
-            # estimate of flood depth
-            flood_depth             = routing.transferVolToTopWaterLayer / \
-                                      routing.cellArea                    # m
-
-
-            # fraction of surface water within cells
-            surface_water_fraction  = routing.dynamicFracWat              # m2.m-2
-
-
             # surface water volume
-            # - this will be converted to surface water head elevation
-            surface_water_volume    = routing.channelStorage + \
-                                      routing.transferVolToTopWaterLayer  # m3
-            # Note that the 'routing.channelStorage' may not include "routing.floodInundationVolume", particularly if the "routing.floodInundationVolume" is transferred to the "landSurface.topWaterLayer".                           
-            
+            surface_water_volume    = routing.channelStorage
+
+            # ~ # Under development: Note that the 'routing.channelStorage' may not include "routing.floodInundationVolume", particularly if the "routing.floodInundationVolume" is transferred to the "landSurface.topWaterLayer".                           
+            # ~ surface_water_volume    = routing.channelStorage + \
+                                      # ~ routing.transferVolToTopWaterLayer  # m3
+
 
             # surface water discharge (m3/s) 
             surface_water_discharge = routing.discharge                   # m3.s-1
             
+
+            # For the current implementation (January 2021), I simplify that river water levels are just estimated from discharge; 
+            # - therefore, we do not need the following:
+            surface_water_fraction = None
+            bankfull_depth = None
+            flood_depth = None
+
+
+            # ~ # bankfull depth
+            # ~ try:
+                # ~ bankfull_depth      = routing.channelDepth                # m
+            # ~ except:
+                # ~ bankfull_depth      = routing.predefinedChannelDepth      # m
+            # ~ # TODO: FIX THIS (remove try and except). For now, this works only for channel    
+
+            # ~ # estimate of flood depth 
+            # ~ flood_depth             = routing.transferVolToTopWaterLayer / \
+                                      # ~ routing.cellArea                    # m
+            # ~ # TODO: FIX THIS    
+
+            # ~ # fraction of surface water within cells
+            # ~ surface_water_fraction  = routing.dynamicFracWat              # m2.m-2
+            # ~ # TODO: FIX THIS    
+              
+
 
             self.gw_modflow.update(currTimeStep, groundwater_recharge, \
                                                  groundwater_abstraction, \

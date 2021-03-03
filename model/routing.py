@@ -75,6 +75,13 @@ class Routing(object):
         # This variable needed only for kinematic wave methods (i.e. kinematicWave and simplifiedKinematicWave)
         result['subDischarge']             = self.subDischarge               #  m3/s   ; sub-time step discharge (needed for kinematic wave methods/approaches)
 
+        # This variable is introduced to transfer surface water volume to the topWaterLayer of the landSurface.py/landCover.py modules (Arno Scheme) - Note that this is still experimental (and optional).                                                                 
+        result['transferVolToTopWaterLayer']         = self.transferVolToTopWaterLayer      #  m3/day   
+
+        # The following variables are needed for daily coupling to MODFLOW.
+        result['dynamicFracWat']                     = self.dynamicFracWat                  #  m2/m2
+        result['discharge']                          = self.discharge                       #  m3/s
+
         return result
 
     def __init__(self,iniItems,initialConditions,lddMap):
@@ -99,6 +106,17 @@ class Routing(object):
             if iniItems.routingOptions['includeWaterBodies'] == "False" or\
                iniItems.routingOptions['includeWaterBodies'] == "None":
                 self.includeWaterBodies = False
+
+
+        # option to transfer flood inundation to the topWaterLayer of the landSurface.py/landCover.py module (Arno Scheme) - Note that this is still experimental (and optional)
+        self.transferFloodInundationVolumeToTopWaterLayer = False
+        if 'transferFloodInundationVolumeToTopWaterLayer' in iniItems.routingOptions.keys():
+            msg = "This run conceptualizes that floodInundationVolume is transferred to the topWaterLayer."
+            self.transferFloodInundationVolumeToTopWaterLayer = iniItems.routingOptions['transferFloodInundationVolumeToTopWaterLayer'] == "True"
+        else:    
+            msg = "This run simplifies that floodInundationVolume is NOT transferred to the topWaterLayer (default setting)."
+        logger.info(msg)
+
 
         # local drainage direction:
         self.lddMap = vos.readPCRmapClone(iniItems.routingOptions['lddMap'],
@@ -343,6 +361,32 @@ class Routing(object):
             # Initial conditions needed for kinematic wave methods
             self.subDischarge            = vos.readPCRmapClone(iniItems.routingOptions['subDischargeIni'],self.cloneMap,self.tmpDir,self.inputDir)  
 
+            # introduced to transfer surface water volume to the topWaterLayer
+            if 'transferVolToTopWaterLayerIni' in iniItems.routingOptions.keys():
+                self.transferVolToTopWaterLayer = \
+                                           vos.readPCRmapClone(iniItems.routingOptions['transferVolToTopWaterLayerIni'], self.cloneMap,self.tmpDir,self.inputDir)
+            else:
+                msg  = "The initial condition 'transferVolToTopWaterLayerIni' is not defined in the ini/configuration file. "
+                msg += "Yet, this is only needed if the option 'transferFloodInundationVolumeToTopWaterLayer' is set to 'True'."
+                logger.warning(msg)
+                self.transferVolToTopWaterLayer = None
+
+            # needed for (daily) coupling to MODFLOW
+            if 'dynamicFracWatIni' in iniItems.routingOptions.keys():
+                self.dynamicFracWat      = vos.readPCRmapClone(iniItems.routingOptions['dynamicFracWatIni']            , self.cloneMap,self.tmpDir,self.inputDir)
+            else:
+                msg  = "The initial condition 'dynamicFracWatIni' is not defined in the ini/configuration file. "
+                msg += "Yet, this is only needed for a run that is online coupled with MODFLOW."
+                logger.warning(msg)
+                self.dynamicFracWat      = None
+            if 'dischargeIni' in iniItems.routingOptions.keys():
+                self.discharge           = vos.readPCRmapClone(iniItems.routingOptions['dischargeIni'     ]            , self.cloneMap,self.tmpDir,self.inputDir)
+            else:
+                msg  = "The initial condition 'dischargeIni' is not defined in the ini/configuration file. "
+                msg += "Yet, this is only needed for a run that is online coupled with MODFLOW."
+                logger.warning(msg)
+                self.discharge           = None
+
         else:              
 
             # read initial conditions from the memory
@@ -359,6 +403,12 @@ class Routing(object):
             
             self.subDischarge            = iniConditions['routing']['subDischarge']
             
+            self.transferVolToTopWaterLayer = \
+                                           iniConditions['routing']['transferVolToTopWaterLayer']
+            
+            self.dynamicFracWat          = iniConditions['routing']['dynamicFracWat']
+            self.discharge               = iniConditions['routing']['discharge'     ]
+
         self.channelStorage        = pcr.ifthen(self.landmask, pcr.cover(self.channelStorage,        0.0))
         self.readAvlChannelStorage = pcr.ifthen(self.landmask, pcr.cover(self.readAvlChannelStorage, 0.0))
         self.avgDischarge          = pcr.ifthen(self.landmask, pcr.cover(self.avgDischarge,          0.0))
@@ -368,8 +418,20 @@ class Routing(object):
         self.riverbedExchange      = pcr.ifthen(self.landmask, pcr.cover(self.riverbedExchange,      0.0))
         self.subDischarge          = pcr.ifthen(self.landmask, pcr.cover(self.subDischarge ,         0.0))
 
+        self.transferVolToTopWaterLayer = \
+                                     pcr.ifthen(self.landmask, pcr.cover(self.transferVolToTopWaterLayer, 0.0))
+
+        self.dynamicFracWat        = pcr.ifthen(self.landmask, pcr.cover(self.dynamicFracWat,             0.0))
+        self.discharge             = pcr.ifthen(self.landmask, pcr.cover(self.discharge     ,             0.0))
+
         self.readAvlChannelStorage = pcr.min(self.readAvlChannelStorage, self.channelStorage)
         self.readAvlChannelStorage = pcr.max(self.readAvlChannelStorage, 0.0)
+
+        # if not activated, the following must always be zero:
+        if self.transferFloodInundationVolumeToTopWaterLayer == False:
+            self.transferVolToTopWaterLayer = pcr.spatial(pcr.scalar(0.0))
+            self.transferVolToTopWaterLayer = pcr.ifthen(self.landmask, self.transferVolToTopWaterLayer)
+
 
         # make sure that timestepsToAvgDischarge is consistent (or the same) for the entire map:
         try:

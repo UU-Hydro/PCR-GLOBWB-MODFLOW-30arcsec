@@ -214,11 +214,16 @@ class LandCover(object):
             self.allocSegments = pcr.ifthen(self.landmask, self.allocSegments)
             self.allocSegments = pcr.clump(self.allocSegments)
         
-            # extrapolate it 
-            self.allocSegments = pcr.cover(self.allocSegments, \
-                                           pcr.windowmajority(self.allocSegments, 0.5))
+            extrapolate = True
+            if "noParameterExtrapolation" in iniItems.landSurfaceOptions.keys() and iniItems.landSurfaceOptions["noParameterExtrapolation"] == "True": extrapolate = False
+
+            if extrapolate:
+                # extrapolate it 
+                self.allocSegments = pcr.cover(self.allocSegments, \
+                                               pcr.windowmajority(self.allocSegments, 0.5))
+
             self.allocSegments = pcr.ifthen(self.landmask, self.allocSegments)
-            
+
             # clump it and cover the rests with cell ids 
             self.allocSegments = pcr.clump(self.allocSegments)
             cell_ids = pcr.mapmaximum(pcr.scalar(self.allocSegments)) + pcr.scalar(100.0) + pcr.uniqueid(pcr.boolean(1.0))
@@ -1000,6 +1005,11 @@ class LandCover(object):
             self.satDegUppTotal = self.satDegUpp
             self.satDegLowTotal = self.satDegLow
 
+            self.satDegTotal = pcr.ifthen(self.landmask, \
+                  vos.getValDivZero(\
+                  self.storUpp + self.storLow, self.parameters.storCapUpp + self.parameters.storCapLow,\
+                  vos.smallNumber, 0.0))
+
         if self.numberOfSoilLayers == 3:
             self.satDegUpp000005 = vos.getValDivZero(\
                   self.storUpp000005, self.parameters.storCapUpp000005,\
@@ -1022,6 +1032,11 @@ class LandCover(object):
             self.satDegUppTotal = pcr.ifthen(self.landmask, self.satDegUppTotal)
             self.satDegLowTotal = self.satDegLow030150
         
+            self.satDegTotal = pcr.ifthen(self.landmask, \
+                  vos.getValDivZero(\
+                  self.storUpp000005 + self.storUpp005030 + self.satDegLow030150, self.parameters.storCapUpp000005 + self.parameters.storCapUpp005030 + self.parameters.storCapLow030150,\
+                  vos.smallNumber, 0.0))
+
         if self.report == True:
             # writing Output to netcdf files
             # - daily output:
@@ -2659,22 +2674,22 @@ class LandCover(object):
                 satisfiedIndustryDemandFromFossilGroundwater = satisfiedIndustryDomesticDemandFromFossilGroundwater * vos.getValDivZero(remainingIndustry, \
                                                                                                                                         remainingIndustryDomestic)             
 
-        # update satistfied demand fossil groundwater allocation
-        satisfiedIrrigationDemand += satisfiedIrrigationDemandFromFossilGroundwater
-        satisfiedLivestockDemand  += satisfiedLivestockDemandFromFossilGroundwater
-        satisfiedDomesticDemand   += satisfiedDomesticDemandFromFossilGroundwater
-        satisfiedIndustryDemand   += satisfiedIndustryDemandFromFossilGroundwater
-
-        if self.debugWaterBalance:
-            vos.waterBalanceCheck([satisfiedDomesticDemand, \
-                                   satisfiedIndustryDemand, \
-                                   satisfiedLivestockDemand, \
-                                   satisfiedIrrigationDemand],\
-                                  [self.desalinationAllocation, self.allocSurfaceWaterAbstract, self.allocNonFossilGroundwater, self.fossilGroundwaterAlloc],\
-                                  [pcr.scalar(0.0)],\
-                                  [pcr.scalar(0.0)] ,\
-                                  'desalinatedWaterAllocationForAllSectors and surfaceWaterAllocationForAllSectors and ALL groundwaterAllocationForAllSectors', True,\
-                                   currTimeStep.fulldate,threshold=1e-4)
+            # update satistfied demand fossil groundwater allocation
+            satisfiedIrrigationDemand += satisfiedIrrigationDemandFromFossilGroundwater
+            satisfiedLivestockDemand  += satisfiedLivestockDemandFromFossilGroundwater
+            satisfiedDomesticDemand   += satisfiedDomesticDemandFromFossilGroundwater
+            satisfiedIndustryDemand   += satisfiedIndustryDemandFromFossilGroundwater
+		    
+            if self.debugWaterBalance:
+                vos.waterBalanceCheck([satisfiedDomesticDemand, \
+                                       satisfiedIndustryDemand, \
+                                       satisfiedLivestockDemand, \
+                                       satisfiedIrrigationDemand],\
+                                      [self.desalinationAllocation, self.allocSurfaceWaterAbstract, self.allocNonFossilGroundwater, self.fossilGroundwaterAlloc],\
+                                      [pcr.scalar(0.0)],\
+                                      [pcr.scalar(0.0)] ,\
+                                      'desalinatedWaterAllocationForAllSectors and surfaceWaterAllocationForAllSectors and ALL groundwaterAllocationForAllSectors', True,\
+                                       currTimeStep.fulldate,threshold=1e-4)
 
 
         # Use the default PCR-GLOBWB allocation scheme to use surface water for fulfiling the remaining demand

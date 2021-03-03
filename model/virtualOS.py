@@ -144,7 +144,7 @@ def singleTryNetcdf2PCRobjCloneWithoutTime(ncFile, varName,\
         nc_dims = [dim for dim in f.dimensions]
         nc_vars = [var for var in f.variables]
         for var in nc_vars:                   
-            if var not in nc_dims: varName = var
+            if var not in nc_dims and var not in ["lat", "lon", "latitude", "longitude"]: varName = var
         logger.debug('reading variable: '+str(varName)+' from the file: '+str(ncFile))
 
     if LatitudeLongitude == True:
@@ -308,7 +308,7 @@ def singleTryNetcdf2PCRobjClone_version_until_2020_07_14(ncFile,\
         nc_dims = [dim for dim in f.dimensions]
         nc_vars = [var for var in f.variables]
         for var in nc_vars:                   
-            if var not in nc_dims: varName = var
+            if var not in nc_dims and var not in ["lat", "lon", "latitude", "longitude"]: varName = var
         logger.debug('reading variable: '+str(varName)+' from the file: '+str(ncFile))
     
     if varName == "evapotranspiration":        
@@ -598,7 +598,7 @@ def singleTryNetcdf2PCRobjClone(ncFile,\
         nc_dims = [dim for dim in f.dimensions]
         nc_vars = [var for var in f.variables]
         for var in nc_vars:                   
-            if var not in nc_dims: varName = var
+            if var not in nc_dims and var not in ["lat", "lon", "latitude", "longitude"]: varName = var
         logger.debug('reading variable: '+str(varName)+' from the file: '+str(ncFile))
     
     if varName == "evapotranspiration":        
@@ -683,7 +683,7 @@ def singleTryNetcdf2PCRobjClone(ncFile,\
                 date  = datetime.datetime(date.year,int(1),int(1))
             if useDoy == "monthly":
                 date = datetime.datetime(date.year,date.month,int(1))
-            if useDoy == "yearly" or useDoy == "monthly" or useDoy == "daily_seasonal" or useDoy == "daily":
+            if useDoy == "yearly" or useDoy == "monthly" or useDoy == "daily_seasonal" or useDoy == "daily" or useDoy == "daily_per_monthly_file":
                 # if the desired year is not available, use the first year or the last year that is available
                 first_year_in_nc_file = findFirstYearInNCTime(f.variables['time'])
                 last_year_in_nc_file  =  findLastYearInNCTime(f.variables['time'])
@@ -776,15 +776,15 @@ def singleTryNetcdf2PCRobjClone(ncFile,\
         if yULClone != yULInput: sameClone = False
 
 
-    #~ # check data on dimensions - this correction is needed in case of the WFDEI_Forcing which has includes levels for surface varables (time, height/level, lat, lon)
-    #~ if f.variables[varName].ndim == 4:
-        #~ # not standard NC format
-        #~ logger.warning('WARNING: the netCDF file %s has an additional dimension for variable %s ; the last two are read as latitude, longitude' % (ncFile, varName))
-        #~ # file with additional layer/dimension
-        #~ cropData = f.variables[varName][int(idx),0,:,:]       # still original data
-    #~ else:
-        #~ # standard nc file
-        #~ cropData = f.variables[varName][int(idx),:,:]       # still original data
+    # check data on dimensions - this correction is needed in case of the WFDEI_Forcing which has includes levels for surface varables (time, height/level, lat, lon)
+    if f.variables[varName].ndim == 4:
+        # not standard NC format
+        logger.warning('WARNING: the netCDF file %s has an additional dimension for variable %s ; the last two are read as latitude, longitude' % (ncFile, varName))
+        # file with additional layer/dimension
+        cropData = f.variables[varName][int(idx),0,:,:]     # still original data
+    else:
+        # standard nc file
+        cropData = f.variables[varName][int(idx),:,:]       # still original data
 
 
     factor = 1                                 # needed in regridData2FinerGrid
@@ -858,7 +858,19 @@ def singleTryNetcdf2PCRobjClone(ncFile,\
     #~ pcr.aguila(outPCR)
     
     #f.close();
+    
+    if useDoy == "daily_per_monthly_file": 
+        # close the file on the last day of the month
+        tomorrow = date + datetime.timedelta(days=1)
+        if tomorrow.day == 1: 
+            # close the file
+            f.close()
+            # remove from the cache
+            del filecache[ncFile]
+    
+    del f ; del cropData
     f = None ; cropData = None 
+    
     # PCRaster object
     return (outPCR)
 
@@ -1562,6 +1574,13 @@ def singleTryReadPCRmapClone(v, cloneMapFileName, tmpDir, absolutePath = None, i
             PCRmap = netcdf2PCRobjCloneWithoutTime(ncFile = v,\
                                                    varName = "automatic",\
                                                    cloneMapFileName = cloneMapFileName)
+
+            # ~ PCRmap = netcdf2PCRobjCloneWithoutTime(ncFile = v,\
+                                                   # ~ varName = "automatic",\
+                                                   # ~ cloneMapFileName = cloneMapFileName,\
+                                                   # ~ LatitudeLongitude = True,\
+                                                   # ~ specificFillValue = None,\
+                                                   # ~ absolutePath = absolutePath)
 
         else:
             

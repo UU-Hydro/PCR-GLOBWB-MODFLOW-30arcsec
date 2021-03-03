@@ -109,6 +109,8 @@ class LandSurface(object):
         self.tmpDir   = iniItems.tmpDir
         self.inputDir = iniItems.globalOptions['inputDir']
         self.landmask = landmask
+        
+        # make iniItems available for the other methods/functions:
         self.iniItems = iniItems
 
         # cellArea (unit: m2)
@@ -135,7 +137,8 @@ class LandSurface(object):
         self.stateVars = ['storUppTotal',
                           'storLowTotal',
                           'satDegUppTotal',
-                          'satDegLowTotal']
+                          'satDegLowTotal',
+                          'satDegTotal']
         #
         # flux variables (unit: m/day)
         self.fluxVars  = ['infiltration','gwRecharge','netLqWaterToSoil',
@@ -382,9 +385,6 @@ class LandSurface(object):
         # initiate old style reporting (this is useful for debuging)
         self.initiate_old_style_land_surface_reporting(iniItems)
         
-        # make iniItems available for the other methods/functions:
-        self.iniItems = iniItems
-
 
     def initiate_old_style_land_surface_reporting(self,iniItems):
 
@@ -695,20 +695,28 @@ class LandSurface(object):
         self.irrigationEfficiency = vos.readPCRmapClone(\
                                     iniItems.landSurfaceOptions['irrigationEfficiency'],
                                     self.cloneMap,self.tmpDir,self.inputDir)
-        # extrapolate efficiency map:                                                # TODO: Make a better extrapolation algorithm (considering cell size, etc.). 
-        window_size = 1.25 * pcr.clone().cellSize()
-        window_size = min(window_size, min(pcr.clone().nrRows(), pcr.clone().nrCols())*pcr.clone().cellSize())
-        try:
-            self.irrigationEfficiency = pcr.cover(self.irrigationEfficiency, pcr.windowaverage(self.irrigationEfficiency, window_size))
-            self.irrigationEfficiency = pcr.cover(self.irrigationEfficiency, pcr.windowaverage(self.irrigationEfficiency, window_size))
-            self.irrigationEfficiency = pcr.cover(self.irrigationEfficiency, pcr.windowaverage(self.irrigationEfficiency, window_size))
-            self.irrigationEfficiency = pcr.cover(self.irrigationEfficiency, pcr.windowaverage(self.irrigationEfficiency, window_size))
-            self.irrigationEfficiency = pcr.cover(self.irrigationEfficiency, pcr.windowaverage(self.irrigationEfficiency, window_size))
-            self.irrigationEfficiency = pcr.cover(self.irrigationEfficiency, pcr.windowaverage(self.irrigationEfficiency, 0.75))
-            self.irrigationEfficiency = pcr.cover(self.irrigationEfficiency, pcr.windowaverage(self.irrigationEfficiency, 1.00))
-            self.irrigationEfficiency = pcr.cover(self.irrigationEfficiency, pcr.windowaverage(self.irrigationEfficiency, 1.50))
-        except:                                                 
-            pass
+
+        extrapolate = True
+        if "noParameterExtrapolation" in iniItems.landSurfaceOptions.keys() and iniItems.landSurfaceOptions["noParameterExtrapolation"] == "True": extrapolate = False
+
+        if extrapolate:
+
+             # extrapolate efficiency map:   # TODO: Make a better extrapolation algorithm (considering cell size, etc.). 
+
+             window_size = 1.25 * pcr.clone().cellSize()
+             window_size = min(window_size, min(pcr.clone().nrRows(), pcr.clone().nrCols())*pcr.clone().cellSize())
+             try:
+                 self.irrigationEfficiency = pcr.cover(self.irrigationEfficiency, pcr.windowaverage(self.irrigationEfficiency, window_size))
+                 self.irrigationEfficiency = pcr.cover(self.irrigationEfficiency, pcr.windowaverage(self.irrigationEfficiency, window_size))
+                 self.irrigationEfficiency = pcr.cover(self.irrigationEfficiency, pcr.windowaverage(self.irrigationEfficiency, window_size))
+                 self.irrigationEfficiency = pcr.cover(self.irrigationEfficiency, pcr.windowaverage(self.irrigationEfficiency, window_size))
+                 self.irrigationEfficiency = pcr.cover(self.irrigationEfficiency, pcr.windowaverage(self.irrigationEfficiency, window_size))
+                 self.irrigationEfficiency = pcr.cover(self.irrigationEfficiency, pcr.windowaverage(self.irrigationEfficiency, 0.75))
+                 self.irrigationEfficiency = pcr.cover(self.irrigationEfficiency, pcr.windowaverage(self.irrigationEfficiency, 1.00))
+                 self.irrigationEfficiency = pcr.cover(self.irrigationEfficiency, pcr.windowaverage(self.irrigationEfficiency, 1.50))
+             except:                                                 
+                 pass
+        
         #~ self.irrigationEfficiency = pcr.ifthen(self.landmask, self.irrigationEfficiency)
         self.irrigationEfficiency = pcr.cover(self.irrigationEfficiency, 1.0)
         self.irrigationEfficiency = pcr.max(0.1, self.irrigationEfficiency)
@@ -735,9 +743,14 @@ class LandSurface(object):
             self.allocSegments = pcr.ifthen(self.landmask, self.allocSegments)
             self.allocSegments = pcr.clump(self.allocSegments)
             
-            # extrapolate it 
-            self.allocSegments = pcr.cover(self.allocSegments, \
-                                           pcr.windowmajority(self.allocSegments, 0.5))
+            extrapolate = True
+            if "noParameterExtrapolation" in iniItems.landSurfaceOptions.keys() and iniItems.landSurfaceOptions["noParameterExtrapolation"] == "True": extrapolate = False
+
+            if extrapolate:
+                # extrapolate it 
+                self.allocSegments = pcr.cover(self.allocSegments, \
+                                               pcr.windowmajority(self.allocSegments, 0.5))
+
             self.allocSegments = pcr.ifthen(self.landmask, self.allocSegments)
             
             # clump it and cover the rests with cell ids 
@@ -775,19 +788,24 @@ class LandSurface(object):
 
         # Fill cells with pristineAreaFrac < 0.0 - with window average value within 0.5 and 1.5 degree
         for coverType in self.coverTypes:         
+
             if not coverType.startswith('irr'):
 
-                filled_fractions = pcr.windowaverage(self.landCoverObj[coverType].fracVegCover,0.5)
-                filled_fractions = pcr.cover(filled_fractions,\
-                                   pcr.windowaverage(self.landCoverObj[coverType].fracVegCover,1.5))
-                filled_fractions = pcr.max(0.0, filled_fractions)
-                filled_fractions = pcr.min(1.0, filled_fractions)
+                extrapolate = True
+                if "noParameterExtrapolation" in self.iniItems.landSurfaceOptions.keys() and self.iniItems.landSurfaceOptions["noParameterExtrapolation"] == "True": extrapolate = False
+
+                if extrapolate:
+                    filled_fractions = pcr.windowaverage(self.landCoverObj[coverType].fracVegCover,0.5)
+                    filled_fractions = pcr.cover(filled_fractions,\
+                                       pcr.windowaverage(self.landCoverObj[coverType].fracVegCover,1.5))
+                    filled_fractions = pcr.max(0.0, filled_fractions)
+                    filled_fractions = pcr.min(1.0, filled_fractions)
                 
-                self.landCoverObj[coverType].fracVegCover = pcr.ifthen(pristineAreaFrac >= 0.0, self.landCoverObj[coverType].fracVegCover)
-                self.landCoverObj[coverType].fracVegCover = pcr.cover(\
-                                                            self.landCoverObj[coverType].fracVegCover,filled_fractions)
-                self.landCoverObj[coverType].fracVegCover = pcr.ifthen(self.landmask,\
-                                                            self.landCoverObj[coverType].fracVegCover)                                            
+                    self.landCoverObj[coverType].fracVegCover = pcr.ifthen(pristineAreaFrac >= 0.0, self.landCoverObj[coverType].fracVegCover)
+                    self.landCoverObj[coverType].fracVegCover = pcr.cover(\
+                                                                self.landCoverObj[coverType].fracVegCover,filled_fractions)
+                    self.landCoverObj[coverType].fracVegCover = pcr.ifthen(self.landmask,\
+                                                                self.landCoverObj[coverType].fracVegCover)                                            
 
         # re-check total land cover fractions
         pristineAreaFrac = 0.0
@@ -1026,7 +1044,7 @@ class LandSurface(object):
             # update dzGroundwater from file, from modflow calculation, using the previous time step
             # - assumption that it will be updated once every month
             
-            if currTimeStep.day == 1 and currTimeStep.timeStepPCR > 1: 
+            if currTimeStep.day == 1 and currTimeStep.timeStepPCR > 1 and groundwater.coupleToDailyMODFLOW == False: 
 
                 # for online coupling, we will read files from pcraster maps
                 directory = self.iniItems.main_output_directory + "/modflow/transient/maps/"
@@ -1058,9 +1076,27 @@ class LandSurface(object):
                                 currTimeStep.fulldate, useDoy = 'yearly',\
                                 cloneMapFileName = self.cloneMap)
                 else:
-                    routing.WaterBodies.fracWat = vos.readPCRmapClone(\
-                                routing.WaterBodies.fracWaterInp+str(currTimeStep.year)+".map",
-                                self.cloneMap,self.tmpDir,self.inputDir)
+                    if routing.WaterBodies.fracWaterInp != "None":
+                        routing.WaterBodies.fracWat = vos.readPCRmapClone(\
+                                    routing.WaterBodies.fracWaterInp+str(currTimeStep.year)+".map",
+                                    self.cloneMap,self.tmpDir,self.inputDir)
+                    else:
+                        routing.WaterBodies.fracWat = pcr.spatial(pcr.scalar(0.0))
+            else:
+                if routing.WaterBodies.useNetCDF:
+                    routing.WaterBodies.fracWat = vos.netcdf2PCRobjClone(\
+                                routing.WaterBodies.ncFileInp,'fracWaterInp', \
+                                currTimeStep.fulldate, useDoy = 'yearly',\
+                                cloneMapFileName = self.cloneMap)
+                else:
+                    if routing.WaterBodies.fracWaterInp != "None":
+                        routing.WaterBodies.fracWat = vos.readPCRmapClone(\
+                                    routing.WaterBodies.fracWaterInp,
+                                    self.cloneMap,self.tmpDir,self.inputDir)
+                    else:
+                        routing.WaterBodies.fracWat = pcr.spatial(pcr.scalar(0.0))
+            # Note that the variable used in the following line is FRACWAT (this may be a 'small' bug fixing to the GMD paper version)
+            FRACWAT = pcr.cover(routing.WaterBodies.fracWat, 0.0); 
         FRACWAT = pcr.cover(FRACWAT, 0.0)
         
         # zero fracwat assumption used for debugging against version 1.0
