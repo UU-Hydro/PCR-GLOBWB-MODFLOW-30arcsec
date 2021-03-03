@@ -3,9 +3,9 @@
 #
 # PCR-GLOBWB (PCRaster Global Water Balance) Global Hydrological Model
 #
-# Copyright (C) 2016, Edwin H. Sutanudjaja, Rens van Beek, Niko Wanders, Yoshihide Wada, 
-# Joyce H. C. Bosmans, Niels Drost, Ruud J. van der Ent, Inge E. M. de Graaf, Jannis M. Hoch, 
-# Kor de Jong, Derek Karssenberg, Patricia López López, Stefanie Peßenteiner, Oliver Schmitz, 
+# Copyright (C) 2016, Edwin H. Sutanudjaja, Rens van Beek, Niko Wanders, Yoshihide Wada,
+# Joyce H. C. Bosmans, Niels Drost, Ruud J. van der Ent, Inge E. M. de Graaf, Jannis M. Hoch,
+# Kor de Jong, Derek Karssenberg, Patricia López López, Stefanie Peßenteiner, Oliver Schmitz,
 # Menno W. Straatsma, Ekkamol Vannametee, Dominik Wisser, and Marc F. P. Bierkens
 # Faculty of Geosciences, Utrecht University, Utrecht, The Netherlands
 #
@@ -33,11 +33,11 @@ class ModelTime(object):
     def __init__(self):
         object.__init__(self)
         self._spinUpStatus = False
-    
-  
+
+
     #FIXME: use __init__
     def getStartEndTimeSteps(self,strStartTime,strEndTime,showNumberOfTimeSteps=True):
-        # get startTime, endTime, nrOfTimeSteps 
+        # get startTime, endTime, nrOfTimeSteps
         sd = str(strStartTime).split('-')
         self._startTime = datetime.date(int(sd[0]), int(sd[1]), int(sd[2]))
         ed = str(strEndTime).split('-')
@@ -75,68 +75,72 @@ class ModelTime(object):
     def spinUpStatus(self):
         return self._spinUpStatus
 
-    @property    
+    @property
     def startTime(self):
         return self._startTime
-    
-    @property    
+
+    @property
     def endTime(self):
         return self._endTime
 
-    @property    
+    @property
     def currTime(self):
         return self._currTime
 
-    @property    
+    @property
     def day(self):
         return self._currTime.day
 
-    @property    
+    @property
     def doy(self):
         return self._currTime.timetuple().tm_yday
 
-    @property    
+    @property
     def month(self):
         return self._currTime.month
-    
-    @property    
+
+    @property
     def year(self):
         return self._currTime.year
 
-    @property    
+    @property
     def timeStepPCR(self):
         return self._timeStepPCR
-    
-    @property    
+
+    @property
     def monthIdx(self):
         return self._monthIdx
-    
-    @property    
+
+    @property
     def annuaIdx(self):
         return self._annuaIdx
-    
-    @property    
+
+    @property
     def nrOfTimeSteps(self):
         return self._nrOfTimeSteps
-    
+
     @property
     def fulldate(self):
         return self._fulldate
 
+    @property
+    def yearmonth(self):
+        return '%04i%02i' %(self._currTime.year, self._currTime.month)
+
     def update(self,timeStepPCR):
         self._timeStepPCR = timeStepPCR
         self._currTime = self._startTime + datetime.timedelta(days=1 * (timeStepPCR - 1))
-        
+
         #~ self._fulldate = str(self.currTime.strftime('%Y-%m-%d'))     # This does not work for the date before 1900
         self._fulldate = '%04i-%02i-%02i' %(self._currTime.year, self._currTime.month, self._currTime.day)
         #~ print(self._fulldate)
-        
-        if self.spinUpStatus == True : 
+
+        if self.spinUpStatus == True :
             logger.info("Spin-Up "+str(self._noSpinUp)+" of "+str(self._maxSpinUps))
 
-        # The following contains hours, minutes, seconds, etc. 
+        # The following contains hours, minutes, seconds, etc.
         self._currTimeFull = datetime.datetime(self.year,self.month,self.day)
-        
+
         # check if a certain day is the last day of the month
         if self.isLastDayOfMonth():
             self._monthIdx = self._monthIdx + 1
@@ -144,25 +148,25 @@ class ModelTime(object):
         # check if a certain day is the last day of the year
         if self.isLastDayOfYear():
             self._annuaIdx = self._annuaIdx + 1
-            
+
     def isFirstTimestep(self):
         return self.timeStepPCR == 1
 
     def isFirstDayOfMonth(self):
         return self.day == 1
-    
+
     def isFirstDayOfYear(self):
         return self.doy== 1
-    
+
     def isLastDayOfMonth(self):
         tomorrow = self.currTime + datetime.timedelta(days=1)
-        
+
         #tomorrow is the first day of the month
         return tomorrow.day == 1
-    
+
     def isLastDayOfYear(self):
         tomorrow = self.currTime + datetime.timedelta(days=1)
-        
+
         #tomorrow is the first day of the year
         return tomorrow.timetuple().tm_yday == 1
 
@@ -182,7 +186,7 @@ class ModelTime(object):
     @property
     def endYear(self):
         return self.isLastDayOfYear()
-    
+
     def __str__(self):
         #~ print self._currTime
         return str(self._currTime)
