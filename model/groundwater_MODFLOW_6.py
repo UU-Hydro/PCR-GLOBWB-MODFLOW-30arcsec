@@ -1700,6 +1700,7 @@ class GroundwaterModflow(object):
             else:
                 discharge = vos.readPCRmapClone(self.iniItems.modflowSteadyStateInputOptions['avgDischargeInputMap'],\
                                                 self.cloneMap, self.tmpDir, self.inputDir)
+            discharge = pcr.cover(discharge, 0.0)
             discharge = pcr.max(0.0, discharge)
 
 
@@ -1772,6 +1773,7 @@ class GroundwaterModflow(object):
                 else:
                     discharge = vos.netcdf2PCRobjClone(vos.getFullPath(self.iniItems.modflowTransientInputOptions['dischargeInputNC'], self.inputDir),
                                                        "discharge", str(currTimeStep.fulldate), None, self.cloneMap)
+                discharge = pcr.cover(discharge, 0.0)
                 discharge = pcr.max(discharge, 0.0)
                 
                 # - recharge/capillary rise (unit: m/day) from PCR-GLOBWB
@@ -1858,6 +1860,7 @@ class GroundwaterModflow(object):
                                                                                                        self.dynamicFracWat,\
                                                                                                        self.bankfullDepth,\
                                                                                                        self.floodDepth)
+
         else:
             self.set_drain_and_river_package(discharge, channelStorage, currTimeStep, simulation_type)
 
@@ -1938,6 +1941,7 @@ class GroundwaterModflow(object):
                 except:
                     self.modflow_converged = False
 
+            
             print(self.modflow_converged)
 
             if self.modflow_converged == False:
