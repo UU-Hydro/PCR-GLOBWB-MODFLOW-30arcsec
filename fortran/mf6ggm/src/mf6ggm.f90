@@ -940,7 +940,7 @@ program mf6ggm
             r%nodmap(jc,jr,1) = nodsign
             r%nodmap(jc,jr,2) = nodsign
           else if (nlay == 1) then
-            r%nodmap(jc,jr,1) = nodsign
+            r%nodmap(jc,jr,gnlay) = nodsign
           else
             call errmsg('Invalid number of layers read.')
           end if
@@ -1085,9 +1085,9 @@ program mf6ggm
           end if
           il = xch%gicirilm1(3,i)
           n = abs(r%nodmap(ic,ir,il))
-          !040321 if (n == 0) then
-          !040321   call errmsg('Program error: no node number found for M1.')
-          !040321 end if
+          if (n == 0) then
+            call errmsg('Program error: no node number found for M1.')
+          end if
           xch%cellidm1(i) = n
         end do
         mmd2 => smod(xch%m2mod)
@@ -1105,9 +1105,9 @@ program mf6ggm
               end if
               il = xch2%gicirilm2(3,i)
               n = abs(r%nodmap(ic,ir,il))
-              !040321 if (n == 0) then
-              !040321  call errmsg('Program error: node not found.')
-              !040321 end if
+              if (n == 0) then
+                call errmsg('Program error: node not found.')
+              end if
               xch2%cellidm2(i) = n
             end do
           end if
