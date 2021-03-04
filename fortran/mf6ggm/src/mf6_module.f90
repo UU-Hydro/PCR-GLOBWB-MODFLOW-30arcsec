@@ -1051,7 +1051,7 @@ module mf6_module
         f = trim(this%solname)//pcpu(icpu)//'.models'//trim(pr(inam,irun))//'.asc'
         call open_file(f, iu, 'w')
         do i = 1, this%nmod
-          ms =  'm'//ta((/this%mod_id(i)/),5)
+          ms =  'm'//ta((/this%mod_id(i)/),'(i5.5)')
           s = 'GWF6 ..\..\models\run_input\'//trim(ms)// &
             '\'//trim(ms)//trim(pr(inam,irun))//'.nam '//trim(ms)
           call swap_slash(s)
@@ -1069,7 +1069,7 @@ module mf6_module
     f = trim(this%solname)//'.solmodels.asc'
     call open_file(f, iu, 'w')
     do i = 1, this%nmod
-      ms = 'm'//ta((/this%mod_id(i)/),5); write(iu,'(a)') trim(ms)
+      ms = 'm'//ta((/this%mod_id(i)/),'(i5.5)'); write(iu,'(a)') trim(ms)
     end do
     close(iu)
     !
@@ -1077,7 +1077,7 @@ module mf6_module
     f = trim(this%solname)//'.cgc.solmodels.asc'
     call open_file(f, iu, 'w')
     do i = 1, this%nmod
-      ms = 'm'//ta((/this%mod_id(i)/),5)
+      ms = 'm'//ta((/this%mod_id(i)/),'(i5.5)')
       write(iu,'(a)') trim(ms)//' '//ta((/i/))
     end do
     close(iu)
@@ -1162,7 +1162,7 @@ module mf6_module
         write(ju,'(a)')
       end if
       do i = 1, this%nmod
-        ms =  'm'//ta((/this%mod_id(i)/),5)
+        ms =  'm'//ta((/this%mod_id(i)/),'(i5.5)')
         nam = trim(this%solname)//pcpu(iser)//'.mfsim.'//trim(ms)//trim(pr(inam,irun0ss))//'.nam'
         call open_file(nam, iu, 'w')
         write(iu,'(   a)') 'BEGIN OPTIONS'
@@ -3318,7 +3318,7 @@ module mf6_module
         call logmsg('No drains found.')
       else
         lact(iper) = .true.
-        f = trim(pb)//'.drn.sp'//ta((/iper/),3)
+        f = trim(pb)//'.drn.sp'//ta((/iper/),'(i3.3)')
         call this%write_list(iu, 4, f, i1wrk, r8wrk, r8wrk2, lbin, lbinpos, cwk(iper))
       end if
       call clear_wrk()
@@ -3445,7 +3445,7 @@ module mf6_module
         call logmsg('No general-head boundaries found.')
       else
         lact(iper) = .true.
-        f = trim(pb)//trim(packstr)//'.sp'//ta((/iper/),3)
+        f = trim(pb)//trim(packstr)//'.sp'//ta((/iper/),'(i3.3)')
         call this%write_list(iu, 4, f, i1wrk, r8wrk, r8wrk2, lbin, lbinpos, cwk(iper))
       end if
       call clear_wrk()
@@ -3571,7 +3571,7 @@ module mf6_module
         call logmsg('No rivers found.')
       else
         lact(iper) = .true.
-        f = trim(pb)//'.riv.sp'//ta((/iper/),3)
+        f = trim(pb)//'.riv.sp'//ta((/iper/),'(i3.3)')
         call this%write_list(iu, 2, f, i1wrk, r8wrk, r8wrk2, r8wrk3, lbin, lbinpos, cwk(iper))
       end if
       call clear_wrk()
@@ -3688,7 +3688,7 @@ module mf6_module
         call errmsg('No recharge found.')
       else
         lact(iper) = .true.
-        f = trim(pb)//'.rch.sp'//ta((/iper/),3)
+        f = trim(pb)//'.rch.sp'//ta((/iper/),'(i3.3)')
         call this%write_list(iu, 2, f, i1wrk, r8wrk, lbin, lbinpos, cwk(iper))
       end if
       call clear_wrk()
@@ -3798,7 +3798,7 @@ module mf6_module
       maxbound = max(nbound, maxbound)
       if (nbound > 0) then
         lact(iper) = .true.
-        f = trim(pb)//'.wel.sp'//ta((/iper/),3)
+        f = trim(pb)//'.wel.sp'//ta((/iper/),'(i3.3)')
         call this%write_list(iu, 2, f, i1wrk, r8wrk, lbin, lbinpos, cwk(iper))
       else
         lact(iper) = .false.
@@ -4057,6 +4057,7 @@ module mf6_module
     real(r4b), optional, intent(in) :: nodata_in
     real(r4b) :: r4val
     ! -- local
+    logical :: lmv
     integer(i4b) :: ic, ir, jtile
     real(r4b) :: nodata
 ! ------------------------------------------------------------------------------
@@ -4074,7 +4075,11 @@ module mf6_module
     if (jtile == 0) then
       call errmsg("Program error: mf6_distmap_getval_r4")
     end if
-    call this%maps(jtile)%get_val(ic, ir, r4val, nodata)
+    call this%maps(jtile)%get_val(ic, ir, r4val, lmv)
+    !
+    if (lmv) then
+      r4val = nodata
+    end if
     !
     return
   end function mf6_distmap_getval_r4

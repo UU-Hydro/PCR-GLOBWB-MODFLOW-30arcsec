@@ -92,7 +92,7 @@ program mf6ggm
   real(r8b),    dimension(:),     allocatable :: r8wk1d
   !
   character(len=mxslen) :: str, f, d, out_dir, map_pref, mod_inp
-  logical :: lwmod, lwsol, lok
+  logical :: lwmod, lwsol, lok, lmv
   integer(i1b) :: nlay
   integer(i2b) :: itile, i2v
   integer(i4b) :: iu, ju, nsol, nsol_mm, nsol_sm, i, j, k, kk, k0, k1, n, nn, nb, n_reg, nja_reg
@@ -134,8 +134,10 @@ program mf6ggm
     lok = map%init(f)
     ic = 1
     do ir = 1, gnrow
-      call map%get_val(ic, ir, i4v, i4mv)
-      cam2(ir) = i4v
+      call map%get_val(ic, ir, i4v, lmv)
+      if (lmv) then
+        cam2(ir) = i4mv
+      end if
     end do
     call map%clean()
     call map%close()
@@ -1147,7 +1149,7 @@ program mf6ggm
       call logmsg('**************************************************************')
       call logmsg('***** Writing model IDs... *****')
       call logmsg('**************************************************************')
-      f = '..\post_mappings\s'//ta((/isol/),2)//'.asc'
+      f = '..\post_mappings\s'//ta((/isol/),'(i2.2)')//'.asc'
       call swap_slash(f)
       xmin = gxmin + (sbb%ic0-1)*gcs
       ymin = gymin + (gnrow-sbb%ir1)*gcs
