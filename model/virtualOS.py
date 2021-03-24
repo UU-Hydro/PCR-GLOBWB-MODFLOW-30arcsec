@@ -67,6 +67,66 @@ netcdf_suffixes = ('.nc4','.nc')
 # maximum number of tries for reading files:
 max_num_of_tries = 5
 
+def initialize_logging(log_file_location, log_file_front_name = "log", debug_mode = True):
+    """
+    Initialize logging. Prints to both the console and a log file, at configurable levels
+    """
+
+    # timestamp of this run, used in logging file names, etc
+    timestamp = datetime.datetime.now()
+    
+    # set root logger to debug level        
+    logging.getLogger().setLevel(logging.DEBUG)
+
+    # logging format 
+    formatter = logging.Formatter('%(asctime)s %(name)s %(levelname)s %(message)s')
+
+    # default logging levels
+    log_level_console    = "INFO"
+    log_level_file       = "INFO"
+    # order: DEBUG, INFO, WARNING, ERROR, CRITICAL
+    
+    # log level for debug mode:
+    if debug_mode == True: 
+        log_level_console = "DEBUG"
+        log_level_file    = "DEBUG"
+    
+    console_level = getattr(logging, log_level_console.upper(), logging.INFO)
+    if not isinstance(console_level, int):
+        raise ValueError('Invalid log level: %s', log_level_console)
+    
+    # create handler, add to root logger
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    console_handler.setLevel(console_level)
+    logging.getLogger().addHandler(console_handler)
+
+    # log file name (and location)
+    log_filename = log_file_location + "/" + log_file_front_name + '_' + str(timestamp.isoformat()).replace(":",".") + '.log'
+
+    file_level = getattr(logging, log_level_file.upper(), logging.DEBUG)
+    if not isinstance(console_level, int):
+        raise ValueError('Invalid log level: %s', log_level_file)
+
+    # create handler, add to root logger
+    file_handler = logging.FileHandler(log_filename)
+    file_handler.setFormatter(formatter)
+    file_handler.setLevel(file_level)
+    logging.getLogger().addHandler(file_handler)
+    
+    # file name for debug log 
+    dbg_filename = log_file_location + "/" + log_file_front_name + '_' + str(timestamp.isoformat()).replace(":",".") + '.dbg'
+
+    # create handler, add to root logger
+    debug_handler = logging.FileHandler(dbg_filename)
+    debug_handler.setFormatter(formatter)
+    debug_handler.setLevel(logging.DEBUG)
+    logging.getLogger().addHandler(debug_handler)
+
+    logger.info('Run started at %s', timestamp)
+    logger.info('Logging output to %s', log_filename)
+    logger.info('Debugging output to %s', dbg_filename)
+
 def getFileList(inputDir, filePattern):
     '''creates a dictionary of  files meeting the pattern specified'''
     fileNameList = glob.glob(os.path.join(inputDir, filePattern))
