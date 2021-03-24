@@ -484,7 +484,8 @@ class GroundwaterModflow(object):
         self.pcr_modflow = None
 
         # option to perform only steady state MODFLOW simulation (offline approach only)
-        self.steady_state_only = iniItems.steady_state_only
+        # ~ self.steady_state_only = iniItems.steady_state_only
+        self.steady_state_only = False
         # TODO: FIX THIS, put this option in the ini/configuration file.
 
 
@@ -1699,6 +1700,7 @@ class GroundwaterModflow(object):
             else:
                 discharge = vos.readPCRmapClone(self.iniItems.modflowSteadyStateInputOptions['avgDischargeInputMap'],\
                                                 self.cloneMap, self.tmpDir, self.inputDir)
+            discharge = pcr.cover(discharge, 0.0)
             discharge = pcr.max(0.0, discharge)
 
 
@@ -1771,7 +1773,9 @@ class GroundwaterModflow(object):
                 else:
                     discharge = vos.netcdf2PCRobjClone(vos.getFullPath(self.iniItems.modflowTransientInputOptions['dischargeInputNC'], self.inputDir),
                                                        "discharge", str(currTimeStep.fulldate), None, self.cloneMap)
+                discharge = pcr.cover(discharge, 0.0)
                 discharge = pcr.max(discharge, 0.0)
+                
                 # - recharge/capillary rise (unit: m/day) from PCR-GLOBWB
                 gwRecharge = vos.netcdf2PCRobjClone(vos.getFullPath(self.iniItems.modflowTransientInputOptions['groundwaterRechargeInputNC'], self.inputDir),\
                                                    "groundwater_recharge", str(currTimeStep.fulldate), None, self.cloneMap)
@@ -1842,11 +1846,21 @@ class GroundwaterModflow(object):
 
 
         if self.online_daily_coupling_between_pcrglobwb_and_modflow:
+            
+            # ~ # the following if we use water levels directly from PCR-GLOBWB
+            # ~ self.set_drain_and_river_package(discharge, channelStorage, currTimeStep, simulation_type, "daily", \
+                                                                                                       # ~ False, \
+                                                                                                       # ~ self.dynamicFracWat,\
+                                                                                                       # ~ self.bankfullDepth,\
+                                                                                                       # ~ self.floodDepth)
+
+            # the following if we use water levels directly from PCR-GLOBWB
             self.set_drain_and_river_package(discharge, channelStorage, currTimeStep, simulation_type, "daily", \
-                                                                                                       False, \
+                                                                                                       True, \
                                                                                                        self.dynamicFracWat,\
                                                                                                        self.bankfullDepth,\
                                                                                                        self.floodDepth)
+
         else:
             self.set_drain_and_river_package(discharge, channelStorage, currTimeStep, simulation_type)
 
@@ -1911,17 +1925,23 @@ class GroundwaterModflow(object):
             msg = "Executing MODFLOW with DAMP = " + str(DAMP) + " and HCLOSE = "+str(HCLOSE)+" and RCLOSE = "+str(RCLOSE)+" and MXITER = "+str(MXITER)+" and ITERI = "+str(ITERI)+" and PERLEN = "+str(PERLEN)+" and NSTP = "+str(NSTP)
             logger.info(msg)
 
-            try:
-                #~ working_directory_where_modflow_files_are_written = self.tmp_modflow_dir
-                #~ self.pcr_modflow.run(working_directory_where_modflow_files_are_written)
-                self.pcr_modflow.run()
+            # option to use MODFLOW 6
+            using_modflow_6 = False
+            
+            if using_modflow_6 == False:
+            
                 try:
-                    self.modflow_converged = self.pcr_modflow.converged()           # TODO: Ask Oliver to fix the non-convergence issue that can appear before reaching the end of stress period.
+                    #~ working_directory_where_modflow_files_are_written = self.tmp_modflow_dir
+                    #~ self.pcr_modflow.run(working_directory_where_modflow_files_are_written)
+                    self.pcr_modflow.run()
+                    try:
+                        self.modflow_converged = self.pcr_modflow.converged()           # TODO: Ask Oliver to fix the non-convergence issue that can appear before reaching the end of stress period.  
+                    except:
+                        self.modflow_converged = self.old_check_modflow_convergence()
                 except:
-                    self.modflow_converged = self.old_check_modflow_convergence()
-            except:
-                self.modflow_converged = False
+                    self.modflow_converged = False
 
+            
             print(self.modflow_converged)
 
             if self.modflow_converged == False:
@@ -2184,16 +2204,21 @@ class GroundwaterModflow(object):
         # - for lakes and resevoirs, estimate bed elevation from DEM only
         #                            This is to avoid that groundwater heads fall too far below DEM
         #                            This will also smooth groundwater heads.
-        #~ # --- alternative 1: using just DEM
-        #~ surface_water_bed_elevation = pcr.ifthen(pcr.scalar(self.WaterBodies.waterBodyIds) > 0.0, self.dem_average)
-        #~ surface_water_bed_elevation = pcr.cover(surface_water_bed_elevation, 0.0)
-        # --- alternative 2: using average DEM
-        surface_water_bed_elevation = pcr.areaaverage(self.dem_average, self.WaterBodies.waterBodyIds)
-        surface_water_bed_elevation = pcr.ifthen(pcr.scalar(self.WaterBodies.waterBodyIds) > 0.0, surface_water_bed_elevation)
-        surface_water_bed_elevation = pcr.cover(surface_water_bed_elevation, self.dem_average)
         #
-        # TODO: Need further investigation for lake and reservoir bed elevations.
+        # --- alternative 1: using just DEM
+        surface_water_bed_elevation = pcr.ifthen(pcr.scalar(self.WaterBodies.waterBodyIds) > 0.0, self.dem_average)
+        surface_water_bed_elevation = pcr.cover(surface_water_bed_elevation, 0.0)
+        #
+        # ~ # --- alternative 2: using average DEM
+        # ~ surface_water_bed_elevation = pcr.areaaverage(self.dem_average, self.WaterBodies.waterBodyIds)
+        # ~ surface_water_bed_elevation = pcr.ifthen(pcr.scalar(self.WaterBodies.waterBodyIds) > 0.0, surface_water_bed_elevation)
+        # ~ surface_water_bed_elevation = pcr.cover(surface_water_bed_elevation, self.dem_average)
+        #
+        # TODO: Need further development for lake and reservoir bed elevations. 
+        #
+        # Note: For Jarno's parallelization work, the alternative 1 is the safest. 
 
+        # surface water bed elevation for all cells (lakes, reservoirs and rivers)
         surface_water_bed_elevation = self.lake_and_reservoir_fraction * surface_water_bed_elevation + self.river_fraction * self.dem_riverbed
 
         # rounding values for surface_water_bed_elevation
@@ -2360,16 +2385,16 @@ class GroundwaterModflow(object):
         #~ # -- alternative 1: based on maximum water levels within the lake
         #~ lake_reservoir_water_elevation = pcr.areamaximum(river_water_elevation, self.WaterBodies.waterBodyIds)
         #
-        #~ # -- alternative 2: just using the constant value based on the digital elevation model
-        #~ lake_reservoir_water_elevation    = self.dem_average
-        #~ #
+        # -- alternative 2: just using the constant value based on the digital elevation model - Note: For Jarno's work (parallelization), this is the safest. 
+        lake_reservoir_water_elevation    = self.dem_average
+        #
         #~ lake_reservoir_water_elevation    = pcr.ifthen(pcr.scalar(self.WaterBodies.waterBodyIds) > 0.0, lake_reservoir_water_elevation)
         #
-        # --- alternative 3: using average DEM
-        lake_reservoir_water_elevation = pcr.areaaverage(river_water_elevation, self.WaterBodies.waterBodyIds)
-        lake_reservoir_water_elevation = pcr.ifthen(pcr.scalar(self.WaterBodies.waterBodyIds) > 0.0, lake_reservoir_water_elevation)
-        lake_reservoir_water_elevation = pcr.cover(lake_reservoir_water_elevation, river_water_elevation)
-        lake_reservoir_water_elevation = pcr.cover(lake_reservoir_water_elevation, self.dem_average)
+        # ~ # --- alternative 3: using average DEM
+        # ~ lake_reservoir_water_elevation = pcr.areaaverage(river_water_elevation, self.WaterBodies.waterBodyIds)
+        # ~ lake_reservoir_water_elevation = pcr.ifthen(pcr.scalar(self.WaterBodies.waterBodyIds) > 0.0, lake_reservoir_water_elevation)
+        # ~ lake_reservoir_water_elevation = pcr.cover(lake_reservoir_water_elevation, river_water_elevation)
+        # ~ lake_reservoir_water_elevation = pcr.cover(lake_reservoir_water_elevation, self.dem_average)
         #
         # - surface water elevation for rivers, lakes and reservoirs
         #

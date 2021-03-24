@@ -3,9 +3,9 @@
 #
 # PCR-GLOBWB (PCRaster Global Water Balance) Global Hydrological Model
 #
-# Copyright (C) 2016, Edwin H. Sutanudjaja, Rens van Beek, Niko Wanders, Yoshihide Wada, 
-# Joyce H. C. Bosmans, Niels Drost, Ruud J. van der Ent, Inge E. M. de Graaf, Jannis M. Hoch, 
-# Kor de Jong, Derek Karssenberg, Patricia López López, Stefanie Peßenteiner, Oliver Schmitz, 
+# Copyright (C) 2016, Edwin H. Sutanudjaja, Rens van Beek, Niko Wanders, Yoshihide Wada,
+# Joyce H. C. Bosmans, Niels Drost, Ruud J. van der Ent, Inge E. M. de Graaf, Jannis M. Hoch,
+# Kor de Jong, Derek Karssenberg, Patricia López López, Stefanie Peßenteiner, Oliver Schmitz,
 # Menno W. Straatsma, Ekkamol Vannametee, Dominik Wisser, and Marc F. P. Bierkens
 # Faculty of Geosciences, Utrecht University, Utrecht, The Netherlands
 #
@@ -54,24 +54,24 @@ class DeterministicRunner(DynamicModel):
         DynamicModel.__init__(self)
 
         # model time object
-        self.modelTime = modelTime        
-        
+        self.modelTime = modelTime
+
         # make the configuration available for the other method/function
         self.configuration = configuration
 
         # model and reporting objects
         self.model     = modflow.ModflowCoupling(configuration, modelTime)
         self.reporting = Reporting(configuration, self.model, modelTime)
-        
+
         # set the clone map
         pcr.setclone(configuration.cloneMap)
-        
-        # TODO: pre-factors based on the system arguments
-        
 
-    def initial(self): 
-        
-        # get or prepare the initial condition for groundwater head 
+        # TODO: pre-factors based on the system arguments
+
+
+    def initial(self):
+
+        # get or prepare the initial condition for groundwater head
         self.model.get_initial_heads()
 
     def dynamic(self):
@@ -81,47 +81,57 @@ class DeterministicRunner(DynamicModel):
 
         # update/calculate model and daily merging, and report ONLY at the last day of the month
         if self.modelTime.isLastDayOfMonth():
-            
+
             # update MODFLOW model (It will pick up current model time from the modelTime object)
             self.model.update()
             # reporting is only done at the end of the month
-            self.reporting.report()
+            # self.reporting.report() #JV
 
 def main():
-    
+
     # print disclaimer
     disclaimer.print_disclaimer()
 
     # get the full path of configuration/ini file given in the system argument
     iniFileName   = os.path.abspath(sys.argv[1])
-    
+
     # debug option
     debug_mode = False
     if len(sys.argv) > 2:
         if sys.argv[2] == "debug": debug_mode = True
-    
+
     # options to perform steady state calculation
     steady_state_only = False
-    if len(sys.argv) > 3: 
+    if len(sys.argv) > 3:
         if sys.argv[3] == "steady-state-only": steady_state_only = True
+
+    if len(sys.argv) > 4: #JV
+        tile = sys.argv[4]
+        print('Writing ini-file for tile %s'%tile)
+        iniFileName_new = os.path.join(os.path.dirname(iniFileName),'%s.ini'%tile)
+        f = open(iniFileName,'r'); s = f.read(); f.close()
+        iniFileName = iniFileName_new
+        s = s.replace('$tile$',tile)
+        f = open(iniFileName,'w'); f.write(s); f.close()
+
     # object to handle configuration/ini file
     configuration = Configuration(iniFileName = iniFileName, \
                                   debug_mode = debug_mode, \
-                                  steady_state_only = steady_state_only)      
+                                  steady_state_only = steady_state_only)
 
     # if steady_state_only startTime = endTime
     if steady_state_only:
        configuration.globalOptions['endTime'] = configuration.globalOptions['startTime']
-    
+
     # timeStep info: year, month, day, doy, hour, etc
-    currTimeStep = ModelTime() 
-    
+    currTimeStep = ModelTime()
+
     # Running the deterministic_runner
     currTimeStep.getStartEndTimeSteps(configuration.globalOptions['startTime'],
                                       configuration.globalOptions['endTime'])
     logger.info('Model run starts.')
     deterministic_runner = DeterministicRunner(configuration, currTimeStep, sys.argv)
-    
+
     dynamic_framework = DynamicFramework(deterministic_runner, currTimeStep.nrOfTimeSteps)
     dynamic_framework.setQuiet(True)
     dynamic_framework.run()
