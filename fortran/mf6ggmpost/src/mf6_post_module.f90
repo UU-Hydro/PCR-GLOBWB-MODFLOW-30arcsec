@@ -600,10 +600,11 @@ module mf6_post_module
     return
   end subroutine mf6_post_ser_read_stat
   
- subroutine mf6_post_ser_write(this)
+ subroutine mf6_post_ser_write(this, lwrite)
 ! ******************************************************************************  
     ! -- arguments
     class(tPostSer) :: this
+    logical, intent(in) :: lwrite
     ! --- local
     integer(i4b), parameter :: mxnodread = 5
     !
@@ -641,7 +642,7 @@ module mf6_post_module
             end if
           end do
           ts%read = .true.
-          call mf6_post_ser_write_series(this%gen, ts)
+          if (lwrite) call mf6_post_ser_write_series(this%gen, ts)
         end do
         call m%clean()
       end if
@@ -675,7 +676,7 @@ module mf6_post_module
         end do
         !deallocate(r8wk2d)
         ts%read = .true.
-        call mf6_post_ser_write_series(this%gen, ts)
+        if (lwrite) call mf6_post_ser_write_series(this%gen, ts)
         !deallocate(ts%val)
         !if (mod(n,100) == 0) then
         !  call logmsg('**** sleeping ****')
@@ -729,7 +730,7 @@ module mf6_post_module
     if (associated(ts%glev)) then
       lwtd = .true.
     else
-      lwtd = .true.
+      lwtd = .false.
     end if
     !
     lwrite = .false.
@@ -799,17 +800,18 @@ module mf6_post_module
     return
   end subroutine mf6_post_ser_write_series
  
-  subroutine mf6_post_ser_write_summary(this)
+  subroutine mf6_post_ser_write_summary(this, lss)
 ! ******************************************************************************  
     ! -- arguments
     class(tPostSer) :: this
+    logical, intent(in) :: lss
     ! --- local
     type(tTimeSeries), pointer :: ts => null()
     character(len=1) :: datsep
     character(len=3) :: ext
     character(len=mxslen) :: f, s, s1, s2, s3, laystr
     character(len=mxslen), dimension(:), allocatable :: datestr
-    logical :: lipf, lwrite
+    logical :: lipf, lwrite, lwtd
     logical, dimension(:), allocatable :: lfirst
     integer(i4b) :: iper, nper, i, j, il, jl, ys, mns, date, y, m, ye, me, de, iu
     integer(i4b) :: n
@@ -866,6 +868,11 @@ module mf6_post_module
       case(i_out_txt)
         do i = 1, this%nts
           ts => this%ts(i)
+          if (associated(ts%glev)) then
+            lwtd = .true.
+          else
+            lwtd = .false.
+          end if
           do il = this%gen%il_min, this%gen%il_max
             if (this%gen%itype == 4) then
               jl = 1
@@ -873,10 +880,23 @@ module mf6_post_module
               jl = il
             end if
             if (ts%act .and. (ts%nod(il) > 0)) then
-              if (lfirst(il)) then
-                write(iuarr(jl),'(a)') trim(ts%rawhdr); lfirst(il) = .false.
+              if (lfirst(jl)) then
+                if (lss) then
+                  write(iuarr(jl),'(a)') trim(ts%rawhdr)//' val'
+                else
+                  write(iuarr(jl),'(a)') trim(ts%rawhdr)
+                end if
+                lfirst(jl) = .false.
               end if
-              write(iuarr(jl),'(a)') trim(ts%raw)
+              if (lss) then
+                if (lwtd) then
+                  write(iuarr(jl),'(a)') trim(ts%raw)//' '//ta((/ts%glev-ts%val(il,1)/))
+                else
+                  write(iuarr(jl),'(a)') trim(ts%raw)//' '//ta((/ts%val(il,1)/))
+                end if
+              else
+                write(iuarr(jl),'(a)') trim(ts%raw)
+              end if
             end if
           end do
         end do

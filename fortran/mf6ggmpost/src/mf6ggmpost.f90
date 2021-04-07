@@ -57,8 +57,13 @@ program mf6ggmpost
         call postsol%clean()
       case('t')
         call postser%init(sa)
-        call postser%write()
-        call postser%write_summary()
+        call postser%write(.true.)
+        call postser%write_summary(.false.)
+        call postser%clean()
+      case('p')
+        call postser%init(sa)
+        call postser%write(.false.)
+        call postser%write_summary(.true.)
         call postser%clean()
     end select
   end do
