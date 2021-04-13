@@ -3685,7 +3685,7 @@ module mf6_module
       maxbound = max(nbound,maxbound)
       if (nbound == 0) then
         lact(iper) = .false.
-        call errmsg('No recharge found.')
+        call logmsg('No recharge found.')
       else
         lact(iper) = .true.
         f = trim(pb)//'.rch.sp'//ta((/iper/),'(i3.3)')
