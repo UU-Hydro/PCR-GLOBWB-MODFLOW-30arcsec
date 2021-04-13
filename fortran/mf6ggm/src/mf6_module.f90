@@ -3695,7 +3695,7 @@ module mf6_module
     end do
     !
     if (maxbound == 0) then
-      call errmsg('No recharge found.')
+      call logmsg('No recharge found.')
       pckact(irch) = 0
       return
     end if
