@@ -176,6 +176,8 @@ module utilsmod
     integer(i4b), dimension(:), pointer :: nod    => null()
     real(r8b), pointer                  :: glev   => null()
     real(r8b), dimension(:,:), pointer  :: val    => null()
+    integer(i4b), pointer               :: sm_corr=> null()
+    integer(i4b), pointer               :: nlay   => null()
   contains
     procedure :: clean => timeseries_clean
   end type tTimeSeries
@@ -202,6 +204,8 @@ module utilsmod
     if (associated(this%nod))    deallocate(this%nod)
     if (associated(this%glev))   deallocate(this%glev)
     if (associated(this%val))    deallocate(this%val)
+    if (associated(this%sm_corr))deallocate(this%sm_corr)
+    if (associated(this%nlay))   deallocate(this%nlay)
     !
     this%act    => null()
     this%rawhdr => null()
@@ -215,6 +219,8 @@ module utilsmod
     this%nod    => null()
     this%glev   => null()
     this%val    => null()
+    this%sm_corr=> null()
+    this%nlay   => null()
     !
     return
   end subroutine timeseries_clean

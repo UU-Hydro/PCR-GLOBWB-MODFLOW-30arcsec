@@ -233,16 +233,17 @@ module mf6_post_module
     integer(i4b), parameter :: i_idcol    =  4
     integer(i4b), parameter :: i_xcol     =  5
     integer(i4b), parameter :: i_ycol     =  6
-    integer(i4b), parameter :: i_isol_beg =  7
-    integer(i4b), parameter :: i_isol_end =  8
-    integer(i4b), parameter :: i_in_postf =  9
-    integer(i4b), parameter :: i_itype    = 10
-    integer(i4b), parameter :: i_il_min   = 11
-    integer(i4b), parameter :: i_il_max   = 12
-    integer(i4b), parameter :: i_date_beg = 13
-    integer(i4b), parameter :: i_date_end = 14
-    integer(i4b), parameter :: i_i_out    = 15
-    integer(i4b), parameter :: i_out_dir  = 16
+    integer(i4b), parameter :: i_smcol    =  7
+    integer(i4b), parameter :: i_isol_beg =  9
+    integer(i4b), parameter :: i_isol_end =  9
+    integer(i4b), parameter :: i_in_postf = 10
+    integer(i4b), parameter :: i_itype    = 11
+    integer(i4b), parameter :: i_il_min   = 12
+    integer(i4b), parameter :: i_il_max   = 13
+    integer(i4b), parameter :: i_date_beg = 14
+    integer(i4b), parameter :: i_date_end = 15
+    integer(i4b), parameter :: i_i_out    = 16
+    integer(i4b), parameter :: i_out_dir  = 17
     !
     type(tBB), pointer :: tsbb => null()
     type(tGen), pointer :: gen => null()
@@ -250,11 +251,11 @@ module mf6_post_module
     type(tPostMod), pointer :: m => null()
     type(tPostSerMod), pointer :: tsm => null()
     character(len=mxslen) :: solname,  f, st
-    integer(i4b) :: idcol, xcol, ycol, i, j, k, iu, isol, isol_beg, isol_end, nmod, iact, mxmod
+    integer(i4b) :: idcol, xcol, ycol, smcol, i, j, k, iu, isol, isol_beg, isol_end, nmod, iact, mxmod
     integer(i4b) :: il, ir, ic, gil, gir, gic, n, nn
     integer(i4b) :: ys, mns, y, mn, kper_beg, kper_end
     integer(i4b), dimension(gnlay) :: nod
-    integer(i4b), dimension(:), allocatable :: g2lmod, l2gmod, i4wk, modflg
+    integer(i4b), dimension(:), allocatable :: g2lmod, l2gmod, i4wk, modflg ,mismod
     integer(i4b), dimension(:,:,:), allocatable :: nodmap
     integer(i4b) :: i4val
     logical :: lmv
@@ -302,9 +303,10 @@ module mf6_post_module
     read(opt(i_idcol),*) idcol
     read(opt(i_xcol),*) xcol
     read(opt(i_ycol),*) ycol
+    read(opt(i_smcol),*) smcol
     !
     ! read the station file
-    call this%read_stat(idcol, xcol, ycol)
+    call this%read_stat(idcol, xcol, ycol, smcol)
     !
     ! set the row and columns
     allocate(tsbb)
@@ -439,9 +441,12 @@ module mf6_post_module
         if ((m%bb%ic0 <= ts%ic).and.(ts%ic <= m%bb%ic1).and.&
             (m%bb%ir0 <= ts%ir).and.(ts%ir <= m%bb%ir1)) then
           ic = ts%ic - m%bb%ic0 + 1; ir = ts%ir - m%bb%ir0 + 1
-          nod = 0
+          nod = 0; ts%nlay = 0
           do il = 1, gnlay
             nod(il) = nodmap(ic,ir,il)
+            if (nod(il) > 0) then
+              ts%nlay = ts%nlay + 1
+            end if
           end do
           if (maxval(nod) > 0) then !found
             ts%im = j
@@ -453,7 +458,10 @@ module mf6_post_module
     end do
     !
     ! deactivate time series that do not have associated model data
-    n = 0; nn = 0
+    n = 0; nn = 0; allocate(mismod(mxmod))
+    do k = 1, mxmod
+      mismod(k) = 0
+    end do
     do k = 1, this%nts
       ts => this%ts(k)
       if (ts%im == 0) then
@@ -463,6 +471,7 @@ module mf6_post_module
         !j = g2lmod(ts%im); m => this%mod(j)
         m => this%mod(ts%im)
         if (m%iu <= 0) then
+          j = g2lmod(ts%im); mismod(j) = 1
           nn = nn + 1
           ts%act = .false.
         end if
@@ -472,6 +481,14 @@ module mf6_post_module
       ta((/n/))//'/'//ta((/this%nts/))//'...')
     call logmsg('* Number of time-series removed by non-existing data: '// &
       ta((/nn/))//'/'//ta((/this%nts/))//'...')
+    if (nn > 0) then
+      do k = 1, mxmod
+        if (mismod(k) == 1) then
+          call logmsg('** Non-existing model: '//ta((/k/)))
+        end if
+      end do
+    end if
+    deallocate(mismod)
     !
     ! deactivate using mask
     if (associated(maskmap)) then
@@ -547,13 +564,14 @@ module mf6_post_module
     return
   end subroutine mf6_post_ser_init
 
-  subroutine mf6_post_ser_read_stat(this, idcol, xcol, ycol)
+  subroutine mf6_post_ser_read_stat(this, idcol, xcol, ycol, smcol)
 ! ******************************************************************************  
     ! -- arguments
     class(tPostSer) :: this
     integer(i4b), intent(in) :: idcol
     integer(i4b), intent(in) :: xcol
     integer(i4b), intent(in) :: ycol
+    integer(i4b), intent(in) :: smcol
     ! --- local
     type(tTimeSeries), pointer :: ts => null()
     character(len=mxslen) :: hdr, s
@@ -576,7 +594,7 @@ module mf6_post_module
         this%nts = this%nts + 1
         if (iact == 2) then
           ts => this%ts(this%nts)
-          allocate(ts%act, ts%read, ts%rawhdr, ts%raw, ts%id, ts%x, ts%y, ts%glev)
+          allocate(ts%act, ts%read, ts%rawhdr, ts%raw, ts%id, ts%x, ts%y, ts%glev, ts%sm_corr, ts%nlay)
           ts%act = .true.
           ts%read = .false.
           ts%rawhdr = hdr
@@ -585,6 +603,12 @@ module mf6_post_module
           read(sa(xcol),*) ts%x
           read(sa(ycol),*) ts%y
           ts%glev = huge(DZERO)
+          if (smcol > 0) then
+            read(sa(smcol),*) ts%sm_corr
+          else
+            ts%sm_corr = 1
+        end if
+          ts%nlay = 0
         end if
       end do
       if (iact == 1) then
@@ -736,9 +760,15 @@ module mf6_post_module
     lwrite = .false.
     do il = gen%il_min, gen%il_max
       if ((ts%nod(il) > 0)) then
-        if ((gen%itype == 4).and.lwrite) then ! top only for itype == 4
-          ts%nod(il) = 0 ! label nodes for lower layers zero
+        if (gen%itype == 4) then 
+          if ((ts%nlay > 1).and.(il == gen%il_min).and.(ts%sm_corr == 0)) then !corelation with soil moisture
+            ts%nod(il) = 0
           cycle
+        end if
+          if (lwrite) then ! top only for itype = 4
+            ts%nod(il) = 0 ! label nodes for lower layers zero
+            cycle
+          end if
         end if
         lwrite = .true.
         if ((gen%il_min == gen%il_max).or.(gen%itype == 4)) then
