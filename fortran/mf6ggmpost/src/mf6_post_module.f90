@@ -763,8 +763,8 @@ module mf6_post_module
         if (gen%itype == 4) then 
           if ((ts%nlay > 1).and.(il == gen%il_min).and.(ts%sm_corr == 0)) then !corelation with soil moisture
             ts%nod(il) = 0
-          cycle
-        end if
+            cycle
+          end if
           if (lwrite) then ! top only for itype = 4
             ts%nod(il) = 0 ! label nodes for lower layers zero
             cycle
