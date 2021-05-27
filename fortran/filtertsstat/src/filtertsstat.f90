@@ -1,7 +1,7 @@
 program filtertsstat
   ! -- modules
   use utilsmod, only: i4b, r4b, r8b, get_args, mxslen, open_file, &
-    errmsg, logmsg, ta, parse_line, DZERO, tBB, insert_tab
+    errmsg, logmsg, ta, parse_line, DZERO, tBB, insert_tab, writeasc
   !
   implicit none
   !
@@ -24,21 +24,21 @@ program filtertsstat
   type(tBB), pointer :: bb => null()
   type(tStat), pointer :: sd => null()
   type(tStat), dimension(:), pointer :: sdat => null()
-  character(len=mxslen) :: f_in, f_out, hdr, s
+  character(len=mxslen) :: f_in, f_out, f_out_asc, hdr, s
   character(len=mxslen), dimension(:), allocatable :: args, sa
-  logical :: qre_crit, rho_crit
+  logical :: qre_crit, rho_crit, write_perf
   integer(i4b) :: filt_method
   integer(i4b) :: nsf, ns, na, iu, i, gnc, gnr, ic, ir, nc, nr, n, nmax, np2cand, np3cand
   integer(i4b) :: ylat_ic, xlon_ic, rho_ic, qre_ic, iact, ios, np
   integer(i4b), dimension(4) :: nperf
-  integer(i4b), dimension(:,:), allocatable :: si2d
+  integer(i4b), dimension(:,:), allocatable :: si2d, perf2d
   real(r4b), dimension(4) :: pperf
   real(r8b) :: gxmin, gxmax, gymin, gymax, gcs, x, y, rho, qre
   real(r8b), dimension(:,:), allocatable :: rho2d, qre2d
 ! ------------------------------------------------------------------------------
   !
   ! read the command line arguments
-  args = get_args(); na = len(args)
+  args = get_args(); na = size(args)
   read(args(1:7),*) filt_method, gnc, gnr, gxmin, gxmax, gymin, gymax
   select case(filt_method)
     case(i_best)
@@ -53,6 +53,12 @@ program filtertsstat
   f_in = args(8) 
   read(args(9:12),*) ylat_ic, xlon_ic, rho_ic, qre_ic
   f_out = args(13)
+  !
+  write_perf = .false.
+  if (na > 13) then
+    write_perf = .true.
+    f_out_asc = args(14)
+  end if
   !
   ! read the summary file
   call open_file(f_in, iu, 'r')
@@ -117,6 +123,14 @@ program filtertsstat
   !
   ! get the maximum rho and minumum qre
   allocate(si2d(nc,nr), rho2d(nc,nr), qre2d(nc,nr))
+  if (write_perf) then
+    allocate(perf2d(nc,nr))
+    do ir = 1, nr
+      do ic = 1, nc
+        perf2d(ic,ir) = 0
+      end do
+    end do
+  end if
   !
   if (filt_method == i_best) then !best
     do ir = 1, nr
@@ -199,8 +213,8 @@ program filtertsstat
           sd%write = .true.
           sd%ic = bb%ic0 + ic - 1 !global
           sd%ir = bb%ir0 + ir - 1 !global;
-          sd%x = gxmin + sd%ic*gcs -gcs/2.d0
-          sd%y = gymax + sd%ir*gcs -gcs/2.d0
+          sd%x = gxmin + sd%ic*gcs - gcs/2.d0
+          sd%y = gymax - sd%ir*gcs + gcs/2.d0
           sd%rho = rho2d(ic,ir)
           sd%qre = qre2d(ic,ir)
           if ((abs(sd%qre) <= 0.5d0).and.(sd%rho >= 0.5d0)) then
@@ -219,8 +233,8 @@ program filtertsstat
           end if
           nperf(sd%iperf) = nperf(sd%iperf) + 1
           write(sa(1),*) (sd%ir - 1)*gnc + sd%ic
-          write(sa(2),*) sd%x
-          write(sa(3),*) sd%y
+          write(sa(2),*) sd%y
+          write(sa(3),*) sd%x
           write(sa(4),*) sd%rho
           write(sa(5),*) sd%qre
           write(sa(6),*) achar(9)
@@ -244,6 +258,11 @@ program filtertsstat
   do i = 1, ns
     sd => sdat(i)
     if (sd%write) then
+      if (write_perf) then
+        ic = sd%ic - bb%ic0 + 1 !local
+        ir = sd%ir - bb%ir0 + 1 !local
+        perf2d(ic,ir) = sd%iperf
+      end if
       if (len_trim(sd%raw) == 0) then
         call errmsg('Program error')
       end if
@@ -251,6 +270,11 @@ program filtertsstat
     end if
   end do
   close(iu)
+  !
+  if (write_perf) then
+    call writeasc(f_out_asc, perf2d, bb%ncol, bb%nrow, &
+      gxmin + (bb%ic0-1)*gcs, gymin + (gnr-bb%ir1)*gcs, gcs, 0.D0)
+  end if
   !
   np = sum(nperf)
   write(s,'(f10.2)') 100.*np/ns
