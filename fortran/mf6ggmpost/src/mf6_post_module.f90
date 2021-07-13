@@ -3,7 +3,7 @@ module mf6_post_module
   use, intrinsic :: iso_fortran_env , only: error_unit, output_unit, &
      i1b => int8, i2b => int16, i4b => int32, i8b => int64, r4b => real32, r8b => real64
   use utilsmod, only: IZERO, DZERO, DONE, tBB, errmsg, logmsg, swap_slash, open_file, chkexist, &
-    get_jd, get_ymd_from_jd, ta, writeasc, writeidf, replacetoken, linear_regression, &
+    get_jd, get_ymd_from_jd, ta, writeasc, writeidf, writeflt, replacetoken, linear_regression, &
     tTimeSeries, parse_line, insert_tab, create_dir, change_case, count_dir_files, bb_overlap
   use pcrModule, only: tmap
   use imod_idf
@@ -21,6 +21,7 @@ module mf6_post_module
   integer(i4b), parameter :: i_out_asc = 2
   integer(i4b), parameter :: i_out_ipf = 3
   integer(i4b), parameter :: i_out_txt = 4
+  integer(i4b), parameter :: i_out_flt = 5
   !
   ! -- global variables
   integer(i4b) :: gnsol = IZERO
@@ -607,7 +608,7 @@ module mf6_post_module
             read(sa(smcol),*) ts%sm_corr
           else
             ts%sm_corr = 1
-        end if
+          end if
           ts%nlay = 0
         end if
       end do
@@ -1138,13 +1139,13 @@ module mf6_post_module
     if (associated(this%nodes)) deallocate(this%nodes)
     allocate(this%nodes); this%nodes = 0
     call open_file(f, iu, 'r', .true.)
-    read(iu) bb%ic0, bb%ic1, bb%ir0, bb%ir1 
+    read(iu) bb%ic0, bb%ic1, bb%ir0, bb%ir1
     bb%ncol = bb%ic1 - bb%ic0 + 1; bb%nrow = bb%ir1 - bb%ir0 + 1
     !
-    if (this%gen%gic0 > bb%ic1) lbbonly = .true. 
-    if (this%gen%gic1 < bb%ic0) lbbonly = .true. 
-    if (this%gen%gir0 > bb%ir1) lbbonly = .true. 
-    if (this%gen%gir1 < bb%ir0) lbbonly = .true. 
+    if (this%gen%gic0 > bb%ic1) lbbonly = .true.
+    if (this%gen%gic1 < bb%ic0) lbbonly = .true.
+    if (this%gen%gir0 > bb%ir1) lbbonly = .true.
+    if (this%gen%gir1 < bb%ir0) lbbonly = .true.
     !
     if (lbbonly) then
       !call logmsg('***** skipping *****')
@@ -1616,6 +1617,9 @@ module mf6_post_module
         case(i_out_idf)
           call writeidf(trim(f)//'.idf', r8wk, bb%ncol, bb%nrow, &
             xmin, ymin, gcs, r8nodata)
+        case(i_out_flt)
+          call writeflt(trim(f), r8wk, bb%ncol, bb%nrow, &
+            xmin, ymin, gcs, r8nodata)
       end select
     end do
     !
@@ -1731,6 +1735,8 @@ module mf6_post_module
         gen%i_out = i_out_asc
       case('idf')
         gen%i_out = i_out_idf
+      case('flt')
+        gen%i_out = i_out_flt
       case default
         call errmsg('mf6_post_sol_init')
     end select
@@ -2502,6 +2508,15 @@ module mf6_post_module
                   xmin, ymin, gcs, DZERO)
               end if
               call writeidf(trim(f)//'.idf', wsr8wk, &
+                wbb%ncol, wbb%nrow, &
+                xmin, ymin, gcs, r8nodata)
+            case(i_out_flt)
+              if (this%lwritemodid) then
+                call writeflt(trim(f)//'_modid', wsi4wk, &
+                  wbb%ncol, wbb%nrow, &
+                  xmin, ymin, gcs, IZERO)
+              end if
+              call writeflt(trim(f), wsr8wk, &
                 wbb%ncol, wbb%nrow, &
                 xmin, ymin, gcs, r8nodata)
           end select
