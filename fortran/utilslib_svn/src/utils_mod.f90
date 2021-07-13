@@ -21,9 +21,15 @@ module utilsmod
 
   integer(i4b), parameter :: IZERO = 0
   real(r4b), parameter :: RZERO = 0.0
+  real(r4b), parameter :: RONE = 1.0
   real(r8b), parameter :: DZERO = 0.D0
   real(r8b), parameter :: DONE  = 1.D0
 
+  interface fillgap
+    module procedure :: fillgap_r4
+  end interface fillgap
+  private :: fillgap_r4
+    
   interface readidf_block
     module procedure :: readidf_block_i4
     module procedure :: readidf_block_r4
@@ -73,6 +79,25 @@ module utilsmod
   end interface
   private :: writeasc_i4_r4, writeasc_i4_r8, writeasc_r4_r8, writeasc_r8_r8
 
+  interface readflt
+    module procedure :: readflt_i1
+    module procedure :: readflt_i4
+    module procedure :: readflt_r4
+  end interface
+  private :: readflt_i1, readflt_i4, readflt_r4
+  
+  interface writeflt
+    module procedure :: writeflt_i1_r4
+    module procedure :: writeflt_i4_r4
+    module procedure :: writeflt_r4_r4
+    module procedure :: writeflt_i1_r8
+    module procedure :: writeflt_i4_r8
+    module procedure :: writeflt_r4_r8
+    module procedure :: writeflt_r8_r8
+  end interface
+  private :: writeflt_i1_r4, writeflt_i4_r4, writeflt_r4_r4
+  private :: writeflt_i1_r8, writeflt_i4_r8, writeflt_r4_r8, writeflt_r8_r8
+  
   interface addboundary
     module procedure :: addboundary_i
     module procedure :: addboundary_r
@@ -87,6 +112,11 @@ module utilsmod
   end interface calc_unique
   private :: calc_unique_i, calc_unique_r
 
+  interface get_grid_bb
+    module procedure :: get_r4grid_bb
+  end interface get_grid_bb
+  private :: get_r4grid_bb
+  
   interface writetofile
     module procedure :: writetofile_i4
     module procedure :: writetofile_r4
@@ -95,13 +125,14 @@ module utilsmod
   private :: writetofile_i4, writetofile_r4, writetofile_r8
 
   interface ta
+    module procedure :: ta_i1
     module procedure :: ta_i4
     module procedure :: ta_i8
     module procedure :: ta_r4
     module procedure :: ta_r8
     module procedure :: ta_c
   end interface
-  private :: ta_i4, ta_i8, ta_r4, ta_r8
+  private :: ta_i1, ta_i4, ta_i8, ta_r4, ta_r8
 
   type tPol
     integer(i4b) :: id = 0
@@ -416,6 +447,286 @@ module utilsmod
     return
   end subroutine label_node
 
+  subroutine get_r4grid_bb(a, mv, id, bb)
+! ******************************************************************************
+    ! -- arguments
+    real(r4b), dimension(:,:), intent(in) :: a
+    real(r4b), intent(in) :: mv
+    integer(i4b), dimension(:), allocatable, intent(out) :: id
+    type(tBb), dimension(:), allocatable, intent(out) :: bb
+    !
+    ! -- locals
+    integer(i4b) :: nr, nc, ir, ic, i, j, n, mxid, nid, i4v
+    !
+    integer(i4b), dimension(:), allocatable :: i4wk1d
+! ------------------------------------------------------------------------------
+    nc = size(a,1); nr = size(a,2)
+    !
+    mxid = 0
+    do ir = 1, nc
+      do ic = 1, nc
+        if (a(ic,ir) /= mv) then
+          i4v = int(a(ic,ir),i4b)
+          mxid = max(mxid,i4v)
+        end if
+      end do
+    end do
+    !
+    if (mxid <= 0) call errmsg('get_r4grid_bb: error 1')
+    allocate(i4wk1d(mxid))
+    do i = 1, mxid
+      i4wk1d(i) = 0
+    end do
+    !
+    do ir = 1, nc
+      do ic = 1, nc
+        if (a(ic,ir) /= mv) then
+          i4v = int(a(ic,ir),i4b)
+          i4wk1d(i4v) = 1
+        end if
+      end do
+    end do
+    !
+    nid = 0
+    do i = 1, mxid
+      if (i4wk1d(i) == 1) then
+        nid = nid + 1
+        i4wk1d(i) = nid
+      end if
+    end do
+    !
+    if (nid == 0) call errmsg('get_r4grid_bb: error 2')
+    allocate(id(nid), bb(nid))
+    !
+    do i = 1, mxid
+      j = i4wk1d(i)
+      if (j > 0) then
+        id(j) = i
+      end if
+    end do
+    !
+    do ir = 1, nc
+      do ic = 1, nc
+        if (a(ic,ir) /= mv) then
+          i4v = int(a(ic,ir),i4b)
+          i = i4wk1d(i4v)
+          bb(i)%ic0 = min(bb(i)%ic0,ic); bb(i)%ic1 = max(bb(i)%ic1,ic)
+          bb(i)%ir0 = min(bb(i)%ir0,ir); bb(i)%ir1 = max(bb(i)%ir1,ir)
+        end if
+      end do
+    end do
+    do i = 1, nid
+      bb(i)%ncol = bb(i)%ic1-bb(i)%ic0+1
+      bb(i)%nrow = bb(i)%ir1-bb(i)%ir0+1
+    end do
+    !
+    return
+  end subroutine get_r4grid_bb
+  
+  subroutine grid_to_graph(a, mv, ia, ja, id, bb, label_bnd_id)
+! ******************************************************************************
+    ! -- arguments
+    real(r4b),    dimension(:,:),              intent(in)  :: a
+    real(r4b),                                 intent(in)  :: mv
+    integer(i4b), dimension(:),   allocatable, intent(out) :: ia
+    integer(i4b), dimension(:),   allocatable, intent(out) :: ja
+    integer(i4b), dimension(:),   allocatable, intent(out) :: id
+    type(tBb),    dimension(:),   allocatable, intent(out) :: bb
+    logical, optional                                      :: label_bnd_id
+    !
+    ! -- locals
+    integer(i4b), parameter :: jp = 1
+    integer(i4b), parameter :: jn = 2
+    integer(i4b), parameter :: js = 3
+    integer(i4b), parameter :: je = 4
+    integer(i4b), parameter :: jw = 5
+    integer(i4b), parameter :: ns = jw
+    !
+    integer(i4b), dimension(2,ns) :: st
+    data st/ 0,  0, &
+             0, -1, &
+             0,  1, &
+             1,  0, &
+            -1,  0/
+    !
+    logical :: lidbnd, lbnd
+    !
+    integer(i4b) :: i, j, nc, nr, ic, ir, jc, jr, mxid, i4v, nid, nbr, nja
+    integer(i4b) :: ir0, ir1, ic0, ic1, iact
+    !
+    integer(i4b), dimension(:),   allocatable :: i4wk1d
+    integer(i4b), dimension(:),   allocatable :: i4wk1d2
+    integer(i4b), dimension(:,:), allocatable :: i4wk2d
+! ------------------------------------------------------------------------------
+    !
+    ! clean
+    if (allocated(ia)) deallocate(ia)
+    if (allocated(ja)) deallocate(ja)
+    if (allocated(id)) deallocate(id)
+    if (allocated(bb)) deallocate(bb)
+    if (present(label_bnd_id)) then
+      lidbnd = label_bnd_id
+    else
+      lidbnd = .false.
+    end if
+    !
+    nc = size(a,1); nr = size(a,2)
+    !
+    ! determine the maximum
+    mxid = 0
+    do ir = 1, nr
+      do ic = 1, nc
+        if (a(ic,ir) /= mv) then
+          i4v = int(a(ic,ir),i4b)
+          mxid = max(mxid,i4v)
+        end if
+      end do
+    end do
+    !
+    ! label the ids
+    allocate(i4wk1d(mxid))
+    do i = 1, mxid
+      i4wk1d(i) = 0
+    end do
+    do ir = 1, nr
+      do ic = 1, nc
+        if (a(ic,ir) /= mv) then
+          i4v = int(a(ic,ir),i4b)
+          i4wk1d(i4v) = 1
+        end if
+      end do
+    end do
+    !
+    nid = 0
+    do i = 1, mxid
+      if (i4wk1d(i) == 1) then
+        nid = nid + 1
+        i4wk1d(i) = nid
+       end if
+    end do
+    !
+    allocate(id(nid))
+    do i = 1, mxid
+      j = i4wk1d(i)
+      if (j > 0) then
+        id(j) = i
+      end if
+    end do
+    !
+    ! create local matrix; set bb
+    allocate(i4wk2d(nc,nr))
+    allocate(bb(nid))
+    !
+    do ir = 1, nr
+      do ic = 1, nc
+        if (a(ic,ir) /= mv) then
+          i4v = int(a(ic,ir),i4b)
+          i = i4wk1d(i4v) ! local id
+          i4wk2d(ic,ir) = i
+          bb(i)%ic0 = min(bb(i)%ic0,ic); bb(i)%ic1 = max(bb(i)%ic1,ic)
+          bb(i)%ir0 = min(bb(i)%ir0,ir); bb(i)%ir1 = max(bb(i)%ir1,ir)
+        else
+          i4wk2d(ic,ir) = 0
+        end if
+      end do
+    end do
+    do i = 1, nid
+      bb(i)%ncol = bb(i)%ic1-bb(i)%ic0+1
+      bb(i)%nrow = bb(i)%ir1-bb(i)%ir0+1
+    end do
+    !
+    ! determine the number of neighbors
+    allocate(i4wk1d2(nid))
+    do iact = 1, 2
+      nja = 0
+      do i = 1, nid
+        do j = 1, nid
+          i4wk1d2(j) = 0
+        end do
+        lbnd = .false.
+        do ir = max(1,bb(i)%ir0-1), min(nr,bb(i)%ir1+1)
+          do ic = max(1,bb(i)%ic0-1), min(nc,bb(i)%ic1+1)
+           if (i4wk2d(ic,ir) == i) then
+             do j = 2, ns
+               jc = ic+st(1,j); jc = max(jc,1); jc = min(jc,nc)
+               jr = ir+st(2,j); jr = max(jr,1); jr = min(jr,nr)
+               i4v = i4wk2d(jc,jr)
+               if (i4v > 0) then
+                 if (i4v /= i) then
+                   i4wk1d2(i4v) = 1 ! neighbor found
+                end if
+               else
+                 lbnd = .true.
+               end if
+             end do
+           end if
+          end do
+        end do
+        !
+        ! label catchment
+        if (lbnd.and.lidbnd) then
+          id(i) = -abs(id(i))
+        end if
+        !
+        nja = nja + 1
+        if (iact == 2) then ! center id
+          ja(nja) = i
+        end if
+        nbr = 0
+        do j = 1, nid
+          if (i4wk1d2(j) == 1) then
+            nbr = nbr + 1; nja = nja + 1
+            if (iact == 2) then ! neighbor id
+              ja(nja) = j
+            end if
+          end if
+        end do
+        if (iact == 2) then
+          ia(i+1) = ia(i) + nbr + 1
+        end if
+      end do
+      if (iact == 1) then
+        allocate(ia(nid+1), ja(nja))
+        ia(1) = 1
+      end if
+    end do !act
+    !
+    ! clean up
+    deallocate(i4wk1d, i4wk1d2, i4wk2d)
+    !
+    return
+  end subroutine grid_to_graph
+  
+  recursive subroutine balance_graph(ia, ja, id1, lev1, lev, n)
+! ******************************************************************************
+    ! -- arguments
+    integer(i4b), dimension(:), intent(in)    :: ia
+    integer(i4b), dimension(:), intent(in)    :: ja
+    integer(i4b),               intent(in)    :: id1
+    integer(i4b),               intent(in)    :: lev1
+    integer(i4b), dimension(:), intent(inout) :: lev
+    integer(i4b),               intent(inout) :: n
+    !
+    ! -- locals
+    integer(i4b) :: i, id2, lev2, tlev, dlev
+! ------------------------------------------------------------------------------
+    !
+    lev(id1) = lev1
+    !
+    do i = ia(id1)+1, ia(id1+1)-1
+      id2 = ja(i); lev2 = lev(id2); dlev = lev1-lev2
+      if (dlev > 1) then
+        tlev = lev2 + 1
+        call balance_graph(ia, ja, id2, tlev, lev, n)
+      end if
+      if (abs(dlev) > 1) then
+        n = n + 1
+      end if
+    end do
+    !
+    return
+  end subroutine balance_graph
+  
   function get_jd(y, m, d) result(jd)
 ! ******************************************************************************
     ! -- arguments
@@ -677,6 +988,42 @@ module utilsmod
     return
   end function tas
 
+ function ta_i1(arr, fmt_in) result(s)
+! ******************************************************************************
+    ! -- arguments
+    integer(i1b), dimension(:), intent(in) :: arr
+    character(len=:), allocatable :: s
+    character(len=*), intent(in), optional :: fmt_in
+    ! -- locals
+    logical :: lfmt
+    integer(i4b) :: i
+    character(len=mxslen) :: w, fmt
+! ------------------------------------------------------------------------------
+    lfmt = .false.
+    if (present(fmt_in)) then
+      fmt = fmt_in
+      lfmt = .true.
+    end if
+    if (lfmt) then
+      write(w,fmt) arr(1)
+      s = trim(w)
+    else
+      write(w,*) arr(1)
+      s = trim(adjustl(w))
+    end if
+    do i = 2, size(arr)
+      if (lfmt) then
+        write(w,fmt) arr(i)
+        s = s//' '//trim(w)
+      else
+        write(w,*) arr(i)
+        s = s//' '//trim(adjustl(w))
+      end if
+    end do
+    !
+    return
+ end function ta_i1
+ 
   function ta_i4(arr, fmt_in) result(s)
 ! ******************************************************************************
     ! -- arguments
@@ -1632,6 +1979,442 @@ module utilsmod
     return
   end subroutine writeasc_r4_r8
 
+  subroutine readflt_header(iu, ncol, nrow, xll, yll, cs, nodata, &
+    nbits, pixeltype)
+! ******************************************************************************
+    ! -- arguments
+    integer(i4b), intent(in) :: iu
+    integer(i4b), intent(out) :: ncol, nrow
+    character(len=*), intent(inout) :: nodata
+    real(r8b), intent(out) :: xll, yll, cs
+    integer(i4b), intent(out) :: nbits
+    character(len=*), intent(inout) :: pixeltype
+    ! -- locals
+    !
+    integer(i4b), parameter :: i_nrows         =  1 
+    integer(i4b), parameter :: i_ncols         =  2
+    integer(i4b), parameter :: i_nbits         =  3
+    integer(i4b), parameter :: i_pixeltype     =  4
+    integer(i4b), parameter :: i_ulxmap        =  5
+    integer(i4b), parameter :: i_ulymap        =  6
+    integer(i4b), parameter :: i_xllcorner     =  7
+    integer(i4b), parameter :: i_yllcorner     =  8
+    integer(i4b), parameter :: i_xdim          =  9
+    integer(i4b), parameter :: i_ydim          = 10
+    integer(i4b), parameter :: i_cellsize      = 11
+    integer(i4b), parameter :: i_nodata        = 12
+    integer(i4b), parameter :: i_nodata_value  = 13
+    integer(i4b), parameter :: nkey = i_nodata_value
+    
+    logical :: lx, ly
+    character(len=1) :: cdum
+    character(len=mxslen) :: s, k
+    integer(i4b) :: ios, nrewind, nfound
+    integer(i4b), dimension(nkey) :: flag
+    real(r8b) :: xcul, ycul
+! ------------------------------------------------------------------------------
+    flag = 0
+    nrewind = 0
+    lx = .false.; ly = .false.
+    do while(.true.)
+      read(unit=iu,iostat=ios,fmt='(a)') s
+      if (ios == 0) then
+        read(s,*) k
+        k = change_case(k, 'l')
+        select case(k)
+        case('ncols')
+          read(s,*) cdum, ncol; flag(i_ncols) = 1
+        case('nrows')
+          read(s,*) cdum, nrow; flag(i_nrows) = 1
+        case('xllcorner')
+          read(s,*) cdum, xll; flag(i_xllcorner) = 1; flag(i_ulxmap) = 1
+        case('ulxmap') ! center
+          read(s,*) cdum, xcul; flag(i_xllcorner) = 1; flag(i_ulxmap) = 1
+          lx = .true.
+        case('yllcorner')
+          read(s,*) cdum, yll; flag(i_yllcorner) = 1; flag(i_ulymap) = 1
+        case('ulymap') ! center
+          read(s,*) cdum, ycul; flag(i_yllcorner) = 1; flag(i_ulymap) = 1
+          ly = .true.
+        case('nodata','nodata_value')
+          read(s,*) cdum, nodata; flag(i_nodata) = 1; flag(i_nodata_value) = 1
+        case('cellsize','xdim', 'ydim')
+          read(s,*) cdum, cs; flag(i_cellsize) = 1; flag(i_xdim) = 1; flag(i_ydim) = 1
+        case('nbits')
+          read(s,*) cdum, nbits; flag(i_nbits) = 1
+        case('pixeltype')
+          read(s,*) cdum, pixeltype; flag(i_pixeltype) = 1
+          pixeltype = change_case(pixeltype, 'l')
+        end select
+      end if
+      !
+      nfound = sum(flag)
+      if (nfound == nkey) exit
+      if (ios /= 0) then
+        if (nrewind < nfound) then
+          nrewind = nrewind + 1; rewind(iu)
+        else
+          if ((flag(i_nodata) == 0).or.(flag(i_nodata_value) == 0)) then
+            flag(i_nodata) = 1; flag(i_nodata_value) = 1
+            nodata = '0'
+            nrewind = nrewind + 1; rewind(iu)
+          else
+            call errmsg('Could not parse Ehdr header file.')
+          end if
+        end if
+      end if
+    end do
+    close(iu)
+    !
+    if (lx) then
+      xll = xcul - cs/2.d0
+    end if
+    if (ly) then
+      yll = ycul - cs*nrow + cs/2.d0
+    end if
+    !
+    return
+    end subroutine readflt_header
+  
+  subroutine readflt_i1(fp, x, ncol, nrow, xll, yll, cs, nodata)
+! ******************************************************************************
+    ! -- arguments
+    character(len=*), intent(in) :: fp
+    integer(i4b), intent(out) :: ncol, nrow
+    integer(i1b), dimension(:,:), allocatable, intent(inout) :: x
+    integer(i1b), intent(out) :: nodata
+    real(r8b), intent(out) :: xll, yll, cs
+    ! -- locals
+    character(len=1) :: cdum
+    character(len=mxslen) :: f, nodata_s, pixeltype
+    integer(i4b) :: iu, nbits, icol, irow
+! ------------------------------------------------------------------------------
+    f = trim(fp)//'.hdr'
+    call open_file(f, iu)
+    call readflt_header(iu, ncol, nrow, xll, yll, cs, nodata_s, nbits, pixeltype)
+    if ((nbits /= 8).or.(pixeltype /= 'signedint')) then
+      call errmsg('Could not read '//trim(f))
+    end if
+    read(nodata_s,*) nodata
+    !
+    if (allocated(x)) deallocate(x)
+    allocate(x(ncol,nrow))
+    f = trim(fp)//'.flt'
+    call open_file(f, iu, 'r', .true.)
+    read(iu)((x(icol,irow),icol=1,ncol),irow=1,nrow)
+    close(iu)
+    !
+    return
+  end subroutine readflt_i1
+  
+  subroutine readflt_i4(fp, x, ncol, nrow, xll, yll, cs, nodata)
+! ******************************************************************************
+    ! -- arguments
+    character(len=*), intent(in) :: fp
+    integer(i4b), intent(out) :: ncol, nrow
+    integer(i4b), dimension(:,:), allocatable, intent(inout) :: x
+    integer(i4b), intent(out) :: nodata
+    real(r8b), intent(out) :: xll, yll, cs
+    ! -- locals
+    character(len=1) :: cdum
+    character(len=mxslen) :: f, nodata_s, pixeltype
+    integer(i4b) :: iu, nbits, icol, irow
+! ------------------------------------------------------------------------------
+    f = trim(fp)//'.hdr'
+    call open_file(f, iu)
+    call readflt_header(iu, ncol, nrow, xll, yll, cs, nodata_s, nbits, pixeltype)
+    if ((nbits /= 32).or.(pixeltype /= 'signedint')) then
+      call errmsg('Could not read '//trim(f))
+    end if
+    read(nodata_s,*) nodata
+    !
+    if (allocated(x)) deallocate(x)
+    allocate(x(ncol,nrow))
+    f = trim(fp)//'.flt'
+    call open_file(f, iu, 'r', .true.)
+    read(iu)((x(icol,irow),icol=1,ncol),irow=1,nrow)
+    close(iu)
+    !
+    return
+  end subroutine readflt_i4
+  
+  subroutine readflt_r4(fp, x, ncol, nrow, xll, yll, cs, nodata)
+! ******************************************************************************
+    ! -- arguments
+    character(len=*), intent(in) :: fp
+    integer(i4b), intent(out) :: ncol, nrow
+    real(r4b), dimension(:,:), allocatable, intent(inout) :: x
+    real(r4b), intent(out) :: nodata
+    real(r8b), intent(out) :: xll, yll, cs
+    ! -- locals
+    character(len=1) :: cdum
+    character(len=mxslen) :: f, nodata_s, pixeltype
+    integer(i4b) :: iu, nbits, icol, irow
+! ------------------------------------------------------------------------------
+    f = trim(fp)//'.hdr'
+    call open_file(f, iu)
+    call readflt_header(iu, ncol, nrow, xll, yll, cs, nodata_s, nbits, pixeltype)
+    if ((nbits /= 32).or.(pixeltype /= 'float')) then
+      call errmsg('Could not read '//trim(f))
+    end if
+    read(nodata_s,*) nodata
+    !
+    if (allocated(x)) deallocate(x)
+    allocate(x(ncol,nrow))
+    f = trim(fp)//'.flt'
+    call open_file(f, iu, 'r', .true.)
+    read(iu)((x(icol,irow),icol=1,ncol),irow=1,nrow)
+    close(iu)
+    !
+    return
+  end subroutine readflt_r4
+  
+  subroutine writeflt_header_r4(iu, ncol, nrow, xll, yll, cs, nodata, &
+  nbits, pixeltype)
+! ******************************************************************************
+    ! -- arguments
+    integer(i4b), intent(in) :: iu, ncol, nrow
+    character(len=*), intent(in) :: nodata
+    real(r4b), intent(in) :: xll, yll, cs
+    integer(i4b), intent(in) :: nbits
+    character(len=*), intent(in) :: pixeltype
+    ! -- locals
+! ------------------------------------------------------------------------------
+    write(iu,'(a)') 'ncols '//ta((/ncol/))
+    write(iu,'(a)') 'nrows '//ta((/nrow/))
+    write(iu,'(a)') 'xllcorner '//ta((/xll/))
+    write(iu,'(a)') 'yllcorner '//ta((/yll/))
+    write(iu,'(a)') 'cellsize '//ta((/cs/))
+    write(iu,'(a)') 'nodata_value '//trim(nodata)
+    write(iu,'(a)') 'nbits '//ta((/nbits/))
+    write(iu,'(a)') 'pixeltype '//trim(pixeltype)
+    write(iu,'(a)') 'byteorder lsbfirst'
+    close(iu)
+    !
+    return
+  end subroutine writeflt_header_r4
+  
+  subroutine writeflt_header_r8(iu, ncol, nrow, xll, yll, cs, nodata, &
+  nbits, pixeltype)
+! ******************************************************************************
+    ! -- arguments
+    integer(i4b), intent(in) :: iu, ncol, nrow
+    character(len=*), intent(in) :: nodata
+    real(r8b), intent(in) :: xll, yll, cs
+    integer(i4b), intent(in) :: nbits
+    character(len=*), intent(in) :: pixeltype
+    ! -- locals
+! ------------------------------------------------------------------------------
+    write(iu,'(a)') 'ncols '//ta((/ncol/))
+    write(iu,'(a)') 'nrows '//ta((/nrow/))
+    write(iu,'(a)') 'xllcorner '//ta((/xll/))
+    write(iu,'(a)') 'yllcorner '//ta((/yll/))
+    write(iu,'(a)') 'cellsize '//ta((/cs/))
+    write(iu,'(a)') 'nodata_value '//trim(nodata)
+    write(iu,'(a)') 'nbits '//ta((/nbits/))
+    write(iu,'(a)') 'pixeltype '//trim(pixeltype)
+    write(iu,'(a)') 'byteorder lsbfirst'
+    close(iu)
+    !
+    return
+  end subroutine writeflt_header_r8
+!
+  subroutine writeflt_i1_r4(fp, x, ncol, nrow, xll, yll, cs, nodata)
+! ******************************************************************************
+! see: https://gdal.org/drivers/raster/ehdr.html#raster-ehdr
+    ! -- arguments
+    character(len=*), intent(in) :: fp
+    integer(i4b), intent(in) :: ncol, nrow
+    integer(i1b), dimension(ncol,nrow), intent(in) :: x
+    integer(i1b), intent(in) :: nodata
+    real(r4b), intent(in) :: xll, yll, cs
+    ! -- locals
+    character(len=mxslen) :: f
+    integer(i4b) :: iu, icol, irow
+! ------------------------------------------------------------------------------
+    f = trim(fp)//'.hdr'
+    call open_file(f, iu, 'w')
+    call writeflt_header_r4(iu, ncol, nrow, xll, yll, cs, ta((/nodata/)), 8, 'signedint')
+    close(iu)
+    !
+    f = trim(fp)//'.flt'
+    call open_file(f, iu, 'w', .true.)
+    write(iu)((x(icol,irow),icol=1,ncol),irow=1,nrow)
+    close(iu)
+    !
+    return
+  end subroutine writeflt_i1_r4
+  
+ subroutine writeflt_i4_r4(fp, x, ncol, nrow, xll, yll, cs, nodata)
+! ******************************************************************************
+! see: https://gdal.org/drivers/raster/ehdr.html#raster-ehdr
+    ! -- arguments
+    character(len=*), intent(in) :: fp
+    integer(i4b), intent(in) :: ncol, nrow
+    integer(i4b), dimension(ncol,nrow), intent(in) :: x
+    integer(i4b), intent(in) :: nodata
+    real(r4b), intent(in) :: xll, yll, cs
+    ! -- locals
+    character(len=mxslen) :: f
+    integer(i4b) :: iu, icol, irow
+! ------------------------------------------------------------------------------
+    f = trim(fp)//'.hdr'
+    call open_file(f, iu, 'w')
+    call writeflt_header_r4(iu, ncol, nrow, xll, yll, cs, ta((/nodata/)), 32, 'signedint')
+    close(iu)
+    !
+    f = trim(fp)//'.flt'
+    call open_file(f, iu, 'w', .true.)
+    write(iu)((x(icol,irow),icol=1,ncol),irow=1,nrow)
+    close(iu)
+    !
+    return
+  end subroutine writeflt_i4_r4
+ 
+  subroutine writeflt_r4_r4(fp, x, ncol, nrow, xll, yll, cs, nodata)
+! ******************************************************************************
+! see: https://gdal.org/drivers/raster/ehdr.html#raster-ehdr
+    ! -- arguments
+    character(len=*), intent(in) :: fp
+    integer(i4b), intent(in) :: ncol, nrow
+    real(r4b), dimension(ncol,nrow), intent(in) :: x
+    real(r4b), intent(in) :: nodata
+    real(r4b), intent(in) :: xll, yll, cs
+    ! -- locals
+    character(len=mxslen) :: f
+    integer(i4b) :: iu, icol, irow
+! ------------------------------------------------------------------------------
+    f = trim(fp)//'.hdr'
+    call open_file(f, iu, 'w')
+    call writeflt_header_r4(iu, ncol, nrow, xll, yll, cs, ta((/nodata/)), 32, 'float')
+    close(iu)
+    !
+    f = trim(fp)//'.flt'
+    call open_file(f, iu, 'w', .true.)
+    write(iu)((x(icol,irow),icol=1,ncol),irow=1,nrow)
+    close(iu)
+    !
+    return
+  end subroutine writeflt_r4_r4
+  
+  subroutine writeflt_i1_r8(fp, x, ncol, nrow, xll, yll, cs, nodata)
+! ******************************************************************************
+! see: https://gdal.org/drivers/raster/ehdr.html#raster-ehdr
+    ! -- arguments
+    character(len=*), intent(in) :: fp
+    integer(i4b), intent(in) :: ncol, nrow
+    integer(i1b), dimension(ncol,nrow), intent(in) :: x
+    integer(i1b), intent(in) :: nodata
+    real(r8b), intent(in) :: xll, yll, cs
+    ! -- locals
+    character(len=mxslen) :: f
+    integer(i4b) :: iu, icol, irow
+! ------------------------------------------------------------------------------
+    f = trim(fp)//'.hdr'
+    call open_file(f, iu, 'w')
+    call writeflt_header_r8(iu, ncol, nrow, xll, yll, cs, ta((/nodata/)), 8, 'signedint')
+    close(iu)
+    !
+    f = trim(fp)//'.flt'
+    call open_file(f, iu, 'w', .true.)
+    write(iu)((x(icol,irow),icol=1,ncol),irow=1,nrow)
+    close(iu)
+    !
+    return
+  end subroutine writeflt_i1_r8
+  
+ subroutine writeflt_i4_r8(fp, x, ncol, nrow, xll, yll, cs, nodata)
+! ******************************************************************************
+! see: https://gdal.org/drivers/raster/ehdr.html#raster-ehdr
+    ! -- arguments
+    character(len=*), intent(in) :: fp
+    integer(i4b), intent(in) :: ncol, nrow
+    integer(i4b), dimension(ncol,nrow), intent(in) :: x
+    integer(i4b), intent(in) :: nodata
+    real(r8b), intent(in) :: xll, yll, cs
+    ! -- locals
+    character(len=mxslen) :: f
+    integer(i4b) :: iu, icol, irow
+! ------------------------------------------------------------------------------
+    f = trim(fp)//'.hdr'
+    call open_file(f, iu, 'w')
+    call writeflt_header_r8(iu, ncol, nrow, xll, yll, cs, ta((/nodata/)), 32, 'signedint')
+    close(iu)
+    !
+    f = trim(fp)//'.flt'
+    call open_file(f, iu, 'w', .true.)
+    write(iu)((x(icol,irow),icol=1,ncol),irow=1,nrow)
+    close(iu)
+    !
+    return
+  end subroutine writeflt_i4_r8
+ 
+  subroutine writeflt_r4_r8(fp, x, ncol, nrow, xll, yll, cs, nodata)
+! ******************************************************************************
+! see: https://gdal.org/drivers/raster/ehdr.html#raster-ehdr
+    ! -- arguments
+    character(len=*), intent(in) :: fp
+    integer(i4b), intent(in) :: ncol, nrow
+    real(r4b), dimension(ncol,nrow), intent(in) :: x
+    real(r4b), intent(in) :: nodata
+    real(r8b), intent(in) :: xll, yll, cs
+    ! -- locals
+    character(len=mxslen) :: f
+    integer(i4b) :: iu, icol, irow
+! ------------------------------------------------------------------------------
+    f = trim(fp)//'.hdr'
+    call open_file(f, iu, 'w')
+    call writeflt_header_r8(iu, ncol, nrow, xll, yll, cs, ta((/nodata/)), 32, 'float')
+    close(iu)
+    !
+    f = trim(fp)//'.flt'
+    call open_file(f, iu, 'w', .true.)
+    write(iu)((x(icol,irow),icol=1,ncol),irow=1,nrow)
+    close(iu)
+    !
+    return
+  end subroutine writeflt_r4_r8
+!
+  subroutine writeflt_r8_r8(fp, x, ncol, nrow, xll, yll, cs, nodata)
+! ******************************************************************************
+! see: https://gdal.org/drivers/raster/ehdr.html#raster-ehdr
+    ! -- arguments
+    character(len=*), intent(in) :: fp
+    integer(i4b), intent(in) :: ncol, nrow
+    real(r8b), dimension(ncol,nrow), intent(in) :: x
+    real(r8b), intent(in) :: nodata
+    real(r8b), intent(in) :: xll, yll, cs
+    ! -- locals
+    character(len=mxslen) :: f
+    integer(i4b) :: iu, icol, irow
+    real(r4b), dimension(:,:), allocatable :: r4x
+    real(r4b) :: r4nodata
+! ------------------------------------------------------------------------------
+    f = trim(fp)//'.hdr'
+    call open_file(f, iu, 'w')
+    r4nodata = real(nodata,r4b)
+    call writeflt_header_r8(iu, ncol, nrow, xll, yll, cs, ta((/r4nodata/)), 32, 'float')
+    close(iu)
+    !
+    f = trim(fp)//'.flt'
+    call open_file(f, iu, 'w', .true.)
+    allocate(r4x(ncol,nrow))
+    do irow = 1, nrow
+      do icol = 1, ncol
+        if (x(icol,irow) /= nodata) then
+          r4x(icol,irow) = real(x(icol,irow),r4b)
+        else
+          r4x(icol,irow) = r4nodata
+        end if
+      end do
+    end do
+    write(iu)((r4x(icol,irow),icol=1,ncol),irow=1,nrow)
+    close(iu)
+    deallocate(r4x)
+    !
+    return
+  end subroutine writeflt_r8_r8
+!
   subroutine writeidf_i1_r8(f, x, ncol, nrow, xll, yll, cs, nodata)
 ! ******************************************************************************
     use imod_idf
@@ -2334,14 +3117,14 @@ module utilsmod
 recursive subroutine quicksort_d(a,idx_a,na)
 
 ! DUMMY ARGUMENTS
-integer(kind=4), intent(in) :: na ! nr or items to sort
-real(kind=8), dimension(nA), intent(inout) :: a ! vector to be sorted
-integer(kind=4), dimension(nA), intent(inout) :: idx_a ! sorted indecies of a
+integer(i4b), intent(in) :: na ! nr or items to sort
+real(r8b), dimension(nA), intent(inout) :: a ! vector to be sorted
+integer(i4b), dimension(nA), intent(inout) :: idx_a ! sorted indecies of a
 
 ! LOCAL VARIABLES
-integer(kind=4) :: left, right, mid
-real(kind=8) :: pivot, temp
-integer(kind=4) :: marker, idx_temp
+integer(i4b) :: left, right, mid
+real(r8b) :: pivot, temp
+integer(i4b) :: marker, idx_temp
 
 if (nA > 1) then
 ! insertion sort limit of 47 seems best for sorting 10 million
@@ -2410,7 +3193,6 @@ end if
 return
 end subroutine quicksort_d
 
-
 !> subroutine to sort using the insertionsort algorithm and return indecies
 !! @param[in,out] a, an array of doubles to be sorted
 !! @param[in,out] idx_a, an array of integers of sorted indecies
@@ -2418,14 +3200,14 @@ end subroutine quicksort_d
 subroutine InsertionSort_d(a,idx_a,na)
 
   ! DUMMY ARGUMENTS
-  integer(kind=4),intent(in) :: na
-  real(kind=8), dimension(nA), intent(inout) :: a
-  integer(kind=4),dimension(nA), intent(inout) :: idx_a
+  integer(i4b),intent(in) :: na
+  real(r8b), dimension(nA), intent(inout) :: a
+  integer(i4b),dimension(nA), intent(inout) :: idx_a
 
 ! LOCAL VARIABLES
-  real(kind=8) :: temp
-  integer(kind=4):: i, j
-  integer(kind=4):: idx_tmp
+  real(r8b) :: temp
+  integer(i4b):: i, j
+  integer(i4b):: idx_tmp
 
   do i = 2, nA
      j = i - 1
@@ -2443,6 +3225,114 @@ subroutine InsertionSort_d(a,idx_a,na)
   end do
   return
 end subroutine InsertionSort_d
+
+recursive subroutine quicksort_r(a,idx_a,na)
+
+! DUMMY ARGUMENTS
+integer(i4b), intent(in) :: na ! nr or items to sort
+real(r4b), dimension(nA), intent(inout) :: a ! vector to be sorted
+integer(i4b), dimension(nA), intent(inout) :: idx_a ! sorted indecies of a
+
+! LOCAL VARIABLES
+integer(i4b) :: left, right, mid
+real(r4b) :: pivot, temp
+integer(i4b) :: marker, idx_temp
+
+if (nA > 1) then
+! insertion sort limit of 47 seems best for sorting 10 million
+! integers on Intel i7-980X CPU.  Derived data types that use
+! more memory are optimized with smaller values - around 20 for a 16
+! -byte type.
+  if (nA > 47) then
+  ! Do quicksort for large groups
+  ! Get median of 1st, mid, & last points for pivot (helps reduce
+  ! long execution time on some data sets, such as already
+  ! sorted data, over simple 1st point pivot)
+    mid = (nA+1)/2
+    if (a(mid) >= a(1)) then
+      if (a(mid) <= a(nA)) then
+        pivot = a(mid)
+      else if (a(nA) > a(1)) then
+        pivot = a(nA)
+      else
+        pivot = a(1)
+      end if
+    else if (a(1) <= a(nA)) then
+      pivot = a(1)
+    else if (a(nA) > a(mid)) then
+      pivot = a(nA)
+    else
+      pivot = a(mid)
+    end if
+
+    left = 0
+    right = nA + 1
+
+    do while (left < right)
+      right = right - 1
+      do while (A(right) > pivot)
+        right = right - 1
+      end do
+      left = left + 1
+      do while (A(left) < pivot)
+        left = left + 1
+      end do
+      if (left < right) then
+        temp = A(left)
+        idx_temp = idx_a(left)
+        A(left) = A(right)
+        idx_a(left) = idx_a(right)
+        A(right) = temp
+        idx_a(right) = idx_temp
+      end if
+    end do
+
+    if (left == right) then
+      marker = left + 1
+    else
+      marker = left
+    end if
+
+    call quicksort_r(A(:marker-1),idx_A(:marker-1),marker-1)
+    call quicksort_r(A(marker:),idx_A(marker:),nA-marker+1)
+
+  else
+      call InsertionSort_r(A,idx_a,nA)    ! Insertion sort for small groups is
+      !  faster than Quicksort
+  end if
+end if
+
+return
+end subroutine quicksort_r
+
+subroutine InsertionSort_r(a,idx_a,na)
+
+  ! DUMMY ARGUMENTS
+  integer(i4b),intent(in) :: na
+  real(r4b), dimension(nA), intent(inout) :: a
+  integer(i4b),dimension(nA), intent(inout) :: idx_a
+
+! LOCAL VARIABLES
+  real(r4b) :: temp
+  integer(i4b):: i, j
+  integer(i4b):: idx_tmp
+
+  do i = 2, nA
+     j = i - 1
+     temp = A(i)
+     idx_tmp = idx_a(i)
+     do
+        if (j == 0) exit
+        if (a(j) <= temp) exit
+        A(j+1) = A(j)
+        idx_a(j+1) = idx_a(j)
+        j = j - 1
+     end do
+     a(j+1) = temp
+     idx_a(j+1) = idx_tmp
+  end do
+  return
+end subroutine InsertionSort_r
 
 subroutine addboundary_i(wrk, ncol, nrow)
 ! ******************************************************************************
@@ -2702,7 +3592,7 @@ end subroutine addboundary_r
       end do
     end do
 
-    write(*,*) 'Computing unique parts...'
+    !write(*,*) 'Computing unique parts...'
     !write(*,*) 'Min/max=',minval(p), maxval(p)
 
     id = 0
@@ -2783,7 +3673,7 @@ end subroutine addboundary_r
       end do
     end do
     !
-    write(*,*) '# unique parts found:',id
+    !write(*,*) '# unique parts found:',id
     !
     ! cleanup
     deallocate(lst1, lst2)
@@ -3470,6 +4360,172 @@ end subroutine addboundary_r
     return
   end subroutine calc_unique_r
 
+  subroutine calc_unique_grid_r4(a, mv, id, min_id, max_id, bb_a, gnc)
+! ******************************************************************************
+    ! -- arguments
+    real(r4b), dimension(:,:), intent(in) :: a
+    real(r4b), intent(in) :: mv
+    integer(i8b), dimension(:,:), allocatable, intent(out) :: id
+    integer(i8b), intent(out) :: min_id
+    integer(i8b), intent(out) :: max_id
+    type(tBb), intent(in) :: bb_a
+    integer(i4b), intent(in) :: gnc
+    ! --- local
+    logical :: lfnd, lfull
+    !
+    type(tUnp), dimension(:), allocatable :: unp
+    type(tBb), dimension(:), allocatable :: bb
+    integer(i4b) :: nc, nr, ir, ic, mxid, nid, i, j, i4v, mc, mr, jr, jc, i4dum
+    integer(i4b) :: newid
+    integer(i4b) :: n
+    integer(i8b) :: uid
+    !
+    integer(i4b), dimension(:), allocatable :: i4wk1d, i4wk1d2, i4wk1d3
+    integer(i4b), dimension(:,:), allocatable :: i4wk2d, pu
+    !
+    real(r4b) :: r4dum
+! ------------------------------------------------------------------------------
+    !
+    nc = size(a,1); nr = size(a,2)
+    !
+    if (allocated(id)) deallocate(id)
+    allocate(id(nc,nr))
+    do ir = 1, nr
+      do ic = 1, nc
+        id(ic,ir) = 0
+      end do
+    end do
+    !
+    mxid = 0
+    do ir = 1, nr
+      do ic = 1, nc
+        if (a(ic,ir) /= mv) then
+          mxid = max(mxid,int(a(ic,ir),i4b))
+        end if
+      end do
+    end do
+    newid = mxid
+    !
+    allocate(i4wk1d(mxid))
+    do i = 1, mxid
+      i4wk1d(i) = 0
+    end do
+    do ir = 1, nr
+      do ic = 1, nc
+        if (a(ic,ir) /= mv) then
+          i4v = int(a(ic,ir),i4b)
+          i4wk1d(i4v) = 1
+        end if
+      end do
+    end do
+    !
+    nid = 0
+    do i = 1, mxid
+      if (i4wk1d(i) == 1) then
+        nid = nid + 1; i4wk1d(i) = nid
+      end if
+    end do
+    !
+    allocate(bb(nid), i4wk1d3(nid))
+    do ir = 1, nr
+      do ic = 1, nc
+        if (a(ic,ir) /= mv) then
+          i4v = int(a(ic,ir),i4b)
+          i = i4wk1d(i4v)
+          i4wk1d3(i) = i4v ! local id --> global id
+          bb(i)%ir0 = min(ir,bb(i)%ir0); bb(i)%ir1 = max(ir,bb(i)%ir1)
+          bb(i)%ic0 = min(ic,bb(i)%ic0); bb(i)%ic1 = max(ic,bb(i)%ic1)
+        end if
+      end do
+    end do
+    do i = 1, nid
+      call logmsg('Processing '//ta((/i/))//'/'//ta((/nid/))//'...')
+      bb(i)%ncol = bb(i)%ic1-bb(i)%ic0+1; bb(i)%nrow = bb(i)%ir1-bb(i)%ir0+1
+      mc = bb(i)%ncol; mr = bb(i)%nrow
+      allocate(i4wk2d(mc,mr))
+      lfull = .true.
+      do ir = bb(i)%ir0, bb(i)%ir1
+        do ic = bb(i)%ic0, bb(i)%ic1
+          jr = ir-bb(i)%ir0+1; jc = ic-bb(i)%ic0+1
+          if (a(ic,ir) == i4wk1d3(i)) then
+            i4wk2d(jc,jr) = 1
+          else
+            i4wk2d(jc,jr) = 0
+            lfull = .false.
+          end if
+        end do
+      end do
+      !
+      if (lfull) then
+        jr = 1; jc = 1
+        ir = jr+bb(i)%ir0-1; ic = jc+bb(i)%ic0-1 ! index a
+        jr = ir+bb_a%ir0-1; jc = ic+bb_a%ic0-1 ! global extent
+        !uid = int(jc,i8b)+ int((jr-1),i8b)*int(gnc,i8b)
+        uid = int(i4wk1d3(i),i8b)
+        do ir = bb(i)%ir0, bb(i)%ir1
+          do ic = bb(i)%ic0, bb(i)%ic1
+            if (a(ic,ir) == i4wk1d3(i)) then
+              id(ic,ir) = uid
+            end if
+          end do
+        end do
+      else
+        n = 0
+        call calc_unique_i(i4wk2d, 9, pu, unp, n, i4dum, r4dum, r4dum, r4dum)
+        jc = -1; jr = -1
+        do j = 1, n ! loop over separate parts
+          lfnd = .false.
+          do ir = unp(j)%ir0, unp(j)%ir1
+            do ic = unp(j)%ic0, unp(j)%ic1
+              if (pu(ic,ir) == j) then
+                jc = ic; jr = ir
+                lfnd = .true.
+              end if
+              if (lfnd) exit
+            end do
+            if (lfnd) exit
+          end do
+          if ((jc < 0).or.(jr < 0)) then
+            call errmsg('Program error')
+          end if
+          ir = jr+bb(i)%ir0-1; ic = jc+bb(i)%ic0-1 ! index a
+          jr = ir+bb_a%ir0-1; jc = ic+bb_a%ic0-1 ! global extent
+          !uid = int(jc,i8b)+ int((jr-1),i8b)*int(gnc,i8b)
+          if (j > 1) then
+            newid = newid + 1
+            uid = int(newid,i8b)
+          else
+            uid = int(i4wk1d3(i),i8b)
+          end if
+          !
+          do ir = unp(j)%ir0, unp(j)%ir1
+            do ic = unp(j)%ic0, unp(j)%ic1
+              if (pu(ic,ir) == j) then
+                jr = ir+bb(i)%ir0-1; jc = ic+bb(i)%ic0-1
+                id(jc,jr) = uid
+              end if
+            end do
+          end do
+        end do
+      end if
+      deallocate(i4wk2d)
+    end do
+    !
+    min_id = huge(min_id); max_id = -huge(max_id)
+    do ir = 1, nr
+      do ic = 1, nc
+        if (id(ic,ir) /= 0) then
+          min_id = min(min_id,id(ic,ir))
+          max_id = max(max_id,id(ic,ir))
+        end if
+      end do
+    end do
+    !
+    call logmsg('-->'//ta((/(max_id-min_id)/1000000/))//' M')
+    ! 
+    return
+  end subroutine calc_unique_grid_r4
+  
   subroutine getidmap(wrk, ir0, ir1, ic0, ic1, maxid, idmap, ncat, idmapinv, catarea, idbb)
 ! ******************************************************************************
     ! -- arguments
@@ -3594,5 +4650,226 @@ end subroutine addboundary_r
     !
     return
   end function count_i1a
+  
+  subroutine fillgap_r4(x, nodata, xtgt)
+! ******************************************************************************
+    ! -- arguments
+    real(r4b), dimension(:,:), intent(inout) :: x
+    real(r4b), intent(in) :: nodata
+    real(r4b), intent(in) :: xtgt
+    ! -- locals
+    integer(i4b), parameter :: maxiter = 1000
+    !
+    integer(i4b), parameter :: i_e = 1
+    integer(i4b), parameter :: i_w = 2
+    integer(i4b), parameter :: i_s = 3
+    integer(i4b), parameter :: i_n = 4
+    integer(i4b), parameter :: i_sw = 5
+    integer(i4b), parameter :: i_se = 6
+    integer(i4b), parameter :: i_nw = 7
+    integer(i4b), parameter :: i_ne = 8
+    integer(i4b), parameter :: nsten = i_ne
+    integer(i4b), dimension(2,nsten) :: sicir
+    logical, dimension(nsten) :: lsten
+    !
+    integer(i1b), dimension(:,:), allocatable :: i1wrk
+    integer(i4b) :: nc, nr, ic, ir, n, m, ic0, ic1, ir0, ir1, nbr, i, j, maxcnt
+    integer(i4b) :: ntgt, iter, nnodata, jc, jr
+    integer(i4b) :: bbic0, bbic1, bbir0, bbir1, bbjc0, bbjc1, bbjr0, bbjr1
+    integer(i4b), dimension(:,:), allocatable :: i4wrk
+    integer(i4b), dimension(8) :: i4idx, ucnt
+    real(r4b), dimension(:), allocatable :: r4wrk
+    real(r4b), dimension(8) :: r4nbr, r4ucnt
+    real(r4b) :: r4huge, rval, rvalp, rval_min, rval_max
+    real(r4b), parameter :: my_nodata  = -12345.
+! ------------------------------------------------------------------------------
+    r4huge = huge(r4huge)
+    !
+    nc = size(x,1); nr = size(x,2)
+    allocate(i1wrk(nc,nr),i4wrk(2,nc*nr), r4wrk(nc*nr))
+    bbir0 = 1; bbir1 = nr; bbic0 = 1; bbic1 = nc
+    !
+    iter = 0; n = 1
+    do while(n > 0)
+      iter = iter + 1
+      !
+      do ir = 1, nr
+        do ic = 1, nc
+          i1wrk(ic,ir) = 0
+        end do
+      end do
+      !
+      if (iter == 1) then
+        rvalp = xtgt
+       else
+        rvalp = my_nodata
+      end if
+      !
+      n = 0
+      do ir = bbir0, bbir1
+        do ic = bbic0, bbic1
+          if (x(ic,ir) == rvalp) then
+            ic0 = ic - 1; ic1 = ic + 1
+            ir0 = ir - 1; ir1 = ir + 1
+            nbr = 0; lsten = .false.
+            !
+            if (ic1 <= nc) then ! E
+              jc = ic1; jr = ir; rval = x(jc,jr); sicir(1,i_e) = jc; sicir(2,i_e) = jr; lsten(i_e) = .true.
+              if ((rval /= xtgt).and.(rval /= nodata).and.(rval /= my_nodata)) then
+                nbr = nbr + 1; r4nbr(nbr) = rval
+              end if
+              if (ir1 <= nr) then !S
+                jc = ic1; jr = ir1; rval = x(jc,jr); sicir(1,i_se) = jc; sicir(2,i_se) = jr; lsten(i_se) = .true.
+                if ((rval /= xtgt).and.(rval /= nodata).and.(rval /= my_nodata)) then
+                  nbr = nbr + 1; r4nbr(nbr) = rval
+                end if
+              end if
+              if (ir0 >= 1) then !N
+                jc = ic1; jr = ir0; rval = x(jc,jr); sicir(1,i_ne) = jc; sicir(2,i_ne) = jr; lsten(i_ne) = .true.
+                if ((rval /= xtgt).and.(rval /= nodata).and.(rval /= my_nodata)) then
+                  nbr = nbr + 1; r4nbr(nbr) = rval
+                end if
+              end if
+            end if
+            if (ic0 >= 1) then ! W
+              jc = ic0; jr = ir; rval = x(jc,jr); sicir(1,i_w) = jc; sicir(2,i_w) = jr; lsten(i_w) = .true.
+              if ((rval /= xtgt).and.(rval /= nodata).and.(rval /= my_nodata)) then
+                nbr = nbr + 1; r4nbr(nbr) = rval
+              end if
+              if (ir1 <= nr) then !S
+                jc = ic0; jr = ir1; rval = x(jc,jr); sicir(1,i_sw) = jc; sicir(2,i_sw) = jr; lsten(i_sw) = .true.
+                if ((rval /= xtgt).and.(rval /= nodata).and.(rval /= my_nodata)) then
+                  nbr = nbr + 1; r4nbr(nbr) = rval
+                end if
+              end if
+              if (ir0 >= 1) then !N
+                jc = ic0; jr = ir0; rval = x(jc,jr); sicir(1,i_nw) = jc; sicir(2,i_nw) = jr; lsten(i_nw) = .true.
+                if ((rval /= xtgt).and.(rval /= nodata).and.(rval /= my_nodata)) then
+                  nbr = nbr + 1; r4nbr(nbr) = rval
+                end if
+              end if
+            end if
+            if (ir1 <= nr) then !S
+              jc = ic; jr = ir1; rval = x(jc,jr); sicir(1,i_s) = jc; sicir(2,i_s) = jr; lsten(i_s) = .true.
+              if ((rval /= xtgt).and.(rval /= nodata).and.(rval /= my_nodata)) then
+                nbr = nbr + 1; r4nbr(nbr) = rval
+              end if
+            end if
+            if (ir0 >= 1) then !N
+              jc = ic; jr = ir0; rval = x(jc,jr); sicir(1,i_n) = jc; sicir(2,i_n) = jr; lsten(i_n) = .true.
+              rval = x(ic,ir0)
+              if ((rval /= xtgt).and.(rval /= nodata).and.(rval /= my_nodata)) then
+                nbr = nbr + 1; r4nbr(nbr) = rval
+              end if
+            end if
+            !
+            ! neighbors found
+            if (nbr > 0) then
+              do i = 1, nsten
+                if (lsten(i)) then
+                  jc = sicir(1,i); jr = sicir(2,i)
+                  if (x(jc,jr) == xtgt) then
+                    i1wrk(jc,jr) = 1
+                  end if
+                end if
+              end do
+              !
+              n = n + 1
+              i4wrk(1,n) = ic; i4wrk(2,n) = ir
+              if (nbr <= 2) then
+                r4wrk(n) = r4nbr(1)
+              else
+                ! check if all are the same
+                rval_min = r4huge; rval_max = -r4huge
+                do i = 1, nbr
+                  rval_min = min(rval_min,r4nbr(i))
+                  rval_max = max(rval_max,r4nbr(i))
+                end do
+                if (rval_min == rval_max) then
+                  r4wrk(n) = rval_min
+                else
+                  do i = 1, nbr
+                    i4idx(i) = i
+                  end do
+                  call quicksort_r(r4nbr, i4idx, nbr)
+                  !
+                  ucnt = 0; r4ucnt(1) = r4nbr(1); m = 1
+                  do i = 1, nbr
+                    if (r4nbr(i) /= r4ucnt(m)) then
+                      m = m + 1
+                      r4ucnt(m) = r4nbr(i)
+                    end if
+                    ucnt(m) = ucnt(m) + 1
+                  end do
+                  if (m == 1) then
+                    r4wrk(n) = r4ucnt(1)
+                  else
+                    maxcnt = 0
+                    do i = 1, m
+                      maxcnt = max(maxcnt,ucnt(i))
+                    end do
+                    do i = 1, m
+                      if (ucnt(i) == maxcnt) then
+                        r4wrk(n) = r4ucnt(i)
+                        exit
+                      end if
+                    end do
+                  end if
+                end if
+              end if
+            end if
+          end if
+        end do
+      end do
+      !
+      ! set the target value
+      !call logmsg('# cells labeled: '//ta((/100.*n/(6000*6000)/)))
+      do i = 1, n
+        ic = i4wrk(1,i); ir = i4wrk(2,i)
+        x(ic,ir) = r4wrk(i)
+        i1wrk(ic,ir) = 0
+      end do
+      !
+      bbjr0 = nr+1; bbjr1 = 0; bbjc0 = nc+1; bbjc1 = 0
+      do ir = 1, nr
+        do ic = 1, nc
+          if (i1wrk(ic,ir) == 1) then
+            x(ic,ir) = my_nodata
+            bbjr0 = min(bbjr0,ir); bbjr1 = max(bbjr1,ir)
+            bbjc0 = min(bbjc0,ic); bbjc1 = max(bbjc1,ic)
+          end if
+        end do
+      end do
+      !
+      ! set loop bounding box
+      bbir0 = max(bbjr0-1,1); bbir1 = min(bbjr1+1,nr)
+      bbic0 = max(bbjc0-1,1); bbic1 = min(bbjc1+1,nc)
+      !
+      ! count the remaining target values
+      ntgt = 0; nnodata = 0
+      do ir = 1, nr
+        do ic = 1, nc
+          if (x(ic,ir) == xtgt) then
+            ntgt = ntgt + 1
+          end if
+          if (x(ic,ir) == my_nodata) then
+            nnodata = nnodata + 1
+          end if
+        end do
+      end do
+      !call logmsg('Iteration '//ta((/iter/))//'; # added: '//ta((/n/))//'; # remaining: '//ta((/ntgt,nnodata/)))
+      ntgt = ntgt + nnodata
+      !
+      !if (iter == 1) exit
+      if (iter == maxiter) then
+        call errmsg('fillgap_r4: maximum iterations of '//ta((/iter/))//' reached.')
+        exit
+      end if
+    end do
+    call logmsg('Total iterations: '//ta((/iter/))//'; # not filled: '//ta((/ntgt/)))
+    !
+    deallocate(i1wrk,i4wrk,r4wrk)
+    return
+  end subroutine fillgap_r4
   
 end module utilsmod

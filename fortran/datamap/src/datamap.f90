@@ -5,7 +5,7 @@ program datamap
   use imod_idf
   use utilsmod, only: mxslen, i1b, i2b, i4b, r4b, r8b, DZERO, DONE, &
     readidf_block, writeasc, writeidf, tBB, errmsg, quicksort_d, addboundary, open_file, &
-    chkexist, readgen, tPol, logmsg, ta
+    chkexist, readgen, tPol, logmsg, ta, change_case, parse_line, writeflt
   !
   implicit none
   !
@@ -68,19 +68,28 @@ program datamap
   integer(i4b) :: cfn_unique_i
   !
   ! --- local
+  integer(i4b), parameter :: i_gen     = 1
+  integer(i4b), parameter :: i_gen_ptr = 2
+  integer(i4b), parameter :: i_gbb     = 3
+  integer(i4b), parameter :: i_sel     = 4
+  integer(i4b)            :: i_clip
+  !
   type(idfobj) :: idf, idf2
   type(tBB), pointer :: bb => null()
+  type(tBB), dimension(:), pointer :: bbwrk => null()
   type(tIntf), pointer :: intf => null()
   type(treg), dimension(:), pointer :: regwk => null()
   type(tPol), dimension(:), allocatable :: pol
   !
   character(len=mxslen) :: f, out_pref, s, tile_pref
-  logical :: ldone, lfound, lskip, linitpol, lin
+  character(len=mxslen), dimension(:), allocatable :: sa
+  logical :: ldone, lfound, lskip, lin
   integer(i4b), dimension(:,:), allocatable :: landmask
   integer(i1b), dimension(:,:), allocatable :: nlay
   integer(i2b), dimension(:,:), allocatable :: itile
   integer(i4b) :: p, ofs, iread, ios
-  integer(i4b) :: gir0, gir1, gic0, gic1, idum
+  integer(i4b) :: rgic0, rgic1, rgir0, rgir1, mxid
+  integer(i4b) :: gir0, gir1, gic0, gic1, gjr0, gjr1, gjc0, gjc1,idum
   integer(i4b) :: ir, ic, jr, jc, kr, kc, nbr, m, n, na, iact, nja, mja, nreg, nlnd, nsea, ncell
   integer(i4b) :: i, j, k, ist, nc, nr, nb, ir0, ir1, ic0, ic1, mxgid, mxlid
   integer(i4b) :: jc1, jr1, jc2, jr2, ntile, gnrow, gncol
@@ -92,6 +101,7 @@ program datamap
   integer(i4b), dimension(:), allocatable :: g2l, l2g, cnt, ia, gja, lja, reg, regncat
   integer(i4b), dimension(:,:), pointer :: xid
   integer(i4b), dimension(:,:), pointer :: xid2
+  integer(i4b), dimension(:,:), pointer :: xid3
   real(r4b) :: r4val
   real(r8b) :: gxmin, gymin, gcs, x, y
   real(r4b), dimension(:,:), pointer :: r4wk2d
@@ -121,18 +131,40 @@ program datamap
   !.\map_ireland ..\hydrosheds\cat.idf ..\hydrosheds\d_top.idf ..\hydrosheds\make_clonemap\128\tile\rcb_128.txt ..\hydrosheds\make_clonemap\128\tile\rcb_ ireland.gen
   !1             2                     3                       4                                                5                                         6     7     8     9
   !.\map_ireland ..\hydrosheds\cat.idf ..\hydrosheds\d_top.idf ..\hydrosheds\make_clonemap\128\tile\rcb_128.txt ..\hydrosheds\make_clonemap\128\tile\rcb_ 12230 13880 26780 27660
-  linitpol = .false.
-  iread = 1
+  i_clip = 0
+  !
+  ! determine the clipping options
   if (na > 6) then
-    iread = 0
     call getarg(7,f)
     read(f,*,iostat=ios) idum
     if (ios /= 0) then
-      call logmsg('Reading '//trim(f)//'...')
-      pol = readgen(f)
-      linitpol = .true.
+      s = change_case(f, 'l')
+      if (index(s,'.gen',back=.true.) > 0) then
+        if (na == 7) then
+          i_clip = i_gen
+        else
+          i_clip = i_gen_ptr
+        end if
+      else
+        i_clip = i_sel
+      end if
+    else
+      i_clip = i_gbb
     end if
-    if (.not.linitpol) then
+  end if
+  if (i_clip > 0) then
+    iread = 0
+  else
+    iread = 1
+  end if
+  !
+  ! read the polygon in case of gen-file is being used
+  select case(i_clip)
+    case(i_gen, i_gen_ptr)
+      call getarg(7,f)
+      call logmsg('Reading GEN-file '//trim(f)//'...')
+      pol = readgen(f)
+    case(i_gbb)
       call getarg(7,s); read(s,*) gir0
       call getarg(8,s); read(s,*) gir1
       call getarg(9,s); read(s,*) gic0
@@ -140,18 +172,138 @@ program datamap
       write(*,'(a,4(i5.5,a))') &
         '*** Processing for global bounding box (gir0,gir1,gic0,gic1) = (', &
       gir0,',',gir1,',',gic0,',',gic1,')...'
-    end if
-  end if
+    case(i_sel)
+      !
+      call getarg(8,f) !selection csv file
+      call open_file(f, iu)
+      read(iu,'(a)') s
+      call parse_line(s, sa,',')
+      gjc0 = huge(gjc0); gjc1 = 0; gjr0 = huge(gjr0); gjr1 = 0
+      do while(.true.)
+        read(unit=iu,fmt='(a)',iostat=ios) s
+        if (ios /= 0) exit
+        if (len_trim(s) == 0) exit
+        call parse_line(s, sa,',')
+        n = size(sa)
+        ! rgic0, rgic1, rgir0, rgir1
+        read(sa(n-3),*) rgic0; read(sa(n-2),*) rgic1
+        read(sa(n-1),*) rgir0; read(sa(n-0),*) rgir1
+        !
+        gjc0 = min(gjc0,rgic0); gjc1 = max(gjc1,rgic1)
+        gjr0 = min(gjr0,rgir0); gjr1 = max(gjr1,rgir1)
+      end do
+      close(iu)
+      !
+      call getarg(7,f) !selection idf file
+      if (.not.idfread(idf2, f, 0)) then
+        call errmsg('Could not read '//trim(f))
+      end if
+      call readidf_block(idf2, gjr0, gjr1, gjc0, gjc1, xid2, 0)
+      nct = size(xid2,1); nrt = size(xid2,2)
+      allocate(xid3(nct,nrt))
+      do ir = 1, nrt
+        do ic = 1, nct
+          xid3(ic,ir) = 0
+        end do
+      end do
+      !
+      ! loop over the ids and fill
+      call getarg(8,f) !selection csv file
+      call open_file(f, iu)
+      read(iu,'(a)') s
+      call parse_line(s, sa,',')
+      do while(.true.)
+        read(unit=iu,fmt='(a)',iostat=ios) s
+        if (ios /= 0) exit
+        if (len_trim(s) == 0) exit
+        call parse_line(s, sa,',')
+        read(sa(1),*) id
+        n = size(sa)
+        ! rgic0, rgic1, rgir0, rgir1
+        read(sa(n-3),*) rgic0; read(sa(n-2),*) rgic1
+        read(sa(n-1),*) rgir0; read(sa(n-0),*) rgir1
+        do ir = rgir0, rgir1
+          do ic = rgic0, rgic1
+            jr = ir - gjr0 + 1; jc = ic - gjc0 + 1
+            if (xid2(jc,jr) == id) then
+              xid3(jc,jr) = id
+            end if
+          end do
+        end do
+      end do
+      call idfdeallocatex(idf2)
+      !
+      ! determine the catchment to use
+      call getarg(3,f)
+      write(*,'(a)') 'Reading entire '//trim(f)//'...'
+      if (.not.idfread(idf, f, 1)) then ! read entire grid
+        call errmsg('Could not read '//trim(f))
+      end if
+      gnrow = idf%nrow; gncol = idf%ncol; gxmin = idf%xmin; gymin = idf%ymin; gcs = idf%dx
+      !
+      do iact = 1, 2
+        mxid = 0
+        do ir = 1, idf%nrow
+          do ic = 1, idf%ncol
+            if (idf%x(ic,ir) /= idf%nodata) then
+              id = abs(int(idf%x(ic,ir),i4b))
+              mxid = max(mxid,id)
+              if (iact == 2) then
+                bbwrk(id)%ir0 = min(ir,bbwrk(id)%ir0)
+                bbwrk(id)%ir1 = max(ir,bbwrk(id)%ir1)
+                bbwrk(id)%ic0 = min(ic,bbwrk(id)%ic0)
+                bbwrk(id)%ic1 = max(ic,bbwrk(id)%ic1)
+              end if
+            end if
+          end do
+        end do
+        if (iact == 1) then
+          allocate(bbwrk(mxid),i4wk1d1(mxid))
+          do i = 1, mxid
+            i4wk1d1(i) = 0
+          end do
+        end if
+      end do
+      !
+      gir0 = gnrow+1; gir1 = 0; gic0 = gncol+1; gic1 = 0
+      do ir = gjr0, gjr1
+        do ic = gjc0, gjc1
+          jr = ir - gjr0 + 1; jc = ic - gjc0 + 1
+          if (xid3(jc,jr) > 0) then
+            id = abs(int(idf%x(ic,ir)))
+            if (id > 0) then
+              i4wk1d1(id) = 1
+              gic0 = min(gic0, bbwrk(id)%ic0); gic1 = max(gic1, bbwrk(id)%ic1)
+              gir0 = min(gir0, bbwrk(id)%ir0); gir1 = max(gir1, bbwrk(id)%ir1)
+            else
+              call errmsg('Program error.')
+            end if
+          end if
+        end do
+      end do
+      !
+      if (.false.) then
+        call writeflt('sel_tmp', xid3, nct, nrt, &
+          real(idf2%xmin + (gjc0-1)*idf2%dx,r8b), &
+          real(idf2%ymin + (idf2%nrow-gjr1)*idf2%dx,r8b), &
+         real(idf2%dx,r8b), 0); stop
+      end if
+      !
+      ! clean up
+      deallocate(bbwrk)
+      call idfdeallocatex(idf)
+      call idfdeallocatex(idf2)
+  end select
   !
   call getarg(2,out_pref)
   call getarg(3,f)
-  if (iread == 1) write(*,'(a)') 'Reading entire '//trim(f)//'...'
+  if (i_clip == 0) write(*,'(a)') 'Reading entire '//trim(f)//'...'
   if (.not.idfread(idf, f, iread)) then
     call errmsg('Could not read '//trim(f))
   end if
   gnrow = idf%nrow; gncol = idf%ncol; gxmin = idf%xmin; gymin = idf%ymin; gcs = idf%dx
   !
-  if (linitpol) then
+  if ((i_clip == i_gen).or.(i_clip == i_gen_ptr)) then
     gir0 = gnrow+1; gir1 = 0; gic0 = gncol+1; gic1 = 0
     do i  = 1, size(pol)
       ic = (pol(i)%xmin-gxmin)/gcs;           gic0 = min(gic0, ic)
@@ -163,7 +315,7 @@ program datamap
     gir0 = max(gir0,1); gir1 = min(gir1, gnrow)
   end if
   !
-  if (iread == 0) then
+  if (i_clip > 0) then
     call readidf_block(idf, gir0, gir1, gic0, gic1, xid)
     nc = size(xid,1); nr = size(xid,2)
   else
@@ -178,9 +330,9 @@ program datamap
   end if
   !
   if (.false.) then
-    call writeidf('tmp.idf', xid, nc, nr, &
-      gxmin + (gic0-1)*gcs, gymin + (gnrow-gir1)*idf%dx, &
-      gcs, 0.D0); stop
+    call writeflt('tmp', xid, nc, nr, &
+      gxmin + (gic0-1)*gcs, gymin + (gnrow-gir1)*idf%dx, gcs, 0)
+    stop
   end if
   
   ! set the land mask
@@ -197,8 +349,24 @@ program datamap
     end do
   end do
   !
+  ! remove catchment that are not selected
+  if (i_clip == i_sel) then
+    do ir = 1, nr
+      do ic = 1, nc
+        id = int(xid(ic,ir),i4b)
+        if (id /= 0) then
+          id = abs(id)
+          if (i4wk1d1(id) == 0) then
+            xid(ic,ir) = 0
+          end if
+        end if
+      end do
+    end do
+    deallocate(i4wk1d1)
+  end if
+  !
   ! remove catchment outside of polygon(s)
-  if (linitpol .and. (na == 7)) then
+  if (i_clip == i_gen) then
     do ir = 1, nr
       do ic = 1, nc
         xid(ic,ir) = abs(xid(ic,ir))
@@ -252,12 +420,12 @@ program datamap
   end if
   !
   if (.false.) then
-    call writeidf('tmp.idf', xid, nc, nr, &
-      gxmin + (gic0-1)*gcs, gymin + (gnrow-gir1)*idf%dx, &
-      gcs, 0.D0); stop
+    call writeflt('tmp', xid, nc, nr, &
+      gxmin + (gic0-1)*gcs, gymin + (gnrow-gir1)*idf%dx, gcs, 0)
+      stop
   end if
   !
-  if (linitpol .and. (na > 7)) then
+  if (i_clip == i_gen_ptr) then
     call getarg(8,f)
     if (.not.idfread(idf2, f, 0)) then
       call errmsg('Could not read '//trim(f))
@@ -342,20 +510,20 @@ program datamap
   !end if
   !
   if (.false.) then
-    call writeidf('tmp.idf', xid, nc, nr, &
-      gxmin + (gic0-1)*gcs, gymin + (gnrow-gir1)*idf%dx, &
-      gcs, 0.D0); stop
+    call writeflt('tmp', xid, nc, nr, &
+      gxmin + (gic0-1)*gcs, gymin + (gnrow-gir1)*idf%dx, gcs, 0)
+    stop
   end if
   !
   call idfdeallocatex(idf)
   !
   allocate(nlay(nc,nr))
   call getarg(4,f)
-  if (iread == 1) write(*,'(a)') 'Reading entire '//trim(f)//'...'
+  if (i_clip == 0) write(*,'(a)') 'Reading entire '//trim(f)//'...'
   if (.not.idfread(idf, f, iread)) then
     call errmsg('Could not read '//trim(f))
   end if
-  if (iread == 0) then
+  if (i_clip > 0) then
     call readidf_block(idf, gir0, gir1, gic0, gic1, r4wk2d, 0.)
   else
     allocate(r4wk2d(nc,nr))
@@ -379,8 +547,8 @@ program datamap
   deallocate(r4wk2d)
   !
   if (.false.) then
-    call writeidf('nlay.idf', nlay, nc, nr, &
-    gxmin + (gic0-1)*gcs, gymin + (gnrow-gir1)*gcs, gcs, 0.D0)
+    call writeflt('nlay', nlay, nc, nr, &
+    gxmin + (gic0-1)*gcs, gymin + (gnrow-gir1)*gcs, gcs, int(0,i1b))
     stop
   end if
   call idfdeallocatex(idf)
@@ -408,12 +576,9 @@ program datamap
         end if
       end do
     end do
-    call writeidf('tmp.idf', xid, nc, nr, &
+    call writeflt('tmp', xid, nc, nr, &
       gxmin + (gic0-1)*gcs, gymin + (gnrow-gir1)*idf%dx, &
-      gcs, 0.D0)
-    call writeasc('tmp.asc', xid, nc, nr, &
-      gxmin + (gic0-1)*gcs, gymin + (gnrow-gir1)*idf%dx, &
-      gcs, 0.D0)
+      gcs, 0)
   end if
   !
   mxgid = maxval(xid)
@@ -678,21 +843,21 @@ program datamap
   !
   ! debug output
   if (.false.) then
-  do ir = 1, nr
-    do ic = 1, nc
-      id = xid(ic,ir)
-      if (abs(id) /= 0) then
-        if (id > 0) then
-          xid(ic,ir) = reg(g2l(id))
-        else
-          xid(ic,ir) = -reg(g2l(-id))
+    do ir = 1, nr
+      do ic = 1, nc
+        id = xid(ic,ir)
+        if (abs(id) /= 0) then
+          if (id > 0) then
+            xid(ic,ir) = reg(g2l(id))
+          else
+            xid(ic,ir) = -reg(g2l(-id))
+          end if
         end if
-      end if
+      end do
     end do
-  end do
-  call writeidf('reg.idf', xid, nc, nr, &
-    idf%xmin + (gic0-1)*idf%dx, idf%ymin + (idf%nrow-gir1)*idf%dx, &
-    idf%dx, 0.D0)
+    call writeflt('reg', xid, nc, nr, &
+      idf%xmin + (gic0-1)*idf%dx, idf%ymin + (idf%nrow-gir1)*idf%dx, idf%dx, 0)
+    stop
   end if
   !
   allocate(i4wk1d1(mxlid + 1))
