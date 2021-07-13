@@ -1,7 +1,7 @@
 program filtertsstat
   ! -- modules
   use utilsmod, only: i4b, r4b, r8b, get_args, mxslen, open_file, &
-    errmsg, logmsg, ta, parse_line, DZERO, tBB, insert_tab, writeasc
+    errmsg, logmsg, ta, parse_line, DZERO, tBB, insert_tab, writeasc, writeflt
   !
   implicit none
   !
@@ -21,19 +21,23 @@ program filtertsstat
   ! -- locals
   integer(i4b), parameter :: i_best = 1
   integer(i4b), parameter :: i_mean = 2
+  real(r8b), parameter :: rho_thres  = 0.5D0
+  real(r8b), parameter :: aqre_thres = 0.5D0
+!  real(r8b), parameter :: aqre_thres = 50.0D0
   type(tBB), pointer :: bb => null()
   type(tStat), pointer :: sd => null()
   type(tStat), dimension(:), pointer :: sdat => null()
-  character(len=mxslen) :: f_in, f_out, f_out_asc, hdr, s
+  character(len=mxslen) :: f_in, f_out, f_out_pref, hdr, s
   character(len=mxslen), dimension(:), allocatable :: args, sa
   logical :: qre_crit, rho_crit, write_perf
   integer(i4b) :: filt_method
-  integer(i4b) :: nsf, ns, na, iu, i, gnc, gnr, ic, ir, nc, nr, n, nmax, np2cand, np3cand
+  integer(i4b) :: nsf, nsr, ns, na, iu, i, gnc, gnr, ic, ir, nc, nr, n, nmax, np2cand, np3cand
   integer(i4b) :: ylat_ic, xlon_ic, rho_ic, qre_ic, iact, ios, np
   integer(i4b), dimension(4) :: nperf
   integer(i4b), dimension(:,:), allocatable :: si2d, perf2d
   real(r4b), dimension(4) :: pperf
   real(r8b) :: gxmin, gxmax, gymin, gymax, gcs, x, y, rho, qre
+  real(r8b) :: rhotot, aqretot
   real(r8b), dimension(:,:), allocatable :: rho2d, qre2d
 ! ------------------------------------------------------------------------------
   !
@@ -57,12 +61,13 @@ program filtertsstat
   write_perf = .false.
   if (na > 13) then
     write_perf = .true.
-    f_out_asc = args(14)
+    f_out_pref = args(14)
   end if
   !
   ! read the summary file
   call open_file(f_in, iu, 'r')
   do iact = 1, 2
+    rhotot = DZERO; aqretot = DZERO
     read(unit=iu,fmt='(a)',iostat=ios) hdr
     ns = 0
     do while(ios == 0)
@@ -90,16 +95,18 @@ program filtertsstat
             cycle
           end if
           read(sa(rho_ic),*) sd%rho; read(sa(qre_ic),*) sd%qre
-          if ((abs(sd%qre) <= 0.5d0).and.((sd%rho) >= 0.5d0)) then
+          rhotot = rhotot + sd%rho
+          aqretot = aqretot + abs(sd%qre)
+          if ((abs(sd%qre) <= aqre_thres).and.((sd%rho) >= rho_thres)) then
             sd%iperf = 1
           end if
-          if ((abs(sd%qre)  > 0.5d0).and.((sd%rho) >= 0.5d0)) then
+          if ((abs(sd%qre)  > aqre_thres).and.((sd%rho) >= rho_thres)) then
             sd%iperf = 2
           end if
-          if ((abs(sd%qre) <= 0.5d0).and.((sd%rho)  < 0.5d0)) then
+          if ((abs(sd%qre) <= aqre_thres).and.((sd%rho)  < rho_thres)) then
             sd%iperf = 3
           end if
-          if ((abs(sd%qre)  > 0.5d0).and.((sd%rho)  < 0.5d0)) then
+          if ((abs(sd%qre)  > aqre_thres).and.((sd%rho)  < rho_thres)) then
             sd%iperf = 4
           end if
           if (sd%iperf == 0) then
@@ -118,6 +125,7 @@ program filtertsstat
     rewind(iu)
   end do
   close(iu)
+  nsr = ns
   bb%ncol = bb%ic1 - bb%ic0 + 1; nc = bb%ncol
   bb%nrow = bb%ir1 - bb%ir0 + 1; nr = bb%nrow
   !
@@ -150,6 +158,13 @@ program filtertsstat
         rho2d(ic,ir) = rho 
         qre2d(ic,ir) = qre
       end if
+!      if (rho > rho2d(ic,ir)) then
+!        si2d(ic,ir)  = i 
+!        rho2d(ic,ir) = rho 
+!      end if
+!      if (qre < qre2d(ic,ir)) then
+!        qre2d(ic,ir) = qre
+!      end if
     end do
     ! label for writing
     nperf = 0
@@ -217,17 +232,17 @@ program filtertsstat
           sd%y = gymax - sd%ir*gcs + gcs/2.d0
           sd%rho = rho2d(ic,ir)
           sd%qre = qre2d(ic,ir)
-          if ((abs(sd%qre) <= 0.5d0).and.(sd%rho >= 0.5d0)) then
+          if ((abs(sd%qre) <= aqre_thres).and.(sd%rho >= rho_thres)) then
             sd%iperf = 1
           end if
-          if ((abs(sd%qre)  > 0.5d0).and.(sd%rho >= 0.5d0)) then
+          if ((abs(sd%qre)  > aqre_thres).and.(sd%rho >= rho_thres)) then
             sd%iperf = 2
           end if
-          if ((abs(sd%qre) <= 0.5d0).and.(sd%rho  < 0.5d0)) then
+          if ((abs(sd%qre) <= aqre_thres).and.(sd%rho  < rho_thres)) then
             sd%iperf = 3
           end if
-          qre_crit = (abs(sd%qre) > 0.5d0)
-          rho_crit = (sd%rho  < 0.5d0)
+          qre_crit = (abs(sd%qre) > aqre_thres)
+          rho_crit = (sd%rho  < rho_thres)
           if (qre_crit .and. rho_crit) then
             sd%iperf = 4
           end if
@@ -272,8 +287,10 @@ program filtertsstat
   close(iu)
   !
   if (write_perf) then
-    call writeasc(f_out_asc, perf2d, bb%ncol, bb%nrow, &
-      gxmin + (bb%ic0-1)*gcs, gymin + (gnr-bb%ir1)*gcs, gcs, 0.D0)
+!    call writeasc(f_out_pref, perf2d, bb%ncol, bb%nrow, &
+!      gxmin + (bb%ic0-1)*gcs, gymin + (gnr-bb%ir1)*gcs, gcs, 0.D0)
+    call writeflt(f_out_pref, perf2d, bb%ncol, bb%nrow, &
+      gxmin + (bb%ic0-1)*gcs, gymin + (gnr-bb%ir1)*gcs, gcs, 0)
   end if
   !
   np = sum(nperf)
@@ -288,5 +305,8 @@ program filtertsstat
   if (filt_method == i_mean) then
     call logmsg('Max count per cell : '//ta((/nmax/),'(i10)'))
   end if
+  call logmsg('Avg. rho: '//ta((/rhotot/nsr/)))
+  call logmsg('Avg. absolute qre: '//ta((/aqretot/nsr/)))
+  
   !
 end program
