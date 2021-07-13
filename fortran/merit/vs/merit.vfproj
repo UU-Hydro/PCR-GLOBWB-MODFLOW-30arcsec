@@ -48,6 +48,8 @@
 		<Filter Name="Header Files" Filter="fi;fd;h;inc"/>
 		<Filter Name="Resource Files" Filter="rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe"/>
 		<Filter Name="Source Files" Filter="f90;for;f;fpp;ftn;def;odl;idl">
+		<Filter Name="Geometry library">
+		<File RelativePath="..\..\geomlib\src\geometry.f90"/></Filter>
 		<Filter Name="iMOD library">
 		<File RelativePath="..\..\imodlib_5_1\src\imod_idf_lib.f90"/>
 		<File RelativePath="..\..\imodlib_5_1\src\imod_idf_mod.f90"/>
@@ -58,11 +60,11 @@
 				<Tool Name="VFFortranCompilerTool" WarnInterfaces="false"/></FileConfiguration>
 			<FileConfiguration Name="Debug|x64">
 				<Tool Name="VFFortranCompilerTool" WarnInterfaces="false"/></FileConfiguration></File></Filter>
-		<Filter Name="Geometry library">
-		<File RelativePath="..\..\geomlib\src\geometry.f90"/></Filter>
-		<Filter Name="Utility library">
-		<File RelativePath="..\..\utilslib_svn\src\utils_mod.f90"/></Filter>
+		<Filter Name="Ehdr library">
+		<File RelativePath="..\..\ehdr_lib\ehdr_lib.f90"/></Filter>
 		<Filter Name="PCR library">
 		<File RelativePath="..\..\pcrlib\src\pcrlib.f90"/></Filter>
+		<Filter Name="Utility library">
+		<File RelativePath="..\..\utilslib_svn\src\utils_mod.f90"/></Filter>
 		<File RelativePath="..\src\merit.f90"/></Filter></Files>
 	<Globals/></VisualStudioProject>
