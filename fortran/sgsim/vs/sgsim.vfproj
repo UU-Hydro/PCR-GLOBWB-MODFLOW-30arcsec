@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<VisualStudioProject ProjectCreator="Intel Fortran" Keyword="Console Application" Version="11.0" ProjectIdGuid="{F91EC197-789E-474F-81FF-2C6B90AA39BB}">
+	<Platforms>
+		<Platform Name="Win32"/>
+		<Platform Name="x64"/></Platforms>
+	<Configurations>
+		<Configuration Name="Debug|Win32">
+				<Tool Name="VFFortranCompilerTool" SuppressStartupBanner="true" DebugInformationFormat="debugEnabled" Optimization="optimizeDisabled" WarnInterfaces="true" Traceback="true" BoundsCheck="true" StackFrameCheck="true" RuntimeLibrary="rtMultiThreadedDebugDLL"/>
+				<Tool Name="VFLinkerTool" LinkIncremental="linkIncrementalNo" SuppressStartupBanner="true" GenerateDebugInformation="true" SubSystem="subSystemConsole"/>
+				<Tool Name="VFResourceCompilerTool"/>
+				<Tool Name="VFMidlTool" SuppressStartupBanner="true"/>
+				<Tool Name="VFCustomBuildTool"/>
+				<Tool Name="VFPreLinkEventTool"/>
+				<Tool Name="VFPreBuildEventTool"/>
+				<Tool Name="VFPostBuildEventTool"/>
+				<Tool Name="VFManifestTool" SuppressStartupBanner="true"/></Configuration>
+		<Configuration Name="Release|Win32">
+				<Tool Name="VFFortranCompilerTool" SuppressStartupBanner="true" RuntimeLibrary="rtMultiThreadedDLL"/>
+				<Tool Name="VFLinkerTool" LinkIncremental="linkIncrementalNo" SuppressStartupBanner="true" SubSystem="subSystemConsole"/>
+				<Tool Name="VFResourceCompilerTool"/>
+				<Tool Name="VFMidlTool" SuppressStartupBanner="true"/>
+				<Tool Name="VFCustomBuildTool"/>
+				<Tool Name="VFPreLinkEventTool"/>
+				<Tool Name="VFPreBuildEventTool"/>
+				<Tool Name="VFPostBuildEventTool"/>
+				<Tool Name="VFManifestTool" SuppressStartupBanner="true"/></Configuration>
+		<Configuration Name="Debug|x64">
+				<Tool Name="VFFortranCompilerTool" SuppressStartupBanner="true" DebugInformationFormat="debugEnabled" Optimization="optimizeDisabled" BufferedIO="true" Preprocess="preprocessYes" PreprocessorDefinitions="IFORT" Traceback="true" BoundsCheck="true" StackFrameCheck="true" RuntimeLibrary="rtMultiThreadedDebugDLL"/>
+				<Tool Name="VFLinkerTool" LinkIncremental="linkIncrementalNo" SuppressStartupBanner="true" GenerateDebugInformation="true" SubSystem="subSystemConsole"/>
+				<Tool Name="VFResourceCompilerTool"/>
+				<Tool Name="VFMidlTool" SuppressStartupBanner="true" TargetEnvironment="midlTargetAMD64"/>
+				<Tool Name="VFCustomBuildTool"/>
+				<Tool Name="VFPreLinkEventTool"/>
+				<Tool Name="VFPreBuildEventTool"/>
+				<Tool Name="VFPostBuildEventTool"/>
+				<Tool Name="VFManifestTool" SuppressStartupBanner="true"/></Configuration>
+		<Configuration Name="Release|x64">
+				<Tool Name="VFFortranCompilerTool" SuppressStartupBanner="true" BufferedIO="true" Preprocess="preprocessYes" PreprocessorDefinitions="IFORT" RuntimeLibrary="rtMultiThreadedDLL"/>
+				<Tool Name="VFLinkerTool" LinkIncremental="linkIncrementalNo" SuppressStartupBanner="true" SubSystem="subSystemConsole"/>
+				<Tool Name="VFResourceCompilerTool"/>
+				<Tool Name="VFMidlTool" SuppressStartupBanner="true" TargetEnvironment="midlTargetAMD64"/>
+				<Tool Name="VFCustomBuildTool"/>
+				<Tool Name="VFPreLinkEventTool"/>
+				<Tool Name="VFPreBuildEventTool"/>
+				<Tool Name="VFPostBuildEventTool"/>
+				<Tool Name="VFManifestTool" SuppressStartupBanner="true"/></Configuration></Configurations>
+	<Files>
+		<Filter Name="Header Files" Filter="fi;fd;h;inc"/>
+		<Filter Name="Resource Files" Filter="rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe"/>
+		<Filter Name="Source Files" Filter="f90;for;f;fpp;ftn;def;odl;idl">
+		<Filter Name="GSLIB">
+		<File RelativePath="..\..\gslib\acorni.for"/>
+		<File RelativePath="..\..\gslib\backtr.for"/>
+		<File RelativePath="..\..\gslib\beyond.for"/>
+		<File RelativePath="..\..\gslib\blue.for"/>
+		<File RelativePath="..\..\gslib\chknam.for"/>
+		<File RelativePath="..\..\gslib\chktitle.for"/>
+		<File RelativePath="..\..\gslib\cova3.for"/>
+		<File RelativePath="..\..\gslib\dlocate.for"/>
+		<File RelativePath="..\..\gslib\dpowint.for"/>
+		<File RelativePath="..\..\gslib\dsortem.for"/>
+		<File RelativePath="..\..\gslib\gauinv.for"/>
+		<File RelativePath="..\..\gslib\gcum.for"/>
+		<File RelativePath="..\..\gslib\getindx.for"/>
+		<File RelativePath="..\..\gslib\getz.for"/>
+		<File RelativePath="..\..\gslib\green.for"/>
+		<File RelativePath="..\..\gslib\hexa.for"/>
+		<File RelativePath="..\..\gslib\ksol.for"/>
+		<File RelativePath="..\..\gslib\ktsol.for"/>
+		<File RelativePath="..\..\gslib\locate.for"/>
+		<File RelativePath="..\..\gslib\nscore.for"/>
+		<File RelativePath="..\..\gslib\numtext.for"/>
+		<File RelativePath="..\..\gslib\ordrel.for"/>
+		<File RelativePath="..\..\gslib\picksupr.for"/>
+		<File RelativePath="..\..\gslib\powint.for"/>
+		<File RelativePath="..\..\gslib\psfill.for"/>
+		<File RelativePath="..\..\gslib\psline.for"/>
+		<File RelativePath="..\..\gslib\pstext.for"/>
+		<File RelativePath="..\..\gslib\rand.for"/>
+		<File RelativePath="..\..\gslib\red.for"/>
+		<File RelativePath="..\..\gslib\resc.for"/>
+		<File RelativePath="..\..\gslib\scal.for"/>
+		<File RelativePath="..\..\gslib\setrot.for"/>
+		<File RelativePath="..\..\gslib\setsupr.for"/>
+		<File RelativePath="..\..\gslib\sortem.for"/>
+		<File RelativePath="..\..\gslib\sqdist.for"/>
+		<File RelativePath="..\..\gslib\srchsupr.for"/>
+		<File RelativePath="..\..\gslib\strlen.for"/></Filter>
+		<Filter Name="iMOD library">
+		<File RelativePath="..\..\imodlib_5_1\src\imod_idf_lib.f90"/>
+		<File RelativePath="..\..\imodlib_5_1\src\imod_idf_mod.f90"/>
+		<File RelativePath="..\..\imodlib_5_1\src\imod_idf_par.f90"/>
+		<File RelativePath="..\..\imodlib_5_1\src\imod_utl.f90"/>
+		<File RelativePath="..\..\imodlib_5_1\src\utl.f90"/></Filter>
+		<Filter Name="Geom library">
+		<File RelativePath="..\..\geomlib\src\geometry.f90"/></Filter>
+		<Filter Name="Utility library">
+		<File RelativePath="..\..\utilslib_svn\src\utils_mod.f90"/></Filter>
+		<File RelativePath="..\src\sgsim.for"/></Filter></Files>
+	<Globals/></VisualStudioProject>
