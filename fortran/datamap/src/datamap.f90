@@ -832,9 +832,9 @@ program datamap
   deallocate(i4wk1d1, i4wk1d2)
   !
   write(*,'(a,f10.2)') 'Total # active cells (M):', real(ncell)/1000000.
-  n = min(nreg,10)
+  n = min(nreg,50)
   write(*,*) 'Top '//ta((/n/))//' regions:'
-  do i = 1, min(nreg,10)
+  do i = 1, n
     write(*,'(i2.2,a,f7.2,a,i6,a,f6.2,a)') i, &
       ' - # cells (M):', real(regncell(i))/1000000., &
       '; # catchments:', regncat(i), &
