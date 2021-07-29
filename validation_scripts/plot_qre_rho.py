@@ -5,8 +5,9 @@ def plot_qre_r(provList, res):
     i = 0
     for prov in provList:
         i += 1
-        #f = './%s/summary_inge.txt'%(prov); print('Reading %s...'%f)
-        f = './%s/mean_summary_%s.txt'%(prov,res); print('Reading %s...'%f)
+        #f = r'f:\models\pcr-globwb-30arcsec\model_new\validation\statistics\sensitivity_analysys_080621\2_ggm5m_awr17_mean.txt'
+        f = './%s/mean_summary_10km_awr2017_bot_5m.txt'%(prov); print('Reading %s...'%f)
+        #f = './%s/mean_summary_%s.txt'%(prov,res); print('Reading %s...'%f)
         #f = './%s/summary_%s_inge.txt'%(prov,res); print('Reading %s...'%f)
         x1 = np.genfromtxt(f, delimiter='\t', skip_header=1)
         print('--> %i stations'%np.shape(x1)[0])
@@ -19,6 +20,10 @@ def plot_qre_r(provList, res):
 
     qre = 100.*abs(x[:,4]); rho = x[:,3];
     #qre = 100.*abs(x[:,16]); rho = x[:,5]
+
+    # inge:
+    qre = abs(x[:,4]); rho = x[:,3];
+
 
     xmin = 0; xmax = 150; ymin = -1; ymax = 1.5
     #fpdf = 'ggm_tr_qre_rho_%s_%s_inge.pdf'%("_".join(provList),res)
@@ -41,9 +46,9 @@ def plot_qre_r(provList, res):
 
 if __name__ == "__main__":
     for res in ['30s']:
-        plot_qre_r(['ADES'],res)
-        plot_qre_r(['DINO'],res)
+        #plot_qre_r(['ADES'],res)
+        #plot_qre_r(['DINOF'],res)
         plot_qre_r(['USGS'],res)
-        plot_qre_r(['ADES','DINO','USGS'],res)
+        #plot_qre_r(['ADES','DINO','USGS'],res)
 
 
