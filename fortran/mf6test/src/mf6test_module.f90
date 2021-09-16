@@ -8,8 +8,10 @@ module mf6test_module
     writebin, get_jd, jd_next_month, get_month_days, getwords, getminmax, &
     replacetoken, IZERO, RZERO, DZERO, DONE, tBB, calc_unique, tI4grid, count_i1a, &
     get_slash, get_abs_path, get_month_days, get_month_days_s, get_ymd_from_jd
-  use imod_idf
-  
+  use ehdrModule
+  !
+  implicit none
+  !
   integer(i4b),          parameter :: mxslen = 1024
   character(len=mxslen), parameter :: resultsbindir = '..\..\models\run_output_bin'
   character(len=mxslen), parameter :: resultslstdir = '..\..\models\run_output_lst'
@@ -48,13 +50,15 @@ module mf6test_module
   private
   
   integer(i4b), parameter :: i_undefined = 0
-  integer(i4b), parameter :: i_idf       = 1
-  integer(i4b), parameter ::  maxnraw = 1000
+  integer(i4b), parameter :: i_ehdr       = 1
+  integer(i4b), parameter :: maxnraw = 1000
 
   type tData
-    character(mxslen)       :: s = ''
-    integer(i4b)            :: file_type = i_undefined
-    type(idfobj),   pointer :: idf     => null()
+    character(mxslen)     :: s = ''
+    integer(i4b)          :: file_type = i_undefined
+    type(tEhdr),  pointer :: ehdr     => null()
+    real(r8b)             :: r8mult = DONE
+    real(r8b)             :: r8add = DZERO
   end type tData
   
   type tRaw
@@ -73,6 +77,7 @@ module mf6test_module
     character(len=mxslen), dimension(:), allocatable :: perdate
   contains
     procedure :: init => mf6_raw_init
+    procedure :: init_file => mf6_raw_init_file
     procedure :: mf6_raw_get_index
     procedure :: mf6_raw_key_exists
     procedure :: mf6_raw_get_name_char, mf6_raw_get_name_i4b, mf6_raw_get_name_r8b
@@ -112,8 +117,18 @@ module mf6test_module
     real(r8b),    dimension(:), pointer :: hwva  => null() !length nja
   end type tDisu
   
+  type tReg
+    type(tBb),                      pointer :: bb          => null()
+    integer(i2b), dimension(:,:),   pointer :: itile       => null()
+    integer(i4b), dimension(:),     pointer :: layer_nodes => null()
+    integer(i4b), dimension(:,:,:), pointer :: nodmap      => null()
+    integer(i4b), dimension(:,:,:), pointer :: bndmap      => null()
+  end type tReg
+  
   type tExchange
     type(tBb),                    pointer :: bb          => null()
+    integer(i4b), dimension(:),   pointer :: m1reg       => null() !region ID M1
+    integer(i4b), dimension(:),   pointer :: m2reg       => null() !region ID M1
     integer(i4b),                 pointer :: m1mod       => null() !local model index for solution
     integer(i4b),                 pointer :: m2mod       => null()
     character(len=mxslen),        pointer :: m2modelname => null()
@@ -131,6 +146,8 @@ module mf6test_module
     character(len=mxslen),         pointer :: modelname   => null()
     character(len=mxslen),         pointer :: rootdir     => null()
     character(len=mxslen),         pointer :: bindir      => null()
+    integer(i4b),                  pointer :: nreg        => null()
+    type(tReg), dimension(:),      pointer :: reg         => null()
     type(tDisu),                   pointer :: disu        => null()
     integer(i4b),                  pointer :: nxch        => null()
     type(tExchange), dimension(:), pointer :: xch         => null()
@@ -142,6 +159,7 @@ module mf6test_module
   contains
     procedure :: get_model_name => mf6_mod_get_model_name
     procedure :: set_disu       => mf6_mod_set_disu
+    procedure :: get_array      => mf6_mod_get_array_r8
     generic   :: write_array    => mf6_mod_write_array_i4, &
                                    mf6_mod_write_array_r8
     procedure :: mf6_mod_write_array_i4
@@ -169,6 +187,12 @@ module mf6test_module
     !
     procedure :: write_exchanges => mf6_mod_write_exchanges
     !
+    procedure :: write_post_map  => mf6_mod_write_post_map
+    !
+    procedure :: clean_regions  => mf6_mod_clean_regions
+    !
+    procedure :: count_i1a => mf6_mod_count_i1a
+    !
   end type tMf6_mod
   
   type tMf6_sol
@@ -184,11 +208,13 @@ module mf6test_module
     procedure :: write_ims       => mf6_sol_write_ims
     procedure :: write_wrap      => mf6_sol_write_wrap
     procedure :: write_mfsim     => mf6_sol_write_mfsim
+    procedure :: write_post_map  => mf6_sol_write_post_map
     procedure :: clean           => mf6_sol_clean
   end type tMf6_sol
   
   ! public variables
   public :: tMf6_mod
+  public :: tReg
   public :: tMf6_sol
   public :: tExchange
   public :: i1b, i4b, i8b, r4b, r8b
@@ -236,26 +262,42 @@ module mf6test_module
           allocate(this%raw(n)%dat)
           dat => this%raw(n)%dat
           dat%s = words(2)
+          dat%file_type = i_undefined
           !
           !set absolute paths
           call get_abs_path(dat%s)
           !
           ! check for supported file types
-          s = change_case(words(2), 'l')
-          i = index(s, '.idf', back=.true.)
-          if (i > 0) then
-            dat%file_type = i_idf
-            allocate(dat%idf)
+          if (nw >= 3) then
+            s = change_case(words(3), 'l')
+            if (s == 'ehdr') then
+              dat%file_type = i_ehdr
+              !allocate(dat%ehdr)
+              !call dat%ehdr%ehdr_get_val_init(dat%s)
+            end if
           end if
           !
-          ! allocate and read header
-          select case(dat%file_type)
-          case(i_idf)
-            allocate(dat%idf)
-            if (.not.idfread(dat%idf, dat%s, 0)) then
-              call errmsg('Could not read '//trim(dat%s))
-            end if 
-          end select
+          if (nw > 3) then
+            s = change_case(words(4), 'u')
+            if (trim(s) == '*') then
+              call logmsg('**** Multiplication factor found **** ')
+              read(words(5),*) dat%r8mult
+            end if
+            if (trim(s) == '+') then
+              call logmsg('**** Addition factor found **** ')
+              read(words(5),*) dat%r8add
+            end if
+            if (nw > 5) then
+              s = change_case(words(6), 'u')
+              if (trim(s) == '*') then
+                read(words(7),*) dat%r8mult
+              end if
+              if (trim(s) == '+') then
+                read(words(7),*) dat%r8add
+              end if
+            end if
+          end if
+          !
         end if
       end if
     end do
@@ -281,6 +323,30 @@ module mf6test_module
     return
   end subroutine mf6_raw_init
 
+  subroutine mf6_raw_init_file(this)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+!
+    ! -- dummy
+    class(tRawDat) :: this
+    ! -- local
+    type(tData), pointer :: dat
+    integer(I4B) :: i
+! ------------------------------------------------------------------------------  
+    do i = 1, this%nraw
+      dat => this%raw(i)%dat
+      if (dat%file_type == i_ehdr) then
+        allocate(dat%ehdr)
+        call dat%ehdr%ehdr_get_val_init(dat%s)
+      end if
+    end do
+    !
+    return
+  end subroutine mf6_raw_init_file
+  !
   function mf6_raw_get_index(this, key, ilay, iper) result(ind)
 ! ******************************************************************************
 ! ******************************************************************************
@@ -469,7 +535,7 @@ module mf6test_module
     ! -- local
     character(len=mxslen) :: s
     integer(I4B) :: ios
-    integer(I4B) :: jlay, jper
+    integer(I4B) :: jlay, jper, ival
 ! ------------------------------------------------------------------------------
     jlay = 0
     jper = 0
@@ -492,6 +558,80 @@ module mf6test_module
     !
     return
   end function mf6_raw_get_name_r8b
+  
+  subroutine mf6_mod_clean_regions(this)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+!
+    ! -- dummy
+    class(tMf6_mod) :: this
+    ! -- local
+    type(tReg), pointer :: reg
+    integer(i4b) :: ireg
+! ------------------------------------------------------------------------------
+    !
+    if (.not.associated(this%nreg)) return
+    !
+    do ireg = 1, this%nreg
+      reg => this%reg(ireg)
+      if (associated(reg%bb))          deallocate(reg%bb)
+      if (associated(reg%itile))       deallocate(reg%itile)
+      if (associated(reg%layer_nodes)) deallocate(reg%layer_nodes)
+      if (associated(reg%nodmap))     deallocate(reg%nodmap)
+      if (associated(reg%bndmap))     deallocate(reg%bndmap)
+    end do
+    !
+    deallocate(this%nreg); this%nreg => null()
+    deallocate(this%reg);  this%reg  => null()
+    !
+    return
+  end subroutine mf6_mod_clean_regions
+  
+  function mf6_mod_count_i1a(this, i1a) result(cnt)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+!
+    ! -- dummy
+    class(tMf6_mod) :: this
+    integer(i1b), dimension(:), intent(in) :: i1a
+    integer(i4b), dimension(gnlay) :: cnt
+    ! -- local
+    type(tReg), pointer :: reg
+    type(tBb), pointer :: bb => null()
+    integer(i4b) :: ireg, il, ir, ic, n
+! ------------------------------------------------------------------------------
+    !
+    cnt = 0
+    !
+    if (.not.associated(this%nreg)) return
+    !
+    do ireg = 1, this%nreg
+      reg => this%reg(ireg)
+      bb => reg%bb
+      do il = 1, gnlay
+        do ir = 1, bb%nrow
+          do ic = 1, bb%ncol
+            n = abs(reg%nodmap(ic,ir,il))
+            if (n > 0) then
+              if (i1a(n) == 1) then
+                cnt(il) = cnt(il) + 1
+              end if
+            end if
+          end do
+        end do
+      end do
+    end do
+    !
+    call logmsg('#cells assigned to layers: '//ta(cnt))
+    !
+    return
+  end function mf6_mod_count_i1a
   
   subroutine mf6_mod_get_model_name(this, i, modelname)
 ! ******************************************************************************
@@ -523,7 +663,7 @@ module mf6test_module
     ! -- local
     real(r8b), parameter :: thkmin = 0.1d0
     type(tDisu), pointer :: disu => null()
-    integer(i4b) :: iact, il, ir, ic
+    integer(i4b) :: iact, il, ir, ic, i, n, nja
     integer(i4b), dimension(ns) :: ihc
     integer(i4b), dimension(ns) :: st
     !        p t n w e s b
@@ -567,7 +707,7 @@ module mf6test_module
         disu%iac(n) = 0
       end do
       disu%nja = 0
-      s = 0; cl12 = DZERO
+      st = 0; cl12 = DZERO
       do il = 1, gnlay
         topval = raw%getr8('top',il)
         botval = raw%getr8('bot',il)
@@ -1090,7 +1230,7 @@ module mf6test_module
     return
   end subroutine mf6_mod_write_list_3
 
-  subroutine mf6_mod_write(this, pir, pic, pnr, pnc)
+  subroutine mf6_mod_write(this)
 ! ******************************************************************************
 ! ******************************************************************************
 !
@@ -1099,10 +1239,6 @@ module mf6test_module
 !
     ! -- dummy
     class(tMf6_mod) :: this
-    integer(i4b), intent(in) :: pir
-    integer(i4b), intent(in) :: pic
-    integer(i4b), intent(in) :: pnr
-    integer(i4b), intent(in) :: pnc
     !
     ! -- local
     logical, parameter :: lbin    = .true.
@@ -1127,14 +1263,15 @@ module mf6test_module
     !
     ! set the defaults
     pckact = 1
-    
+    pckact(ioc)  = raw%geti('act_oc',idef=0)
     pckact(isto) = raw%geti('act_sto',idef=0)
     pckact(ichd) = raw%geti('act_chd',idef=0)
     pckact(iriv) = raw%geti('act_riv',idef=0)
     pckact(idrn) = raw%geti('act_drn',idef=0)
     pckact(ighb) = raw%geti('act_ghb',idef=0)
-    pckact(ichd) = raw%geti('act_rch',idef=0)
+    pckact(irch) = raw%geti('act_rch',idef=0)
     pckact(iwel) = raw%geti('act_wel',idef=0)
+    
     !
     call this%write_disu(lbin, lbinpos)
     call this%write_ic(lbin, lbinpos)
@@ -1171,7 +1308,31 @@ module mf6test_module
     ! -- dummy
     class(tMf6_mod) :: this
     ! -- local
+    character(len=mxslen) :: f, mn
+    integer(i4b) :: iu, ipck, jpck
 ! ------------------------------------------------------------------------------
+    !
+    mn = this%modelname
+    f = trim(this%rootdir)//trim(mn)//'.nam'
+    call open_file(f, iu, 'w')
+    write(iu,'(   a)') 'BEGIN OPTIONS'
+    f = trim(resultslstdir)//'\'//trim(this%modelname)//'.lst'
+    call swap_slash(f)
+    write(iu,'(2x,a)') 'LIST '//trim(f)
+    if (raw%geti('newton',idef=0) == 1) then
+      write(iu,'(2x,a)') 'NEWTON UNDER_RELAXATION'
+    end if
+    write(iu,'(   a)') 'END OPTIONS'
+    write(iu,'(a)')
+    write(iu,'(   a)') 'BEGIN PACKAGES'
+    do ipck = 3, npck
+      if (pckact(ipck) == 0) cycle
+      f = trim(this%rootdir)//trim(mn)//'.'//trim(pck(ipck))
+      call swap_slash(f)
+      write(iu,'(2x,a)') trim(change_case(pck(ipck),'u'))//'6 '//trim(f)
+    end do
+    write(iu,'(   a)') 'END PACKAGES'
+    close(iu)
     !
     return
   end subroutine mf6_mod_write_nam
@@ -1190,7 +1351,7 @@ module mf6test_module
     ! -- local
     type(tDisu), pointer :: disu
     character(len=mxslen) :: p, pb, f
-    integer(i4b) :: il, ir, ic, n
+    integer(i4b) :: il, ir, ic, n, iu
     real(r8b) :: topval, botval
 ! ------------------------------------------------------------------------------
     !
@@ -1320,7 +1481,27 @@ module mf6test_module
     ! -- dummy
     class(tMf6_mod) :: this
     ! -- local
+    character(len=mxslen) :: p, f
+    integer(i4b) :: iu, iper
 ! ------------------------------------------------------------------------------
+    if (pckact(ioc) == 0) return
+    !
+    p = trim(this%rootdir)//trim(this%modelname)
+    !
+    f = trim(p)//'.oc'
+    call open_file(f, iu, 'w')
+    write(iu,'(   a)') 'BEGIN OPTIONS'
+    f = trim(resultsbindir)//'\'//trim(this%modelname)//'.'//trim(ctim)//'.hds'
+    call swap_slash(f)
+    write(iu,'(2x,a)') 'HEAD FILEOUT '//trim(f)
+    write(iu,'(   a)') 'END OPTIONS'
+    write(iu,'(a)')
+    do iper = 1, raw%nper
+      write(iu,'(   a)') 'BEGIN PERIOD '//ta((/iper/))
+      write(iu,'(2x,a)') 'SAVE HEAD LAST'
+      write(iu,'(   a)') 'END PERIOD'
+    end do
+    close(iu)
     !
     return
   end subroutine mf6_mod_write_oc
@@ -1337,7 +1518,9 @@ module mf6test_module
     logical, intent(in) :: lbin
     logical, intent(in) :: lbinpos
     ! -- local
+    logical :: lconst
     character(len=mxslen) :: p, pb, f
+    integer(i4b) :: ilay, iu, icelltype
 ! ------------------------------------------------------------------------------
     if (pckact(inpf) == 0) return
     !
@@ -1360,31 +1543,25 @@ module mf6test_module
     write(iu,'(2x,a)') 'ICELLTYPE'
     icelltype = raw%geti('icelltype',idef=0)
     write(iu,'(4x,a)') 'CONSTANT '//ta((/icelltype/))
+    !
     write(iu,'(2x,a)') 'K'
-    
-    
-    call this%get_array(i_k, 1, 0, 1, i1wrk, r8wrk) !i_k_l1
-    if (gnlay == 2) call this%get_array(i_k, 2, 0, 2, i1wrk, r8wrk) !i_k_l2
-    
-    
-    
+    do ilay = 1, gnlay
+      call this%get_array('k', ilay, 0, ilay, i1wrk, r8wrk)
+    end do
     f = trim(pb)//'.npf.k'; call this%write_array(iu, 4, f, r8wrk, lbin, lbinpos)
     call clear_wrk()
+    !
     write(iu,'(2x,a)') 'K33'
-    
-    
     if (gnlay > 1) then
-      
-      call this%get_array(i_k33, 1, 0, 1, i1wrk, r8wrk) !i_k33_l1
-      call this%get_array(i_k33, 2, 0, 2, i1wrk, r8wrk) !i_k33_l2
-      
-      
-      
+      do ilay = 1, gnlay
+        call this%get_array('k33', ilay, 0, ilay, i1wrk, r8wrk)
+      end do
       f = trim(pb)//'.npf.k33'; call this%write_array(iu, 4, f, r8wrk, lbin, lbinpos)
+      call clear_wrk()
     else
       write(iu,'(4x,a)') 'CONSTANT 0.1'
     end if
-    call clear_wrk()
+    !
     write(iu,'(   a)') 'END GRIDDATA'
     close(iu)
     !
@@ -1426,9 +1603,9 @@ module mf6test_module
     ! -- local
 ! ------------------------------------------------------------------------------
     !
-    if (pckact(idrn) == 0) return
+    if (pckact(ichd) == 0) return
     !
-    call errmsg('DRN package not yet supported.')
+    call errmsg('CHD package not yet supported.')
     !
     return
   end subroutine mf6_mod_write_chd
@@ -1466,11 +1643,114 @@ module mf6test_module
     logical, intent(in) :: lbin
     logical, intent(in) :: lbinpos
     ! -- local
+    character(len=mxslen), dimension(:), allocatable :: cwk
+    character(len=mxslen) :: p, pb, f
+    integer(i4b) :: i, n, iu, nbound, maxbound, iper, jper, nper, nperspu, ilay
+    integer(i4b), dimension(gnlay) :: nbound_lay
+    logical, dimension(:), allocatable :: lact
 ! ------------------------------------------------------------------------------
     !
     if (pckact(idrn) == 0) return
     !
-    call errmsg('DRN package not yet supported.')
+    call clear_wrk()
+    !
+    p = trim(this%rootdir)//trim(this%modelname)
+    if (lbin) then
+      pb =  trim(this%bindir)//trim(this%modelname)
+    else
+      pb = p
+    end if
+    !
+    ! write all binary files and store the file strings
+    nper = raw%nper
+    allocate(cwk(nper), lact(nper))
+    maxbound = 0
+    do iper = 1, nper
+      do ilay = 1, gnlay
+        call this%get_array('drn_stage', ilay, iper, ilay, i1wrk, r8wrk, ib_in=2) !i_drn_elev_l1
+        call this%get_array('drn_cond', ilay, iper, ilay, i1wrk, r8wrk2, ib_in=2)
+      end do
+      !
+      ! check
+      do i = 1, size(i1wrk)
+        if (r8wrk(i) < -1000D0) then
+          call errmsg("Invalid range for drain.")
+        end if
+      end do
+      !
+      ! filter for zero conductance
+      n = 0
+      do i = 1, size(i1wrk)
+        if (r8wrk2(i) == DZERO) then
+          if (i1wrk(i) == 1) n = n + 1
+          i1wrk(i) = 0
+        end if
+        if (r8wrk2(i) < DZERO) then
+          call errmsg("Negative drain conductance.")
+        end if
+      end do
+      if (n > 0) then
+        call logmsg('Removed '//ta((/n/))//' drains with zero conductance.')
+      end if
+      !
+      nbound_lay = this%count_i1a(i1wrk); nbound = sum(nbound_lay)
+      maxbound = max(nbound,maxbound)
+      if (nbound == 0) then
+        lact(iper) = .false.
+        call logmsg('No drains found.')
+      else
+        lact(iper) = .true.
+        f = trim(pb)//'.drn.sp'//ta((/iper/),'(i3.3)')
+        call this%write_list(iu, 4, f, i1wrk, r8wrk, r8wrk2, lbin, lbinpos, cwk(iper))
+      end if
+      call clear_wrk()
+    end do
+    !
+    if (maxbound == 0) then
+      call logmsg('No drains found.')
+      pckact(idrn) = 0
+      return
+    end if
+    
+    f = trim(p)//'.drn'
+    call open_file(f, iu, 'w')
+    write(iu,'(   a)') 'BEGIN OPTIONS'
+    write(iu,'(   a)') 'END OPTIONS'
+    write(iu,'(a)')
+    write(iu,'(   a)') 'BEGIN DIMENSIONS'
+    write(iu,'(2x,a)') 'MAXBOUND '//ta((/maxbound/))
+    write(iu,'(   a)') 'END DIMENSIONS'
+    write(iu,'(a)')
+    do iper = 1, nper
+      write(iu,'(   a)') 'BEGIN PERIOD '//ta((/iper/))
+      if (lact(iper)) write(iu,'(a)') trim(cwk(iper))
+      write(iu,'(   a)') 'END PERIOD'
+    end do
+    close(iu)
+    !
+    if (ltransient) then
+      f = trim(p)//'.drn'
+      call open_file(f, iu, 'w')
+      write(iu,'(   a)') 'BEGIN OPTIONS'
+      write(iu,'(   a)') 'END OPTIONS'
+      write(iu,'(a)')
+      write(iu,'(   a)') 'BEGIN DIMENSIONS'
+      write(iu,'(2x,a)') 'MAXBOUND '//ta((/maxbound/))
+      write(iu,'(   a)') 'END DIMENSIONS'
+      write(iu,'(a)')
+      nperspu = raw%geti('nyear_spinup')*12
+      do iper = 1, nper
+        write(iu,'(   a)') 'BEGIN PERIOD '//ta((/iper/))
+        jper = mod(iper, nperspu)
+        if (jper == 0) jper = nperspu
+        if (lact(jper)) write(iu,'(a)') trim(cwk(jper))
+        write(iu,'(   a)') 'END PERIOD'
+      end do
+      close(iu)
+    end if
+    !
+    deallocate(cwk, lact)
+    call clear_wrk()
     !
     return
   end subroutine mf6_mod_write_drn
@@ -1508,11 +1788,107 @@ module mf6test_module
     logical, intent(in) :: lbin
     logical, intent(in) :: lbinpos
     ! -- local
+    character(len=mxslen), dimension(:), allocatable :: cwk
+    character(len=mxslen) :: p, pb, f
+    integer(i4b) :: iu, i, n, nbound, maxbound, iper, jper, nper, nperspu
+    integer(i4b), dimension(gnlay) :: nbound_lay
+    logical, dimension(:), allocatable :: lact
 ! ------------------------------------------------------------------------------
     !
     if (pckact(irch) == 0) return
     !
-    call errmsg('RCH package not yet supported.')
+    call clear_wrk()
+    !
+    p = trim(this%rootdir)//trim(this%modelname)
+    if (lbin) then
+      pb =  trim(this%bindir)//trim(this%modelname)
+    else
+      pb = p
+    end if
+    !
+    ! write all binary files and store the file strings
+    nper = raw%nper
+    allocate(cwk(nper), lact(nper))
+    maxbound = 0
+    !
+    do iper = 1, nper
+      call this%get_array('recharge', 0, iper, 1, i1wrk, r8wrk, ib_in=2, toponly_in=.true.)
+      !
+      ! check and filter for zero recharge
+      n = 0
+      do i = 1, size(i1wrk)
+        if (r8wrk(i) == DZERO) then
+          if (i1wrk(i) == 1) n = n + 1
+          i1wrk(i) = 0
+        end if
+        if (r8wrk(i) < DZERO) then
+          call logmsg('Negative recharge found.')
+        end if
+      end do
+      if (n > 0) then
+        call logmsg('Removed '//ta((/n/))//' cells with zero recharge.')
+      end if
+      !
+      nbound_lay = this%count_i1a(i1wrk); nbound = sum(nbound_lay)
+      maxbound = max(nbound,maxbound)
+      if (nbound == 0) then
+        lact(iper) = .false.
+        call logmsg('No recharge found.')
+      else
+        lact(iper) = .true.
+        f = trim(pb)//'.rch.sp'//ta((/iper/),'(i3.3)')
+        call this%write_list(iu, 2, f, i1wrk, r8wrk, lbin, lbinpos, cwk(iper))
+      end if
+      call clear_wrk()
+    end do
+    !
+    if (maxbound == 0) then
+      call logmsg('No recharge found.')
+      pckact(irch) = 0
+      return
+    end if
+    !
+    f = trim(p)//'.rch'
+    call open_file(f, iu, 'w')
+    write(iu,'(   a)') 'BEGIN OPTIONS'
+    write(iu,'(   a)') 'END OPTIONS'
+    write(iu,'(a)')
+    write(iu,'(   a)') 'BEGIN DIMENSIONS'
+    write(iu,'(2x,a)') 'MAXBOUND '//ta((/maxbound/))
+    write(iu,'(   a)') 'END DIMENSIONS'
+    write(iu,'(a)')
+    do iper = 1, nper
+      write(iu,'(   a)') 'BEGIN PERIOD '//ta((/iper/))
+      if (lact(iper)) write(iu,'(a)') trim(cwk(iper))
+      write(iu,'(   a)') 'END PERIOD'
+    end do
+    close(iu)
+    !
+    if (ltransient) then
+      f = trim(p)//'.rch'
+      call open_file(f, iu, 'w')
+      write(iu,'(   a)') 'BEGIN OPTIONS'
+      write(iu,'(   a)') 'END OPTIONS'
+      write(iu,'(a)')
+      write(iu,'(   a)') 'BEGIN DIMENSIONS'
+      write(iu,'(2x,a)') 'MAXBOUND '//ta((/maxbound/))
+      write(iu,'(   a)') 'END DIMENSIONS'
+      write(iu,'(a)')
+      nperspu = raw%geti('nyear_spinup')*12
+      do iper = 1, nper
+        write(iu,'(   a)') 'BEGIN PERIOD '//ta((/iper/))
+        !jper = mod(iper,nperspu)
+        !if (jper == 0) jper = nperspu
+        jper = mod(iper,12)
+        if (jper == 0) jper = 1
+        if (lact(jper)) write(iu,'(a)') trim(cwk(jper))
+        write(iu,'(   a)') 'END PERIOD'
+      end do
+      close(iu)
+    end if
+    !
+    deallocate(cwk, lact)
+    call clear_wrk()
     !
     return
   end subroutine mf6_mod_write_rch
@@ -1668,6 +2044,7 @@ module mf6test_module
     call this%write_tdis()
     call this%write_ims()
     call this%write_mfsim()
+    call this%write_post_map()
     !
     return
   end subroutine mf6_sol_write
@@ -1935,6 +2312,31 @@ module mf6test_module
     return
   end subroutine mf6_sol_write_mfsim
 ! 
+  subroutine mf6_sol_write_post_map(this)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+!
+    ! -- dummy
+    class(tMf6_sol) :: this 
+    ! -- local
+    character(len=mxslen) :: d, f
+    integer(i4b) :: i, iu
+! ------------------------------------------------------------------------------
+    !
+    d = '..\post_mappings\'; call create_dir(d, .true.)
+    f = trim(d)//trim(this%solname)//'.modmap.bin'; call swap_slash(f)
+    !
+    call open_file(f, iu, 'w', .true.)
+    write(iu) this%nmod
+    write(iu)(this%mod_id(i),i=1, this%nmod)
+    close(iu)
+    !
+    return
+  end subroutine mf6_sol_write_post_map
+!
   subroutine mf6_sol_write_tdis(this)
 ! ******************************************************************************
 ! ******************************************************************************
@@ -2135,10 +2537,10 @@ module mf6test_module
     !
     ! overwrite the defaults
     do j = 1, nnlvar
-      c%nlvar(2,j) = raw%getc(trim(c%nlvar(1,j)),cdef=trim(c%nlvar(2,j)))
+      c%nlvar(2,j) = raw%getc(trim(change_case(c%nlvar(1,j),'l')),cdef=trim(c%nlvar(2,j)))
     end do
     do j = 1, nlvar
-      c%lvar(2,j) = raw%getc(trim(c%lvar(1,j)),cdef=trim(c%lvar(2,j)))
+      c%lvar(2,j) = raw%getc(trim(change_case(c%lvar(1,j),'l')),cdef=trim(c%lvar(2,j)))
     end do
     rclose_option = raw%getc('rclose_option',cdef='')
     if (len_trim(rclose_option) > 0) then
@@ -2170,6 +2572,239 @@ module mf6test_module
     return
   end subroutine mf6_sol_write_ims
 
-  
-  
+  subroutine mf6_mod_get_array_r8(this, key, ilay_dat, iper_dat, ilay_tgt, &
+    arrflg, arr, ib_in, toponly_in)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+!
+    ! -- dummy
+    class(tMf6_mod) :: this
+    character(len=*), intent(in) :: key
+    integer(i4b), intent(in) :: ilay_dat
+    integer(i4b), intent(in) :: iper_dat
+    integer(i4b), intent(in) :: ilay_tgt
+    integer(i1b), dimension(:), pointer, intent(inout) :: arrflg
+    real(r8b), dimension(:), pointer, intent(inout) :: arr
+    integer(i4b), intent(in), optional :: ib_in
+    logical, intent(in), optional :: toponly_in
+    ! -- local
+    type(tEhdr), pointer :: ehdr
+    real(r4b), parameter :: r4nodata = -12345.
+    real(r8b), parameter :: r8nodata = -12345.d0
+    type(tReg), pointer :: reg
+    type(tData), pointer :: dat => null()
+    integer(i4b) :: n, nt, i, ireg, ir, ic, jr, jc, ib, itile, ilay, nlay
+    integer(i4b) :: arrsiz
+    real(r4b) :: r4val
+    real(r8b) :: r8val
+    logical :: lfirst, ltile, toponly, found, ldefault
+! ------------------------------------------------------------------------------
+    lfirst = .true.
+    ltile = .false.
+    ldefault = .false.
+    !
+    if (present(ib_in)) then
+      ib = ib_in
+    else
+      ib = 0
+    end if
+    !
+    if (present(toponly_in)) then
+      toponly = toponly_in
+    else
+      toponly = .false.
+    end if
+    !
+    i = raw%mf6_raw_get_index(key, ilay_dat, iper_dat)
+    if (i <= 0) then
+      call logmsg('Warning: array not read for '//trim(key)// &
+        ' layer '//ta((/ilay_dat/))//' kper '//ta((/iper_dat/)))
+      return
+    end if
+    dat => raw%raw(i)%dat
+    !
+    n = sum(this%layer_nodes)
+    if (.not.associated(arr)) then
+      allocate(arr(n))
+      do i = 1, size(arr)
+        arr(i) = DZERO
+      end do
+    end if
+    if (.not.associated(arrflg)) then
+      allocate(arrflg(n))
+      do i = 1, size(arrflg)
+        arrflg(i) = 0
+      end do
+    end if
+    !
+    if (size(arrflg) /= size(arr)) then
+      call errmsg('mf6_mod_get_array_r8: program error 1')
+    end if
+    arrsiz = size(arrflg)
+    
+    select case(dat%file_type)
+      case(i_ehdr)
+        ehdr => dat%ehdr
+    end select
+    
+    do ireg = 1, this%nreg
+      reg => this%reg(ireg)
+      nlay = size(reg%nodmap,3)
+      do ir = reg%bb%ir0, reg%bb%ir1
+        do ic = reg%bb%ic0, reg%bb%ic1
+          jr = ir - reg%bb%ir0 + 1; jc = ic - reg%bb%ic0 + 1
+          n = reg%nodmap(jc,jr,ilay_tgt)
+          !select case(ib)
+          !  case(0) ! all cells including sea cells
+          !    n = reg%nodmap(jc,jr,ilay_tgt)
+          !    n = abs(n)
+          !  case(1) ! sea cells only
+          !    n = reg%nodmap(jc,jr,ilay_tgt)
+          !    if (n < 0) then
+          !      n = abs(n)
+          !    else
+          !      n = 0
+          !    end if
+          !  case(2) ! all cells excluding sea cells
+          !    n = reg%nodmap(jc,jr,ilay_tgt)
+          !    if (n < 0) then
+          !      n = 0
+          !    end if
+          !  case(3) ! internal M1 interface cells only (skip sea)
+          !    n = reg%bndmap(jc,jr,ilay_tgt)
+          !    if (n < 0) then
+          !      n = 0
+          !    end if
+          !  case default
+          !    call errmsg('mf6_mod_get_array_r8: program error 1')
+          !end select
+          !
+          ! only select active cells seen from top
+          if (toponly.and.(n /= 0)) then
+            found = .false.
+            do ilay = 1, nlay
+              nt = reg%nodmap(jc,jr,ilay)
+              if (nt /= 0) then 
+                found = .true.
+                exit
+              end if
+            end do
+            if (found .and. (nt /= n)) then
+              n = 0
+            end if
+          end if
+          !
+          if (n < 0) then 
+            call errmsg('mf6_mod_get_array_r8: program error 2')
+          end if
+          if (n /= 0) then
+            select case(dat%file_type)
+            case(i_ehdr)
+              r8val = ehdr%ehdr_get_val_r8(ic, ir, gcs)
+            case(i_undefined)
+              read(dat%s,*) r8val
+            end select
+            if (n /= 0) then
+              if ((n < 1) .or. (n > arrsiz)) then
+                call errmsg('mf6_mod_get_array_r8: program error 3 '//ta((/ib/))//' '//&
+                  ta((/n/))//' '//ta((/arrsiz/)))
+              end if
+              arr(n) = r8val * dat%r8mult + dat%r8add
+              arrflg(n) = 1
+            end if
+          end if
+        end do
+      end do
+    end do
+    !
+    !if (.not.ltile) then
+    !  call logmsg('WARNING, for some points the tile was not found!')
+    !end if
+    !if (ldefault) then
+    !  call logmsg('WARNING, for some points default values were taken!')
+    !end if
+    !
+    return
+  end subroutine mf6_mod_get_array_r8
+!
+  subroutine mf6_mod_write_post_map(this)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+!
+    ! -- dummy
+    class(tMf6_mod) :: this
+    ! -- local
+    character(len=mxslen) :: d
+    type(tReg), pointer :: reg => null()
+    type(tBb), pointer :: bb => null()
+    character(len=mxslen) :: f
+    integer(i4b) :: ireg, nodes, n, iu, il, ir, ic, nlay, gic, gir, gil, i, j 
+! ------------------------------------------------------------------------------
+    !
+    nodes = 0
+    do ireg = 1, this%nreg
+      reg => this%reg(ireg)
+      do il = 1, size(reg%layer_nodes)
+        nodes = nodes + reg%layer_nodes(il)
+      end do
+    end do
+    !
+    call clear_wrk()
+    allocate(i4wrk2d(3,nodes))
+    do i = 1, nodes
+      do j = 1, 3
+        i4wrk2d(j,i) = 0
+      end do
+    end do
+    !
+    do ireg = 1, this%nreg
+      reg => this%reg(ireg)
+      do il = 1, size(reg%layer_nodes)
+        bb => reg%bb
+        nlay = size(reg%nodmap,3)
+        do ir = 1, bb%nrow
+          do ic = 1, bb%ncol
+            n = reg%nodmap(ic,ir,il)
+            gil = il; gic = ic + bb%ic0 - 1; gir = ir + bb%ir0 - 1
+            if (n < 0) then
+              gil = -gil
+            end if
+            if (n /= 0) then
+              n = abs(n)
+              if (i4wrk2d(1,n) /= 0) then
+                call errmsg('mf6_mod_write_post_map: program error')
+              end if
+              i4wrk2d(1,n) = gil; i4wrk2d(2,n) = gir; i4wrk2d(3,n) = gic
+            end if
+          end do
+        end do
+      end do
+    end do
+    !
+    ! check
+    do i = 1, nodes
+      if (i4wrk2d(1,i) == 0) then
+        call errmsg('mf6_mod_write_post_map: program error')
+      end if
+    end do
+    !
+    d = '..\..\models\post_mappings\'
+    call create_dir(d, .true.)
+    f = trim(d)//trim(this%modelname)//'.nodmap.bin'
+    call swap_slash(f)
+    call open_file(f, iu, 'w', .true.)
+    write(iu) this%bb%ic0, this%bb%ic1, this%bb%ir0, this%bb%ir1
+    write(iu) nodes ! number of nodes
+    write(iu)((i4wrk2d(j,i),j=1,3),i=1,nodes)
+    close(iu)
+    !
+    return
+  end subroutine mf6_mod_write_post_map
+!
 end module

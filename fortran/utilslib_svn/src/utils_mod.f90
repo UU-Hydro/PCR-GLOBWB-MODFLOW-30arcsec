@@ -1,9 +1,28 @@
 module utilsmod
   use, intrinsic :: iso_fortran_env , only: error_unit, output_unit, &
-    i1b => int8, i2b => int16, i4b => int32, i8b => int64, r4b => real32, r8b => real64
+    i1b => int8, i2b => int16, i4b => int32, i8b => int64, &
+    r4b => real32, r8b => real64
 
   implicit none
 
+  integer(i4b), parameter :: i_i1 = 1
+  integer(i4b), parameter :: i_i2 = 2
+  integer(i4b), parameter :: i_i4 = 3
+  integer(i4b), parameter :: i_r4 = 4
+  integer(i4b), parameter :: i_r8 = 5
+  integer(i4b), parameter :: i_n = i_r8
+  !
+  type tNum
+    logical, dimension(i_n) :: flg
+    integer(i1b) :: i1v
+    integer(i2b) :: i2v
+    integer(i4b) :: i4v
+    real(r4b)    :: r4v
+    real(r8b)    :: r8v
+  contains
+    procedure :: read  => tNum_read
+  end type tNum
+  
   integer(i4b), dimension(:,:), allocatable :: i4wk2d
 
 #ifdef LINUX
@@ -216,6 +235,47 @@ module utilsmod
   save
 
   contains
+    
+  subroutine tNum_read(this,s)
+! ******************************************************************************  
+    ! -- arguments
+    class(tNum) :: this
+    character(len=*), intent(in) :: s
+    !
+    integer(i1b) :: i1v
+    integer(i2b) :: i2v
+    integer(i4b) :: i4v
+    real(r4b) :: r4v
+    real(r8b) :: r8v
+    !
+    integer(i4b) :: ios
+! ------------------------------------------------------------------------------
+    !
+    this%flg = .false.
+    !
+    read(s,*,iostat=ios) i1v
+    if (ios == 0) then
+      this%i1v = i1v; this%flg(i_i1) = .true.
+    end if
+    read(s,*,iostat=ios) i2v
+    if (ios == 0) then
+      this%i2v = i2v; this%flg(i_i2) = .true.
+    end if
+    read(s,*,iostat=ios) i4v
+    if (ios == 0) then
+      this%i4v = i4v; this%flg(i_i4) = .true.
+    end if
+    read(s,*,iostat=ios) r4v
+    if (ios == 0) then
+      this%r4v = r4v; this%flg(i_r4) = .true.
+    end if
+    read(s,*,iostat=ios) r8v
+    if (ios == 0) then
+      this%r8v = r8v; this%flg(i_r8) = .true.
+    end if
+    !
+    return
+  end subroutine tNum_read
   
   subroutine timeseries_clean(this)
 ! ******************************************************************************  
@@ -1455,10 +1515,10 @@ module utilsmod
     !
     inquire(file=f, exist=lex)
     if (lex) then
-      inquire(file=f, opened=lop)
+      inquire(file=f, opened=lop, number=iu)
       if (lop) then
-        call errmsg('File '//trim(f)//' is already opened.')
-        close(iu)
+        call logmsg('Warning: file '//trim(f)//' is already opened.')
+        return
       end if
     end if
     !
