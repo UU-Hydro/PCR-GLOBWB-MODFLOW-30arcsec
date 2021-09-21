@@ -24,7 +24,8 @@ program mf6test
   type(tReg), pointer :: reg => null()
   !
   ! work arrays
-  real(r4b), dimension(:,:), allocatable :: r4wk2d
+  real(r4b), dimension(:), allocatable :: r4wk1d
+  real(r4b), dimension(:,:), allocatable :: r4wk2d, r4wk2d2
   real(r8b), dimension(:), allocatable :: r8wk1d
   !
   character(len=mxslen) :: out_dir, f, fp, d, s
@@ -32,9 +33,14 @@ program mf6test
   integer(i4b) :: iu, pir, pic, pjr, pjc, i, n1, n2, ist, iact, iopt, ios
   integer(i4b) :: il, jl, ir, ic, jr, jc, bnexp, bcsexp, bs, step
   integer(i4b) :: ic0, ic1, ic2, ir0, ir1, ir2
-  real(r4b) :: r4xll, r4yll, r4cs, r4nodata, drn_width, drn_cond
+  real(r4b) :: r4xll, r4yll, r4cs, r4nodata
   real(r8b) :: r8xll, r8yll
+  !
+  real(r4b) :: drn_width, drn_cond
   real(r4b) :: kmin, kmax, kmean, k2sigma, kmin_rnd, kmax_rnd
+  real(r4b) :: chd_head_w, chd_head_e, chd_head_n, chd_head_s
+  integer(i4b) :: nwel
+  real(r4b) :: qmin, qmax, qmean, q2sigma
   !
   ! mf6 header:
   character(len=16) :: text_in ! ulasav
@@ -59,7 +65,7 @@ program mf6test
   call raw%init(f)
   !
   nl = raw%geti('nlay')
-  gnc = 2**(n_rd-1); gnr = gnc; lnr = gnr/p_rd; lnc = lnr
+  gnc = p_rd*2**(n_rd-1); gnr = gnc; lnr = gnr/p_rd; lnc = lnr
   gcs = 2**csexp_rd; gnlay = nl
   lnodes = lnr*lnc*gnlay
   !
@@ -67,16 +73,15 @@ program mf6test
   bnexp = raw%geti('base_n_exp')
   bcsexp = raw%geti('base_cs_exp')
   !
-  ! create uniform drain grid
   select case(iopt)
-  case(1)
+  case(1) ! raster input
     if (n == 7) then
       call getarg(7, s); read(s,*) nbs_rd
       bs = 2**(nbs_rd-1) ! block = bs * bs
     else
       bs = 2**(n_rd-1) ! block = bs * bs
     end if
-    gnc = 2**(bnexp-1); gnr = gnc
+    !gnc = 2**(bnexp-1); gnr = gnc
     allocate(r4wk2d(gnc,gnr))
     r4xll = RZERO; r4yll = RZERO; r4nodata = RZERO; r4cs = real(2**bcsexp,r4b)
     do ir = 1, gnr
@@ -84,7 +89,8 @@ program mf6test
         r4wk2d(ic,ir) = r4nodata
       end do
     end do
-    drn_width = 2**0
+    !----- DRN -----
+    drn_width = 8**0
     do ir = bs/2, gnr-bs/2, bs
       do ic = 1, gnc
         r4wk2d(ic,ir)   = r4wk2d(ic,ir)   + r4cs*drn_width/2.
@@ -107,12 +113,15 @@ program mf6test
       end do
     end do
     f = 'drn_cond'
-    call writeflt(f, r4wk2d, gnc, gnr, r4xll, r4yll, r4cs, r4nodata)
+    call writeflt(f, r4wk2d, gnc, gnr, r4xll, r4yll, r4cs, r4nodata, &
+      hdrKeys=(/'DLT_USCLTYPE SUMCDR','DLT_DSCLTYPE NOINTP'/))
     !
+    !----- K -----
     kmin = 5.  !  1 = fijn zand
     kmax = 30. ! 30 = grof zand
     k2sigma = (kmax-kmin)/2.; kmean = kmin + k2sigma
-    call random_seed(); call random_number(r4wk2d)
+    !call random_seed()
+    call random_number(r4wk2d)
     kmin_rnd = huge(kmin_rnd); kmax_rnd = -huge(kmax_rnd)
     do ir = 1, gnr
       do ic = 1, gnc
@@ -123,8 +132,50 @@ program mf6test
     end do
     call logmsg('Min/max k-values: '//ta((/kmin_rnd, kmax_rnd/)))
     f = 'k'
-    call writeflt(f, r4wk2d, gnc, gnr, r4xll, r4yll, r4cs, r4nodata)
-    !stop
+    call writeflt(f, r4wk2d, gnc, gnr, r4xll, r4yll, r4cs, r4nodata, &
+      hdrKeys=(/'DLT_USCLTYPE GEOM','DLT_DSCLTYPE NOINTP'/))
+    !
+    !----- CHD -----
+    r4nodata = -9999.
+    chd_head_w = 10.; chd_head_e = 0.; chd_head_n = r4nodata;  chd_head_s = r4nodata
+    do ir = 1, gnr
+      do ic = 1, gnc
+        r4wk2d(ic,ir) = r4nodata
+      end do
+    end do
+    do ir = 1, gnr
+      if (r4wk2d(  1,ir) == r4nodata) r4wk2d(  1,ir) = chd_head_w
+      if (r4wk2d(gnc,ir) == r4nodata) r4wk2d(gnc,ir) = chd_head_e
+    end do
+    do ic = 1, gnc
+      if (r4wk2d(ic,  1) == r4nodata) r4wk2d(ic,  1) = chd_head_n
+      if (r4wk2d(ic,gnr) == r4nodata) r4wk2d(ic,gnr) = chd_head_s
+    end do
+    f = 'chd_head'
+    call writeflt(f, r4wk2d, gnc, gnr, r4xll, r4yll, r4cs, r4nodata, &
+      hdrKeys=(/'DLT_USCLTYPE ARITH','DLT_DSCLTYPE NOINTP'/))
+    !
+    !----- WEL -----
+    nwel = 60000; qmin = 5000.; qmax = 5000.
+    q2sigma = (qmax-qmin)/2.; qmean = qmin + q2sigma
+    do ir = 1, gnr
+      do ic = 1, gnc
+        r4wk2d(ic,ir) = r4nodata
+      end do
+    end do
+    !
+    allocate(r4wk2d2(3,nwel)) ! x, y, q
+    !call random_seed()
+    call random_number(r4wk2d2)
+    do i = 1, nwel
+      ic = int(ceiling(gnc*r4wk2d2(1,i)))
+      ir = int(ceiling(gnr*r4wk2d2(2,i)))
+      r4wk2d(ic,ir) = -(qmean +q2sigma*2.*(r4wk2d2(3,i)-0.5))
+    end do
+    f = 'wel_q'
+    call writeflt(f, r4wk2d, gnc, gnr, r4xll, r4yll, r4cs, r4nodata, &
+      hdrKeys=(/'DLT_USCLTYPE SUMCDR','DLT_DSCLTYPE NOINTP'/))
+    stop
   case(2)
     if (n == 7) then
       call getarg(7, fp)
@@ -147,14 +198,17 @@ program mf6test
           read(unit=iu,iostat=ios)(r8wk1d(i),i=1,lnodes)
           n = 0
           do jl = 1, gnlay
-            if (jl /= il) cycle
-            do ir = 1, lnr
-              do ic = 1, lnc
-                jc = ic0 + ic - 1; jr = ir0 + ir - 1
-                n = n + 1
-                r4wk2d(jc,jr) = real(r8wk1d(n),r4b)
+            if (jl == il) then
+              do ir = 1, lnr
+                do ic = 1, lnc
+                  jc = ic0 + ic - 1; jr = ir0 + ir - 1
+                  n = n + 1
+                  r4wk2d(jc,jr) = real(r8wk1d(n),r4b)
+                end do
               end do
-            end do
+            else
+              n = n + lnr*lnc
+            end if
           end do
           close(iu)
         end do

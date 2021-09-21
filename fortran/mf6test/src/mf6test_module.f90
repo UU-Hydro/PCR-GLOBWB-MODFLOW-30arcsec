@@ -17,6 +17,7 @@ module mf6test_module
   character(len=mxslen), parameter :: resultslstdir = '..\..\models\run_output_lst'
   logical                          :: ltransient = .false.
   character(len=2)                 :: ctim = 'ss'
+  real(r8b), parameter :: r8nodata = -12345.d0
   
   integer(i4b), parameter :: inam  =  1
   integer(i4b), parameter :: itdis =  2
@@ -56,6 +57,7 @@ module mf6test_module
   type tData
     character(mxslen)     :: s = ''
     integer(i4b)          :: file_type = i_undefined
+    logical               :: readall = .false.
     type(tEhdr),  pointer :: ehdr     => null()
     real(r8b)             :: r8mult = DONE
     real(r8b)             :: r8add = DZERO
@@ -263,6 +265,7 @@ module mf6test_module
           dat => this%raw(n)%dat
           dat%s = words(2)
           dat%file_type = i_undefined
+          dat%readall = .false.
           !
           !set absolute paths
           call get_abs_path(dat%s)
@@ -270,10 +273,9 @@ module mf6test_module
           ! check for supported file types
           if (nw >= 3) then
             s = change_case(words(3), 'l')
-            if (s == 'ehdr') then
+            if (s(1:4) == 'ehdr') then
               dat%file_type = i_ehdr
-              !allocate(dat%ehdr)
-              !call dat%ehdr%ehdr_get_val_init(dat%s)
+              if (s == 'ehdr_readall') dat%readall = .true.
             end if
           end if
           !
@@ -333,14 +335,30 @@ module mf6test_module
     ! -- dummy
     class(tRawDat) :: this
     ! -- local
-    type(tData), pointer :: dat
-    integer(I4B) :: i
+    type(tData), pointer :: dat1, dat2
+    integer(I4B) :: i, j
+    logical :: lfound
 ! ------------------------------------------------------------------------------  
     do i = 1, this%nraw
-      dat => this%raw(i)%dat
-      if (dat%file_type == i_ehdr) then
-        allocate(dat%ehdr)
-        call dat%ehdr%ehdr_get_val_init(dat%s)
+      dat1 => this%raw(i)%dat
+      if (dat1%file_type == i_ehdr) then
+        allocate(dat1%ehdr)
+        lfound = .false.
+        do j = 1, this%nraw
+          if (i == j) cycle
+          dat2 => this%raw(j)%dat
+          if (dat2%file_type == i_ehdr) then
+            if (associated(dat2%ehdr)) then
+              if (dat1%s == dat2%s) then
+                lfound = .true.
+                dat1%ehdr => dat2%ehdr
+              end if
+            end if
+          end if
+        end do
+        if (.not.lfound) then
+          call dat1%ehdr%ehdr_get_val_init(dat1%s)
+        end if
       end if
     end do
     !
@@ -1356,6 +1374,7 @@ module mf6test_module
 ! ------------------------------------------------------------------------------
     !
     if (pckact(idisu) == 0) return
+    call logmsg('Processing for '//trim(pck(idisu))//'...')
     !
     call clear_wrk()
     !
@@ -1449,6 +1468,7 @@ module mf6test_module
 ! ------------------------------------------------------------------------------
     !
     if (pckact(iic) == 0) return
+    call logmsg('Processing for '//trim(pck(iic))//'...')
     !
     p = trim(this%rootdir)//trim(this%modelname)
     if (lbin) then
@@ -1485,6 +1505,7 @@ module mf6test_module
     integer(i4b) :: iu, iper
 ! ------------------------------------------------------------------------------
     if (pckact(ioc) == 0) return
+    call logmsg('Processing for '//trim(pck(ioc))//'...')
     !
     p = trim(this%rootdir)//trim(this%modelname)
     !
@@ -1523,6 +1544,7 @@ module mf6test_module
     integer(i4b) :: ilay, iu, icelltype
 ! ------------------------------------------------------------------------------
     if (pckact(inpf) == 0) return
+    call logmsg('Processing for '//trim(pck(inpf))//'...')
     !
     call clear_wrk()
     !
@@ -1546,6 +1568,7 @@ module mf6test_module
     !
     write(iu,'(2x,a)') 'K'
     do ilay = 1, gnlay
+      call logmsg('k layer '//ta((/ilay/))//'...')
       call this%get_array('k', ilay, 0, ilay, i1wrk, r8wrk)
     end do
     f = trim(pb)//'.npf.k'; call this%write_array(iu, 4, f, r8wrk, lbin, lbinpos)
@@ -1554,6 +1577,7 @@ module mf6test_module
     write(iu,'(2x,a)') 'K33'
     if (gnlay > 1) then
       do ilay = 1, gnlay
+        call logmsg('k33 layer '//ta((/ilay/))//'...')
         call this%get_array('k33', ilay, 0, ilay, i1wrk, r8wrk)
       end do
       f = trim(pb)//'.npf.k33'; call this%write_array(iu, 4, f, r8wrk, lbin, lbinpos)
@@ -1583,6 +1607,7 @@ module mf6test_module
 ! ------------------------------------------------------------------------------
     !
     if (pckact(isto) == 0) return
+    call logmsg('Processing for '//trim(pck(isto))//'...')
     !
     call errmsg('STO package not yet supported.')
     !
@@ -1601,11 +1626,92 @@ module mf6test_module
     logical, intent(in) :: lbin
     logical, intent(in) :: lbinpos
     ! -- local
+    character(len=mxslen), dimension(:), allocatable :: cwk
+    character(len=mxslen) :: p, pb, f
+    integer(i4b) :: i, n, iu, nbound, maxbound, iper, jper, nper, nperspu, ilay
+    integer(i4b), dimension(gnlay) :: nbound_lay
+    logical, dimension(:), allocatable :: lact
 ! ------------------------------------------------------------------------------
     !
     if (pckact(ichd) == 0) return
+    call logmsg('Processing for '//trim(pck(ichd))//'...')
     !
-    call errmsg('CHD package not yet supported.')
+    call clear_wrk()
+    !
+    p = trim(this%rootdir)//trim(this%modelname)
+    if (lbin) then
+      pb =  trim(this%bindir)//trim(this%modelname)
+    else
+      pb = p
+    end if
+    !
+    ! write all binary files and store the file strings
+    nper = raw%nper
+    allocate(cwk(nper), lact(nper))
+    maxbound = 0
+    do iper = 1, nper
+      do ilay = 1, gnlay
+        call this%get_array('chd_head', ilay, iper, ilay, i1wrk, r8wrk)
+      end do
+      !
+      nbound_lay = this%count_i1a(i1wrk); nbound = sum(nbound_lay)
+      maxbound = max(nbound,maxbound)
+      if (nbound == 0) then
+        lact(iper) = .false.
+        call logmsg('No drains found.')
+      else
+        lact(iper) = .true.
+        f = trim(pb)//'.chd.sp'//ta((/iper/),'(i3.3)')
+        call this%write_list(iu, 2, f, i1wrk, r8wrk, lbin, lbinpos, cwk(iper))
+      end if
+      call clear_wrk()
+    end do
+    !
+    if (maxbound == 0) then
+      call logmsg('No constant heads found.')
+      pckact(idrn) = 0
+      return
+    end if
+    
+    f = trim(p)//'.chd'
+    call open_file(f, iu, 'w')
+    write(iu,'(   a)') 'BEGIN OPTIONS'
+    write(iu,'(   a)') 'END OPTIONS'
+    write(iu,'(a)')
+    write(iu,'(   a)') 'BEGIN DIMENSIONS'
+    write(iu,'(2x,a)') 'MAXBOUND '//ta((/maxbound/))
+    write(iu,'(   a)') 'END DIMENSIONS'
+    write(iu,'(a)')
+    do iper = 1, nper
+      write(iu,'(   a)') 'BEGIN PERIOD '//ta((/iper/))
+      if (lact(iper)) write(iu,'(a)') trim(cwk(iper))
+      write(iu,'(   a)') 'END PERIOD'
+    end do
+    close(iu)
+    !
+    if (ltransient) then
+      f = trim(p)//'.chd'
+      call open_file(f, iu, 'w')
+      write(iu,'(   a)') 'BEGIN OPTIONS'
+      write(iu,'(   a)') 'END OPTIONS'
+      write(iu,'(a)')
+      write(iu,'(   a)') 'BEGIN DIMENSIONS'
+      write(iu,'(2x,a)') 'MAXBOUND '//ta((/maxbound/))
+      write(iu,'(   a)') 'END DIMENSIONS'
+      write(iu,'(a)')
+      nperspu = raw%geti('nyear_spinup')*12
+      do iper = 1, nper
+        write(iu,'(   a)') 'BEGIN PERIOD '//ta((/iper/))
+        jper = mod(iper, nperspu)
+        if (jper == 0) jper = nperspu
+        if (lact(jper)) write(iu,'(a)') trim(cwk(jper))
+        write(iu,'(   a)') 'END PERIOD'
+      end do
+      close(iu)
+    end if
+    !
+    deallocate(cwk, lact)
+    call clear_wrk()
     !
     return
   end subroutine mf6_mod_write_chd
@@ -1625,6 +1731,7 @@ module mf6test_module
 ! ------------------------------------------------------------------------------
     !
     if (pckact(iriv) == 0) return
+    call logmsg('Processing for '//trim(pck(iriv))//'...')
     !
     call errmsg('RIV package not yet supported.')
     !
@@ -1651,6 +1758,7 @@ module mf6test_module
 ! ------------------------------------------------------------------------------
     !
     if (pckact(idrn) == 0) return
+    call logmsg('Processing for '//trim(pck(idrn))//'...')
     !
     call clear_wrk()
     !
@@ -1681,11 +1789,11 @@ module mf6test_module
       ! filter for zero conductance
       n = 0
       do i = 1, size(i1wrk)
-        if (r8wrk2(i) == DZERO) then
+        if ((r8wrk2(i) == DZERO) .or. (r8wrk2(i) == r8nodata)) then
           if (i1wrk(i) == 1) n = n + 1
           i1wrk(i) = 0
         end if
-        if (r8wrk2(i) < DZERO) then
+        if ((i1wrk(i) == 1).and.(r8wrk2(i) < DZERO)) then
           call errmsg("Negative drain conductance.")
         end if
       end do
@@ -1770,6 +1878,7 @@ module mf6test_module
 ! ------------------------------------------------------------------------------
     !
     if (pckact(ighb) == 0) return
+    call logmsg('Processing for '//trim(pck(ighb))//'...')
     !
     call errmsg('GHB package not yet supported.')
     !
@@ -1796,6 +1905,7 @@ module mf6test_module
 ! ------------------------------------------------------------------------------
     !
     if (pckact(irch) == 0) return
+    call logmsg('Processing for '//trim(pck(irch))//'...')
     !
     call clear_wrk()
     !
@@ -1905,11 +2015,92 @@ module mf6test_module
     logical, intent(in) :: lbin
     logical, intent(in) :: lbinpos
     ! -- local
+    character(len=mxslen), dimension(:), allocatable :: cwk
+    character(len=mxslen) :: p, pb, f
+    integer(i4b) :: i, n, iu, nbound, maxbound, iper, jper, nper, nperspu, ilay
+    integer(i4b), dimension(gnlay) :: nbound_lay
+    logical, dimension(:), allocatable :: lact
 ! ------------------------------------------------------------------------------
     !
     if (pckact(iwel) == 0) return
+    call logmsg('Processing for '//trim(pck(iwel))//'...')
     !
-    call errmsg('WEL package not yet supported.')
+    call clear_wrk()
+    !
+    p = trim(this%rootdir)//trim(this%modelname)
+    if (lbin) then
+      pb =  trim(this%bindir)//trim(this%modelname)
+    else
+      pb = p
+    end if
+    !
+    ! write all binary files and store the file strings
+    nper = raw%nper
+    allocate(cwk(nper), lact(nper))
+    maxbound = 0
+    do iper = 1, nper
+      do ilay = 1, gnlay
+        call this%get_array('wel_q', ilay, iper, ilay, i1wrk, r8wrk)
+      end do
+      !
+      nbound_lay = this%count_i1a(i1wrk); nbound = sum(nbound_lay)
+      maxbound = max(nbound,maxbound)
+      if (nbound == 0) then
+        lact(iper) = .false.
+        call logmsg('No wells found.')
+      else
+        lact(iper) = .true.
+        f = trim(pb)//'.wel.sp'//ta((/iper/),'(i3.3)')
+        call this%write_list(iu, 2, f, i1wrk, r8wrk, lbin, lbinpos, cwk(iper))
+      end if
+      call clear_wrk()
+    end do
+    !
+    if (maxbound == 0) then
+      call logmsg('No wells found.')
+      pckact(iwel) = 0
+      return
+    end if
+    
+    f = trim(p)//'.wel'
+    call open_file(f, iu, 'w')
+    write(iu,'(   a)') 'BEGIN OPTIONS'
+    write(iu,'(   a)') 'END OPTIONS'
+    write(iu,'(a)')
+    write(iu,'(   a)') 'BEGIN DIMENSIONS'
+    write(iu,'(2x,a)') 'MAXBOUND '//ta((/maxbound/))
+    write(iu,'(   a)') 'END DIMENSIONS'
+    write(iu,'(a)')
+    do iper = 1, nper
+      write(iu,'(   a)') 'BEGIN PERIOD '//ta((/iper/))
+      if (lact(iper)) write(iu,'(a)') trim(cwk(iper))
+      write(iu,'(   a)') 'END PERIOD'
+    end do
+    close(iu)
+    !
+    if (ltransient) then
+      f = trim(p)//'.wel'
+      call open_file(f, iu, 'w')
+      write(iu,'(   a)') 'BEGIN OPTIONS'
+      write(iu,'(   a)') 'END OPTIONS'
+      write(iu,'(a)')
+      write(iu,'(   a)') 'BEGIN DIMENSIONS'
+      write(iu,'(2x,a)') 'MAXBOUND '//ta((/maxbound/))
+      write(iu,'(   a)') 'END DIMENSIONS'
+      write(iu,'(a)')
+      nperspu = raw%geti('nyear_spinup')*12
+      do iper = 1, nper
+        write(iu,'(   a)') 'BEGIN PERIOD '//ta((/iper/))
+        jper = mod(iper, nperspu)
+        if (jper == 0) jper = nperspu
+        if (lact(jper)) write(iu,'(a)') trim(cwk(jper))
+        write(iu,'(   a)') 'END PERIOD'
+      end do
+      close(iu)
+    end if
+    !
+    deallocate(cwk, lact)
+    call clear_wrk()
     !
     return
   end subroutine mf6_mod_write_wel
@@ -2592,15 +2783,13 @@ module mf6test_module
     logical, intent(in), optional :: toponly_in
     ! -- local
     type(tEhdr), pointer :: ehdr
-    real(r4b), parameter :: r4nodata = -12345.
-    real(r8b), parameter :: r8nodata = -12345.d0
     type(tReg), pointer :: reg
     type(tData), pointer :: dat => null()
     integer(i4b) :: n, nt, i, ireg, ir, ic, jr, jc, ib, itile, ilay, nlay
     integer(i4b) :: arrsiz
     real(r4b) :: r4val
     real(r8b) :: r8val
-    logical :: lfirst, ltile, toponly, found, ldefault
+    logical :: lfirst, ltile, toponly, found, ldefault, lmv
 ! ------------------------------------------------------------------------------
     lfirst = .true.
     ltile = .false.
@@ -2648,6 +2837,9 @@ module mf6test_module
     select case(dat%file_type)
       case(i_ehdr)
         ehdr => dat%ehdr
+        if (dat%readall) then
+          call ehdr%ehdr_read_full_grid(ehdr%fp)
+        end if
     end select
     
     do ireg = 1, this%nreg
@@ -2703,11 +2895,11 @@ module mf6test_module
           if (n /= 0) then
             select case(dat%file_type)
             case(i_ehdr)
-              r8val = ehdr%ehdr_get_val_r8(ic, ir, gcs)
+              r8val = ehdr%ehdr_get_val_r8(ic, ir, gcs, lmv)
             case(i_undefined)
               read(dat%s,*) r8val
             end select
-            if (n /= 0) then
+            if (n /= 0 .and. .not.lmv) then
               if ((n < 1) .or. (n > arrsiz)) then
                 call errmsg('mf6_mod_get_array_r8: program error 3 '//ta((/ib/))//' '//&
                   ta((/n/))//' '//ta((/arrsiz/)))
@@ -2715,11 +2907,21 @@ module mf6test_module
               arr(n) = r8val * dat%r8mult + dat%r8add
               arrflg(n) = 1
             end if
+            if (lmv) then
+              arr(n) = r8nodata
+              arrflg(n) = 0
+            end if
           end if
         end do
       end do
     end do
     !
+    select case(dat%file_type)
+      case(i_ehdr)
+        ehdr => dat%ehdr
+        !call ehdr%clean_x()
+    end select
+    
     !if (.not.ltile) then
     !  call logmsg('WARNING, for some points the tile was not found!')
     !end if
