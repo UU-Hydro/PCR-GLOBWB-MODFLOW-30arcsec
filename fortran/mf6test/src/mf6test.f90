@@ -83,7 +83,7 @@ program mf6test
     end if
     !gnc = 2**(bnexp-1); gnr = gnc
     allocate(r4wk2d(gnc,gnr))
-    r4xll = RZERO; r4yll = RZERO; r4nodata = RZERO; r4cs = real(2**bcsexp,r4b)
+    r4xll = RZERO; r4yll = RZERO; r4nodata = RZERO; r4cs = real(gcs,r4b)
     do ir = 1, gnr
       do ic = 1, gnr
         r4wk2d(ic,ir) = r4nodata
@@ -94,7 +94,7 @@ program mf6test
     do ir = bs/2, gnr-bs/2, bs
       do ic = 1, gnc
         r4wk2d(ic,ir)   = r4wk2d(ic,ir)   + r4cs*drn_width/2.
-        r4wk2d(ic,ir+1) = r4wk2d(ic,ir+1) + r4cs*drn_width/2.
+        r4wk2d(ic,ir+1) = r4wk2d(ic,ir+1) + r4cs*drn_width/2
       end do
     end do
     do ir = 1, gnr
