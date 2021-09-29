@@ -39,14 +39,15 @@ module mf6test_module
   integer(i4b), dimension(npck) :: pckact
   
   ! stencil
-  integer(i4b), parameter :: jp = 1
-  integer(i4b), parameter :: jt = 2
-  integer(i4b), parameter :: jn = 3
-  integer(i4b), parameter :: jw = 4
-  integer(i4b), parameter :: je = 5
-  integer(i4b), parameter :: js = 6
-  integer(i4b), parameter :: jb = 7
-  integer(i4b), parameter :: ns = jb
+  integer(i4b), parameter :: jp   = 1
+  integer(i4b), parameter :: jt   = 2
+  integer(i4b), parameter :: jn   = 3
+  integer(i4b), parameter :: jw   = 4 
+  integer(i4b), parameter :: je   = 5
+  integer(i4b), parameter :: js   = 6
+  integer(i4b), parameter :: jb   = 7
+  !
+  integer(i4b), parameter :: ns   = jb
   
   private
   
@@ -96,18 +97,21 @@ module mf6test_module
   real(r8b)    :: gxmin      = DZERO
   real(r8b)    :: gymin      = DZERO
   real(r8b)    :: gcs        = DZERO
-  
+  integer(i4b), dimension(:), allocatable :: rlev
+  !
   ! work arrays
-  character(len=mxslen), dimension(:),     pointer :: cwrk1d => null()
-  character(len=mxslen), dimension(:,:),   pointer :: cwrk2d => null()
-  integer(i1b),          dimension(:),     pointer :: i1wrk   => null()
-  integer(i1b),          dimension(:),     pointer :: i1wrk2  => null()
-  integer(i4b),          dimension(:),     pointer :: i4wrk1d => null()
-  integer(i4b),          dimension(:,:),   pointer :: i4wrk2d => null()
-  integer(i4b),          dimension(:,:,:), pointer :: i4wrk3d => null()
-  real(r8b),             dimension(:),     pointer :: r8wrk   => null()
-  real(r8b),             dimension(:),     pointer :: r8wrk2  => null()
-  real(r8b),             dimension(:),     pointer :: r8wrk3  => null()
+  character(len=mxslen), dimension(:),     pointer :: cwrk1d   => null()
+  character(len=mxslen), dimension(:,:),   pointer :: cwrk2d   => null()
+  integer(i1b),          dimension(:),     pointer :: i1wrk    => null()
+  integer(i1b),          dimension(:),     pointer :: i1wrk2   => null()
+  integer(i1b),          dimension(:,:),   pointer :: i1wrk2d  => null()
+  integer(i4b),          dimension(:),     pointer :: i4wrk1d  => null()
+  integer(i4b),          dimension(:),     pointer :: i4wrk1d2 => null()
+  integer(i4b),          dimension(:,:),   pointer :: i4wrk2d  => null()
+  integer(i4b),          dimension(:,:,:), pointer :: i4wrk3d  => null()
+  real(r8b),             dimension(:),     pointer :: r8wrk    => null()
+  real(r8b),             dimension(:),     pointer :: r8wrk2   => null()
+  real(r8b),             dimension(:),     pointer :: r8wrk3   => null()
   
   type tDisu
     integer(i4b),               pointer :: nodes => null()
@@ -118,13 +122,18 @@ module mf6test_module
     real(r8b),    dimension(:), pointer :: cl12  => null() !length nja
     real(r8b),    dimension(:), pointer :: hwva  => null() !length nja
   end type tDisu
-  
+  !
+  type tRegmap
+    type(tBb),                    pointer :: bb => null()
+    integer(i4b), dimension(:,:), pointer :: nodmap => null()
+    integer(i4b), dimension(:,:), pointer :: bndmap => null()
+  end type tRegmap
+  !
   type tReg
     type(tBb),                      pointer :: bb          => null()
     integer(i2b), dimension(:,:),   pointer :: itile       => null()
     integer(i4b), dimension(:),     pointer :: layer_nodes => null()
-    integer(i4b), dimension(:,:,:), pointer :: nodmap      => null()
-    integer(i4b), dimension(:,:,:), pointer :: bndmap      => null()
+    type(tregMap), dimension(:),    pointer :: regmap      => null()
   end type tReg
   
   type tExchange
@@ -137,6 +146,10 @@ module mf6test_module
     integer(i4b),                 pointer :: nexg        => null()
     integer(i4b), dimension(:),   pointer :: cellidm1    => null()
     integer(i4b), dimension(:),   pointer :: cellidm2    => null()
+    integer(i4b), dimension(:),   pointer :: ihc         => null()
+    real(r8b),    dimension(:),   pointer :: cl1         => null()
+    real(r8b),    dimension(:),   pointer :: cl2         => null()
+    real(r8b),    dimension(:),   pointer :: hwva        => null()
     integer(i4b), dimension(:,:), pointer :: gicirilm1   => null() !help
     integer(i4b), dimension(:,:), pointer :: gicirilm2   => null() !help
   end type tExchange
@@ -216,12 +229,13 @@ module mf6test_module
   
   ! public variables
   public :: tMf6_mod
+  public :: tRegmap
   public :: tReg
   public :: tMf6_sol
   public :: tExchange
   public :: i1b, i4b, i8b, r4b, r8b
   public :: raw
-  public :: gncol, gnrow, gnlay, gxmin, gymin, gcs
+  public :: gncol, gnrow, gnlay, gxmin, gymin, gcs, rlev
   
   save
   
@@ -484,7 +498,7 @@ module mf6test_module
         cval = trim(cdef)
         return
       else
-        call errmsg('Error: key '//trim(key)// 'not found.')
+        call errmsg('Error: key '//trim(key)// ' not found.')
       end if
     end if
     i = this%mf6_raw_get_index(key, jlay, jper)
@@ -523,7 +537,7 @@ module mf6test_module
         ival = idef
         return
       else
-        call errmsg('Error: key '//trim(key)// 'not found.')
+        call errmsg('Error: key '//trim(key)// ' not found.')
       end if
     end if
     s = this%mf6_raw_get_name_char(key, ilay, iper)
@@ -565,7 +579,7 @@ module mf6test_module
         ival = idef
         return
       else
-        call errmsg('Error: key '//trim(key)// 'not found.')
+        call errmsg('Error: key '//trim(key)// ' not found.')
       end if
     end if
     s = this%mf6_raw_get_name_char(key, ilay, iper)
@@ -588,7 +602,7 @@ module mf6test_module
     class(tMf6_mod) :: this
     ! -- local
     type(tReg), pointer :: reg
-    integer(i4b) :: ireg
+    integer(i4b) :: ireg, ilay
 ! ------------------------------------------------------------------------------
     !
     if (.not.associated(this%nreg)) return
@@ -598,8 +612,13 @@ module mf6test_module
       if (associated(reg%bb))          deallocate(reg%bb)
       if (associated(reg%itile))       deallocate(reg%itile)
       if (associated(reg%layer_nodes)) deallocate(reg%layer_nodes)
-      if (associated(reg%nodmap))     deallocate(reg%nodmap)
-      if (associated(reg%bndmap))     deallocate(reg%bndmap)
+      if (associated(reg%regmap)) then
+        do ilay = 1, gnlay
+          if (associated(reg%regmap(ilay)%nodmap)) deallocate(reg%regmap(ilay)%nodmap)
+          if (associated(reg%regmap(ilay)%bndmap)) deallocate(reg%regmap(ilay)%bndmap)
+        end do
+        deallocate(reg%regmap)
+      end if
     end do
     !
     deallocate(this%nreg); this%nreg => null()
@@ -620,7 +639,8 @@ module mf6test_module
     integer(i1b), dimension(:), intent(in) :: i1a
     integer(i4b), dimension(gnlay) :: cnt
     ! -- local
-    type(tReg), pointer :: reg
+    type(tReg), pointer :: reg => null()
+    type(tRegmap), pointer :: regmap => null()
     type(tBb), pointer :: bb => null()
     integer(i4b) :: ireg, il, ir, ic, n
 ! ------------------------------------------------------------------------------
@@ -631,11 +651,12 @@ module mf6test_module
     !
     do ireg = 1, this%nreg
       reg => this%reg(ireg)
-      bb => reg%bb
       do il = 1, gnlay
+        regmap => reg%regmap(il)
+        bb => regmap%bb
         do ir = 1, bb%nrow
-          do ic = 1, bb%ncol
-            n = abs(reg%nodmap(ic,ir,il))
+          do ic = 1, bb%nrow
+            n = abs(regmap%nodmap(ic,ir))
             if (n > 0) then
               if (i1a(n) == 1) then
                 cnt(il) = cnt(il) + 1
@@ -679,41 +700,80 @@ module mf6test_module
     ! -- dummy
     class(tMf6_mod) :: this
     ! -- local
+    character(len=mxslen) :: f
     real(r8b), parameter :: thkmin = 0.1d0
     type(tDisu), pointer :: disu => null()
-    integer(i4b) :: iact, il, ir, ic, i, n, nja
-    integer(i4b), dimension(ns) :: ihc
-    integer(i4b), dimension(ns) :: st
-    !        p t n w e s b
-    data ihc/0,0,1,1,1,1,0/
+    
+    integer(i4b), dimension(:,:,:), allocatable :: nod3d
+    integer(i4b), dimension(:,:), allocatable :: ginrl 
+    integer(i4b) :: iact, il, ir, ic, jl, jr, jc, kl, kr, kc
+    integer(i4b) :: i, j, n, m, nja, nr, nc, nrl, mrl
+    integer(i4b) :: gir, gic, nnbr, nlnbr, maxnrl, np, iside
+    integer(i4b) :: jr0, jr1, jc0, jc1
     real(r8b) :: topval, botval
-    real(r8b), dimension(ns) :: hwva, cl12
-! ------------------------------------------------------------------------------
     !
-    hwva(jp) = DZERO
-    hwva(jn) = gcs
-    hwva(js) = gcs
-    hwva(jw) = gcs
-    hwva(je) = gcs
-    hwva(jt) = gcs*gcs
-    hwva(jb) = gcs*gcs
+    integer(i4b), parameter :: maxnbr = 10
+    integer(i4b), dimension(1+maxnbr) :: ihc
+    integer(i4b), dimension(1+maxnbr) :: st
+    real(r8b), dimension(1+maxnbr) :: hwva, cl12
+    !
+    integer(i4b) :: ihc_val
+    real(r8b) :: hwva_val, cl12_val
+! ------------------------------------------------------------------------------
     !
     allocate(this%disu)
     disu => this%disu
     !
     call clear_wrk()
-    allocate(i4wrk3d(this%ncol,this%nrow,gnlay))
+    !
+    maxnrl = 0
+    do il = 1, gnlay
+      maxnrl = max(maxnrl,2**rlev(il))
+    end do
+    allocate(i4wrk1d(maxnrl**2)); allocate(i4wrk1d2(10))
+    !
+    ! count the number of nodes
+    allocate(disu%nodes); disu%nodes = 0
+    do il = 1, gnlay
+      nrl = 2**rlev(il); nr = this%nrow/nrl; nc = this%ncol/nrl
+      disu%nodes = disu%nodes + nr*nc
+    end do
+    !
+    allocate(ginrl(3,disu%nodes), i1wrk2d(2,disu%nodes))
+    do i = 1, disu%nodes
+      ginrl(:,i) = 0
+    end do
+    !
+    if (allocated(nod3d)) deallocate(nod3d)
+    allocate(nod3d(this%ncol,this%nrow,gnlay))
+    
     allocate(this%layer_nodes(gnlay))
-    allocate(disu%nodes)
+    this%layer_nodes = 0
     disu%nodes = 0; this%layer_nodes = 0
     do il = 1, gnlay
-      do ir = 1, this%nrow
-        do ic = 1, this%ncol
+      nrl = 2**rlev(il)
+      nr = this%nrow/nrl; nc = this%ncol/nrl
+      do ir = 1, nr
+        do ic = 1, nc
+          this%layer_nodes(il) = this%layer_nodes(il) + 1
           disu%nodes = disu%nodes + 1
-          i4wrk3d(ic,ir,il) = disu%nodes
+          jc = (ic-1)*nrl + 1; jr = (ir-1)*nrl + 1
+          ginrl(1,disu%nodes) = jc
+          ginrl(2,disu%nodes) = jr
+          
+          ginrl(3,disu%nodes) = nrl
+          do i = 1, nrl
+            do j = 1, nrl
+              jc = (ic-1)*nrl + j; jr = (ir-1)*nrl + i
+              nod3d(jc,jr,il) = disu%nodes
+            end do
+          end do
         end do
       end do
-      this%layer_nodes(il) = this%nrow*this%ncol
+      if (.false.) then
+        f = 'i4wrk3d_l'//ta((/il/))
+        call writeflt(f, nod3d(:,:,il), this%ncol, this%nrow, DZERO, DZERO, gcs, 0)
+      end if
     end do
     !
     ! iac
@@ -725,67 +785,123 @@ module mf6test_module
         disu%iac(n) = 0
       end do
       disu%nja = 0
-      st = 0; cl12 = DZERO
+      do i = 1, disu%nodes
+        i1wrk2d(:,i) = 0
+      end do
+      !
       do il = 1, gnlay
         topval = raw%getr8('top',il)
         botval = raw%getr8('bot',il)
+        nrl = 2**rlev(il)
         do ir = 1, this%nrow
           do ic = 1, this%ncol
-            n = i4wrk3d(ic,ir,il)
-            st(jp) = n !CENTER
-            if (ir > 1) then !NORTH
-              st(jn) = i4wrk3d(ic,ir-1,il)
-              if (st(jn) /= 0) then
-                cl12(jn) = gcs/2
-              end if
-            end if
-            if (ir < this%nrow) then !SOUTH
-              st(js) = i4wrk3d(ic,ir+1,il)
-              if (st(js) /= 0) then
-                cl12(js) = gcs/2
-              end if
-            end if
-            if (ic > 1) then !WEST
-              st(jw) = i4wrk3d(ic-1,ir,il)
-              if (st(jw) /= 0) then
-                cl12(jw) = gcs/2
-              end if
-            end if
-            if (ic < this%ncol) then !EAST
-              st(je) = i4wrk3d(ic+1,ir,il)
-              if (st(je) /= 0) then
-                cl12(je) = gcs/2
-              end if
-            end if
-            if (il > 1) then !TOP
-              st(jt) = i4wrk3d(ic,ir,il-1)
-              cl12(jt) = max(thkmin, topval-botval)
-              cl12(jt) = cl12(jt)/2
-            end if
-            if (il < gnlay) then !BOT
-              st(jb) = i4wrk3d(ic,ir,il+1)
-              cl12(jb) = max(thkmin, topval-botval)
-              cl12(jb) = cl12(jb)/2
-            end if
-            do i = 1, ns
-              if (st(i) /= 0) then
-                if (st(i) < 0) then
-                  call errmsg('mf6_mod_set_disu: program error')
+            !
+            np = nod3d(ic,ir,il) ! get the node number
+            !
+            if (i1wrk2d(1,np) == 1) cycle ! node is already processed
+            i1wrk2d(1,np) = 1
+            !
+            gic = ginrl(1,np); gir = ginrl(2,np); nrl = ginrl(3,np)
+            !
+            ! set for the center node
+            st(1)   = np
+            ihc(1)  = 0
+            cl12(1) = DZERO
+            hwva(1) = DZERO
+            ! 
+            nnbr = 0 ! number of neighboring nodes
+            do iside = 2, ns
+              select case(iside)
+              case(jn) !N
+                jr0 = gir-1; jr1 = jr0
+                jc0 = gic; jc1 = gic + nrl - 1
+                kl = il
+              case(js) !S
+                jr0 = gir + nrl; jr1 = jr0
+                jc0 = gic; jc1 = gic + nrl - 1
+                kl = il
+              case(jw) !W
+                jr0 = gir; jr1 = gir + nrl - 1
+                jc0 = gic - 1; jc1 = jc0
+                kl = il
+              case(je) !E
+                jr0 = gir; jr1 = gir + nrl - 1
+                jc0 = gic + nrl; jc1 = jc0
+                kl = il
+              case(jt) !T
+                jr0 = gir; jr1 = gir + nrl - 1
+                jc0 = gic; jc1 = gic + nrl - 1
+                kl = il - 1
+              case(jb) !B
+                jr0 = gir; jr1 = gir + nrl - 1
+                jc0 = gic; jc1 = gic + nrl - 1
+                kl = il + 1
+              end select
+              !
+              if ((jr0 < 1).or.(jr0 > this%nrow)) cycle
+              if ((jr1 < 1).or.(jr1 > this%nrow)) cycle
+              if ((jc0 < 1).or.(jc0 > this%ncol)) cycle
+              if ((jc1 < 1).or.(jc1 > this%ncol)) cycle
+              if ((kl < 1).or.(kl > gnlay)) cycle
+              !
+              select case(iside)
+              case(jn,js,jw,je)
+                ihc_val  = 1
+                cl12_val = gcs*nrl/2.d0
+                hwva_val = gcs*nrl
+              case(jt,jb)
+                ihc_val  = 0
+                cl12_val = max(thkmin, topval-botval)/2.d0
+                mrl = min(nrl,2**rlev(kl))
+                hwva_val = (gcs*mrl)**2
+              end select
+              !
+              ! get non-unique neighboring node numbers
+              n = 0
+              do jr = jr0, jr1
+                do jc = jc0, jc1
+                  m = nod3d(jc,jr,kl) ! neighboring node number
+                  n = n + 1
+                  i4wrk1d(n) = m
+                end do
+              end do
+              !
+              ! get unique neighboring node numbers
+              nlnbr = 0
+              do i = 1, n
+                m = i4wrk1d(i)
+                if (i1wrk2d(2,m) == 0) then
+                  i1wrk2d(2,m) = 1
+                  nlnbr = nlnbr + 1
+                  i4wrk1d2(nlnbr) = m
                 end if
-                disu%iac(n) = disu%iac(n) + 1
-                disu%nja = disu%nja + 1
-                if (iact == 2) then
-                  if ((disu%nja < 1).or.(disu%nja > nja)) then
-                   call errmsg('mf6_mod_set_disu: program error')
-                  end if
-                  disu%ja(disu%nja)   = st(i)
-                  disu%ihc(disu%nja)  = ihc(i)
-                  disu%cl12(disu%nja) = cl12(i)
-                  disu%hwva(disu%nja) = hwva(i)
+              end do
+              !
+              ! set the neighboring data and reset
+              do i = 1, nlnbr
+                m = i4wrk1d2(i)
+                nnbr = nnbr + 1
+                st(1+nnbr)   = m
+                ihc(1+nnbr)  = ihc_val
+                cl12(1+nnbr) = cl12_val
+                hwva(1+nnbr) = hwva_val
+                !
+                i1wrk2d(2,m) = 0
+              end do
+            end do
+            !
+            do i = 1, 1+nnbr
+              disu%iac(np) = disu%iac(np) + 1
+              disu%nja = disu%nja + 1
+              if (iact == 2) then
+                if ((disu%nja < 1).or.(disu%nja > nja)) then
+                 call errmsg('mf6_mod_set_disu: program error')
                 end if
+                disu%ja(disu%nja)   = st(i)
+                disu%ihc(disu%nja)  = ihc(i)
+                disu%cl12(disu%nja) = cl12(i)
+                disu%hwva(disu%nja) = hwva(i)
               end if
-              st(i) = 0
-              cl12(i) = DZERO
             end do
           end do
         end do
@@ -801,6 +917,8 @@ module mf6test_module
         end do
       end if
     end do ! iact
+    !
+    deallocate(nod3d)
     !
     return
   end subroutine mf6_mod_set_disu
@@ -1367,9 +1485,10 @@ module mf6test_module
     logical, intent(in) :: lbin
     logical, intent(in) :: lbinpos
     ! -- local
+    integer(i4b), dimension(:,:,:), allocatable :: nod3d
     type(tDisu), pointer :: disu
     character(len=mxslen) :: p, pb, f
-    integer(i4b) :: il, ir, ic, n, iu
+    integer(i4b) :: il, ir, ic, n, iu, nrl
     real(r8b) :: topval, botval
 ! ------------------------------------------------------------------------------
     !
@@ -1380,6 +1499,7 @@ module mf6test_module
     !
     ! set disu
     call this%set_disu()
+    if (allocated(nod3d)) deallocate(nod3d)
     disu => this%disu
     !
     p = trim(this%rootdir)//trim(this%modelname)
@@ -1409,8 +1529,9 @@ module mf6test_module
     do il = 1, gnlay
       topval = raw%getr8('top',il)
       botval = raw%getr8('bot',il)
-      do ir = 1, this%nrow
-        do ic = 1, this%ncol
+      nrl = 2**rlev(il)
+      do ir = 1, this%nrow/nrl
+        do ic = 1, this%ncol/nrl
           n = n + 1
           r8wrk(n) = topval
           r8wrk2(n) = botval
@@ -1922,7 +2043,7 @@ module mf6test_module
     maxbound = 0
     !
     do iper = 1, nper
-      call this%get_array('recharge', 0, iper, 1, i1wrk, r8wrk, ib_in=2, toponly_in=.true.)
+      call this%get_array('recharge', 0, iper, 1, i1wrk, r8wrk, ib_in=2, toponly_in=.false.)
       !
       ! check and filter for zero recharge
       n = 0
@@ -2154,8 +2275,9 @@ module mf6test_module
       f = trim(d)//trim(fexg)//'.asc'; call swap_slash(f)
       call open_file(f, iu, 'w')
       do iexg = 1, xch%nexg
-        write(iu,'(a)') ta((/xch%cellidm1(iexg), xch%cellidm2(iexg)/))//' 1 '//&
-                        ta((/gcs/2, gcs/2, gcs/))
+        write(iu,'(a)') ta((/xch%cellidm1(iexg), xch%cellidm2(iexg)/))//' '// &
+                        ta((/xch%ihc(iexg)/))//' '// &
+                        ta((/xch%cl1(iexg), xch%cl2(iexg), xch%hwva(iexg)/))
       end do
       close(iu)
       !
@@ -2192,9 +2314,17 @@ module mf6test_module
       deallocate(i1wrk2)
       i1wrk2 => null()
     end if
+    if (associated(i1wrk2d)) then
+      deallocate(i1wrk2d)
+      i1wrk2d => null()
+    end if
     if (associated(i4wrk1d)) then
       deallocate(i4wrk1d)
       i4wrk1d => null()
+    end if
+    if (associated(i4wrk1d2)) then
+      deallocate(i4wrk1d2)
+      i4wrk1d2 => null()
     end if
     if (associated(i4wrk2d)) then
       deallocate(i4wrk2d)
@@ -2784,8 +2914,10 @@ module mf6test_module
     ! -- local
     type(tEhdr), pointer :: ehdr
     type(tReg), pointer :: reg
+    type(tRegmap), pointer :: regmap => null()
     type(tData), pointer :: dat => null()
     integer(i4b) :: n, nt, i, ireg, ir, ic, jr, jc, ib, itile, ilay, nlay
+    integer(i4b) :: ir0, ir1, ic0, ic1, nrl
     integer(i4b) :: arrsiz
     real(r4b) :: r4val
     real(r8b) :: r8val
@@ -2844,49 +2976,17 @@ module mf6test_module
     
     do ireg = 1, this%nreg
       reg => this%reg(ireg)
-      nlay = size(reg%nodmap,3)
-      do ir = reg%bb%ir0, reg%bb%ir1
-        do ic = reg%bb%ic0, reg%bb%ic1
-          jr = ir - reg%bb%ir0 + 1; jc = ic - reg%bb%ic0 + 1
-          n = reg%nodmap(jc,jr,ilay_tgt)
-          !select case(ib)
-          !  case(0) ! all cells including sea cells
-          !    n = reg%nodmap(jc,jr,ilay_tgt)
-          !    n = abs(n)
-          !  case(1) ! sea cells only
-          !    n = reg%nodmap(jc,jr,ilay_tgt)
-          !    if (n < 0) then
-          !      n = abs(n)
-          !    else
-          !      n = 0
-          !    end if
-          !  case(2) ! all cells excluding sea cells
-          !    n = reg%nodmap(jc,jr,ilay_tgt)
-          !    if (n < 0) then
-          !      n = 0
-          !    end if
-          !  case(3) ! internal M1 interface cells only (skip sea)
-          !    n = reg%bndmap(jc,jr,ilay_tgt)
-          !    if (n < 0) then
-          !      n = 0
-          !    end if
-          !  case default
-          !    call errmsg('mf6_mod_get_array_r8: program error 1')
-          !end select
-          !
+      regmap => reg%regmap(ilay_tgt)
+      nrl = 2**rlev(ilay_tgt)
+      ir0 = regmap%bb%ir0; ir1 = regmap%bb%ir1
+      ic0 = regmap%bb%ic0; ic1 = regmap%bb%ic1
+      do ir = ir0, ir1
+        do ic = ic0, ic1
+          jr = ir - ir0 + 1; jc = ic - ic0 + 1
+          n = regmap%nodmap(jc,jr)
           ! only select active cells seen from top
           if (toponly.and.(n /= 0)) then
-            found = .false.
-            do ilay = 1, nlay
-              nt = reg%nodmap(jc,jr,ilay)
-              if (nt /= 0) then 
-                found = .true.
-                exit
-              end if
-            end do
-            if (found .and. (nt /= n)) then
-              n = 0
-            end if
+            call errmsg('mf6_mod_get_array_r8: toponly not yet supported')
           end if
           !
           if (n < 0) then 
@@ -2895,7 +2995,7 @@ module mf6test_module
           if (n /= 0) then
             select case(dat%file_type)
             case(i_ehdr)
-              r8val = ehdr%ehdr_get_val_r8(ic, ir, gcs, lmv)
+              r8val = ehdr%ehdr_get_val_r8(ic, ir, nrl*gcs, lmv)
             case(i_undefined)
               read(dat%s,*) r8val
             end select
@@ -2944,9 +3044,10 @@ module mf6test_module
     ! -- local
     character(len=mxslen) :: d
     type(tReg), pointer :: reg => null()
+    type(tRegmap), pointer :: regmap => null()
     type(tBb), pointer :: bb => null()
     character(len=mxslen) :: f
-    integer(i4b) :: ireg, nodes, n, iu, il, ir, ic, nlay, gic, gir, gil, i, j 
+    integer(i4b) :: ireg, nodes, n, iu, il, ir, ic, gic, gir, gil, i, j 
 ! ------------------------------------------------------------------------------
     !
     nodes = 0
@@ -2958,21 +3059,21 @@ module mf6test_module
     end do
     !
     call clear_wrk()
-    allocate(i4wrk2d(3,nodes))
+    allocate(i4wrk2d(4,nodes))
     do i = 1, nodes
-      do j = 1, 3
+      do j = 1, 4
         i4wrk2d(j,i) = 0
       end do
     end do
     !
     do ireg = 1, this%nreg
       reg => this%reg(ireg)
-      do il = 1, size(reg%layer_nodes)
-        bb => reg%bb
-        nlay = size(reg%nodmap,3)
+      do il = 1, gnlay
+        regmap => reg%regmap(il)
+        bb => regmap%bb
         do ir = 1, bb%nrow
           do ic = 1, bb%ncol
-            n = reg%nodmap(ic,ir,il)
+            n = regmap%nodmap(ic,ir)
             gil = il; gic = ic + bb%ic0 - 1; gir = ir + bb%ir0 - 1
             if (n < 0) then
               gil = -gil
@@ -2982,7 +3083,10 @@ module mf6test_module
               if (i4wrk2d(1,n) /= 0) then
                 call errmsg('mf6_mod_write_post_map: program error')
               end if
-              i4wrk2d(1,n) = gil; i4wrk2d(2,n) = gir; i4wrk2d(3,n) = gic
+              i4wrk2d(1,n) = gil
+              i4wrk2d(2,n) = rlev(il)
+              i4wrk2d(3,n) = gir
+              i4wrk2d(4,n) = gic
             end if
           end do
         end do
@@ -3003,7 +3107,7 @@ module mf6test_module
     call open_file(f, iu, 'w', .true.)
     write(iu) this%bb%ic0, this%bb%ic1, this%bb%ir0, this%bb%ir1
     write(iu) nodes ! number of nodes
-    write(iu)((i4wrk2d(j,i),j=1,3),i=1,nodes)
+    write(iu)((i4wrk2d(j,i),j=1,4),i=1,nodes)
     close(iu)
     !
     return

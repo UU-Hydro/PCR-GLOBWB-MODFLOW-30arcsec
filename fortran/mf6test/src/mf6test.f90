@@ -3,7 +3,7 @@ program mf6test
   use utilsmod, only: mxslen, i1b, i2b, i4b, i8b, r4b, r8b, logmsg, errmsg, open_file, create_dir, &
     change_work_dir, swap_slash, RZERO, DZERO, ta, tBb
   use ehdrModule, only: writeflt
-  use mf6test_module, only: raw, tMf6_sol, tMf6_mod, tExchange, tReg, gcs, gnlay
+  use mf6test_module, only: raw, tMf6_sol, tMf6_mod, tExchange, tRegmap, tReg, gcs, gnlay, rlev
   !
   implicit none
   !
@@ -22,6 +22,7 @@ program mf6test
   type(tExchange), pointer :: xch => null()
   type(tBb), pointer :: bb => null()
   type(tReg), pointer :: reg => null()
+  type(tRegmap), pointer :: regmap => null()
   !
   ! work arrays
   real(r4b), dimension(:), allocatable :: r4wk1d
@@ -29,10 +30,12 @@ program mf6test
   real(r8b), dimension(:), allocatable :: r8wk1d
   !
   character(len=mxslen) :: out_dir, f, fp, d, s
-  integer(i4b) :: p_rd, n_rd, nbs_rd, csexp_rd, n, nl, gnr, gnc, lnr, lnc, lnodes, nmod, im, jm, ixch
+  integer(i4b) :: p_rd, n_rd, nbs_rd, csexp_rd, n, nl
+  integer(i4b) :: gnr, gnc, lnr, lnc, grnr, grnc, lrnr, lrnc, nrl, mrl
+  integer(i4b) :: lnodes, nmod, im, jm, ixch
   integer(i4b) :: iu, pir, pic, pjr, pjc, i, n1, n2, ist, iact, iopt, ios
   integer(i4b) :: il, jl, ir, ic, jr, jc, bnexp, bcsexp, bs, step
-  integer(i4b) :: ic0, ic1, ic2, ir0, ir1, ir2
+  integer(i4b) :: ic0, ic1, ic2, ir0, ir1, ir2, nexg
   real(r4b) :: r4xll, r4yll, r4cs, r4nodata
   real(r8b) :: r8xll, r8yll
   !
@@ -47,6 +50,7 @@ program mf6test
   integer(i4b) :: kstp_in, kper_in, ncol_in, nrow_in, ilay_in
   real(r8b) :: pertim_in, totim_in
   !
+  logical, parameter :: lwrite_exchange = .true.
   ! ------------------------------------------------------------------------------
   n = nargs()-1
   if (n < 5) call errmsg('Invalid program arguments.')
@@ -72,6 +76,15 @@ program mf6test
   ! base grid
   bnexp = raw%geti('base_n_exp')
   bcsexp = raw%geti('base_cs_exp')
+  !
+  ! grid refinements
+  allocate(rlev(gnlay))
+  rlev = 0
+  if (raw%geti('act_ref',idef=0)) then
+    do il = 1, gnlay
+      rlev(il) = raw%geti('ref_lev',ilay=il)
+    end do
+  end if
   !
   select case(iopt)
   case(1) ! raster input
@@ -156,7 +169,8 @@ program mf6test
       hdrKeys=(/'DLT_USCLTYPE ARITH','DLT_DSCLTYPE NOINTP'/))
     !
     !----- WEL -----
-    nwel = 60000; qmin = 5000.; qmax = 5000.
+    nwel = 10; qmin = 10000.; qmax = 10000.
+    !nwel = 60000; qmin = 5000.; qmax = 5000.
     q2sigma = (qmax-qmin)/2.; qmean = qmin + q2sigma
     do ir = 1, gnr
       do ic = 1, gnc
@@ -183,31 +197,37 @@ program mf6test
       fp = 'head'
     end if
     d = trim(out_dir)//'models\run_output_bin'
-    allocate(r8wk1d(lnodes), r4wk2d(gnc,gnr))
     do il = 1, gnlay
+      nrl = 2**rlev(il); grnr = gnr/nrl; grnc = gnc/nrl
+      if (allocated(r4wk2d)) deallocate(r4wk2d)
+      allocate(r4wk2d(grnc,grnr))
       im = 0
       do pir = 1, p_rd
         do pic = 1, p_rd
           im = im + 1
-          ic0 = (pic-1)*lnc + 1; ic1 = ic0 + lnc - 1
-          ir0 = (pir-1)*lnr + 1; ir1 = ir0 + lnr - 1
           write(f,'(2a,i5.5,a)') trim(d), '\m', im, '.ss.hds'
           call open_file(f, iu, 'r', .true.)
           read(unit=iu) kstp_in, kper_in, pertim_in, totim_in, &
             text_in, ncol_in, nrow_in, ilay_in
-          read(unit=iu,iostat=ios)(r8wk1d(i),i=1,lnodes)
+          if (allocated(r8wk1d)) deallocate(r8wk1d)
+          allocate(r8wk1d(ncol_in))
+          read(unit=iu,iostat=ios)(r8wk1d(i),i=1,ncol_in)
+          !
           n = 0
           do jl = 1, gnlay
+            mrl = 2**rlev(jl); lrnr = lnr/mrl; lrnc = lnc/mrl
+            ic0 = (pic-1)*lrnc + 1; ic1 = ic0 + lrnc - 1
+            ir0 = (pir-1)*lrnr + 1; ir1 = ir0 + lrnr - 1
             if (jl == il) then
-              do ir = 1, lnr
-                do ic = 1, lnc
+              do ir = 1, lrnr
+                do ic = 1, lrnc
                   jc = ic0 + ic - 1; jr = ir0 + ir - 1
                   n = n + 1
                   r4wk2d(jc,jr) = real(r8wk1d(n),r4b)
                 end do
               end do
             else
-              n = n + lnr*lnc
+              n = n + lrnr*lrnc
             end if
           end do
           close(iu)
@@ -215,7 +235,7 @@ program mf6test
       end do 
       write(f,'(a,i2.2)') trim(fp)//'_l', il
       r8xll = DZERO; r8yll = DZERO
-      call writeflt(f, r4wk2d, gnc, gnr, r8xll, r8yll, gcs, RZERO)
+      call writeflt(f, r4wk2d, grnc, grnr, r8xll, r8yll, nrl*gcs, RZERO)
     end do
     deallocate(r8wk1d, r4wk2d)
     stop
@@ -280,36 +300,49 @@ program mf6test
                 write(xch%m2modelname,'(a,i5.5)') 'm', jm
                 !
                 select case(ist)
-                case(p_jn)
-                  ir1 = 1; ir2 = lnr
-                case(p_js)
-                  ir1 = lnr; ir2 = 1
-                case(p_jw)
-                  ic1 = 1; ic2 = lnc
-                case(p_je)
-                  ic1 = lnc; ic2 = 1
-                end select
-                !
-                select case(ist)
                 case(p_jn, p_js)
+                  n = 0
                   do il = 1, gnlay
-                    do ic = 1, lnc
-                      n1 = ic + (ir1-1)*lnc + (il-1)*lnc*lnr
-                      n2 = ic + (ir2-1)*lnc + (il-1)*lnc*lnr
+                    nrl = 2**rlev(il); lrnr = lnr/nrl; lrnc = lnr/nrl
+                    if (ist == p_jn) then
+                      ir1 = 1; ir2 = lrnr
+                    else
+                      ir1 = lrnr; ir2 = 1
+                    end if
+                    do ic = 1, lrnc
+                      n1 = ic + (ir1-1)*lrnc + n
+                      n2 = ic + (ir2-1)*lrnc + n
                       xch%nexg = xch%nexg + 1
                       xch%cellidm1(xch%nexg) = n1
                       xch%cellidm2(xch%nexg) = n2
+                      xch%ihc(xch%nexg) = 1
+                      xch%cl1(xch%nexg) = nrl*gcs/2.d0
+                      xch%cl2(xch%nexg) = nrl*gcs/2.d0
+                      xch%hwva(xch%nexg) = nrl*gcs
                     end do
+                    n = n + lrnr*lrnc
                   end do
                 case(p_jw, p_je)
+                  n = 0
                   do il = 1, gnlay
-                    do ir = 1, lnr
-                      n1 = ic1 + (ir-1)*lnc + (il-1)*lnc*lnr
-                      n2 = ic2 + (ir-1)*lnc + (il-1)*lnc*lnr
+                    nrl = 2**rlev(il); lrnr = lnr/nrl; lrnc = lnr/nrl
+                    if (ist == p_jw) then
+                      ic1 = 1; ic2 = lrnc
+                    else
+                      ic1 = lrnc; ic2 = 1
+                    end if
+                    do ir = 1, lrnr
+                      n1 = ic1 + (ir-1)*lrnc + n
+                      n2 = ic2 + (ir-1)*lrnc + n
                       xch%nexg = xch%nexg + 1
                       xch%cellidm1(xch%nexg) = n1
                       xch%cellidm2(xch%nexg) = n2
+                      xch%ihc(xch%nexg) = 1
+                      xch%cl1(xch%nexg) = nrl*gcs/2.d0
+                      xch%cl2(xch%nexg) = nrl*gcs/2.d0
+                      xch%hwva(xch%nexg) = nrl*gcs
                     end do
+                    n = n + lrnr*lrnc
                   end do
                 end select
               end if
@@ -324,22 +357,36 @@ program mf6test
               if (associated(xch%m2modelname)) deallocate(xch%m2modelname)
               if (associated(xch%cellidm1)) deallocate(xch%cellidm1)
               if (associated(xch%cellidm2)) deallocate(xch%cellidm2)
+              if (associated(xch%ihc)) deallocate(xch%ihc)
+              if (associated(xch%cl1)) deallocate(xch%cl1)
+              if (associated(xch%cl2)) deallocate(xch%cl2)
+              if (associated(xch%hwva)) deallocate(xch%hwva)
             end do
             deallocate(mod%xch)
           end if
+          n = 0
+          do il = 1, gnlay
+            nrl = 2**rlev(il); n = n + lnr/nrl
+          end do
           allocate(mod%xch(mod%nxch))
           do ixch = 1, mod%nxch
             xch => mod%xch(ixch)
             allocate(xch%nexg); xch%nexg = 0
             allocate(xch%m2modelname)
-            allocate(xch%cellidm1(gnlay*mod%ncol))
-            allocate(xch%cellidm2(gnlay*mod%ncol))
+            allocate(xch%cellidm1(n))
+            allocate(xch%cellidm2(n))
+            allocate(xch%ihc(n))
+            allocate(xch%cl1(n))
+            allocate(xch%cl2(n))
+            allocate(xch%hwva(n))
           end do
         end if
       end do
       !
       ! write the exchanges
-      call mod%write_exchanges(iu)
+      if (lwrite_exchange) then
+        call mod%write_exchanges(iu)
+      end if
     end do
   end do
   close(iu)
@@ -365,19 +412,31 @@ program mf6test
       mod%bb%ir0 =  bb%ir0; mod%bb%ir1 =  bb%ir1
       mod%bb%ncol = bb%ncol; mod%bb%nrow = bb%nrow
       if (im == 1) then
-        allocate(reg%nodmap(mod%ncol, mod%nrow, gnlay), reg%layer_nodes(gnlay))
+        allocate(reg%regmap(gnlay))
+        allocate(reg%layer_nodes(gnlay))
         reg%layer_nodes = 0
         n = 0
         do il = 1, gnlay
-          reg%layer_nodes(il) = mod%nrow*mod%ncol
-          do ir = 1, mod%nrow
-            do ic = 1, mod%ncol
+          regmap => reg%regmap(il)
+          nrl = 2**rlev(il); lrnr = mod%nrow/nrl; lrnc = mod%nrow/nrl
+          allocate(regmap%bb, regmap%nodmap(lrnc, lrnr), regmap%bndmap(lrnc, lrnr))
+          reg%layer_nodes(il) = lrnr*lrnc
+          do ir = 1, lrnr
+            do ic = 1, lrnc
               n = n + 1
-              reg%nodmap(ic,ir,il) = n
+              reg%regmap(il)%nodmap(ic,ir) = n
             end do
           end do
         end do
       end if
+      do il = 1, gnlay
+        regmap => reg%regmap(il)
+        nrl = 2**rlev(il); lrnr = mod%nrow/nrl; lrnc = mod%nrow/nrl
+        bb => regmap%bb
+        bb%ic0 = (pic-1)*lrnc + 1; bb%ic1 = bb%ic0 + lrnc - 1
+        bb%ir0 = (pir-1)*lrnr + 1; bb%ir1 = bb%ir0 + lrnr - 1
+        bb%ncol = lrnc; bb%nrow = lrnr
+      end do
       !
       ! create directories
       mod%rootdir = '..\..\models\run_input\'//trim(mod%modelname)//'\'
