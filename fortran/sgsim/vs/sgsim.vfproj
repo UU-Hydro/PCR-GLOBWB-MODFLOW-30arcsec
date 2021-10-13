@@ -48,6 +48,8 @@
 		<Filter Name="Header Files" Filter="fi;fd;h;inc"/>
 		<Filter Name="Resource Files" Filter="rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe"/>
 		<Filter Name="Source Files" Filter="f90;for;f;fpp;ftn;def;odl;idl">
+		<Filter Name="Geom library">
+		<File RelativePath="..\..\geomlib\src\geometry.f90"/></Filter>
 		<Filter Name="GSLIB">
 		<File RelativePath="..\..\gslib\acorni.for"/>
 		<File RelativePath="..\..\gslib\backtr.for"/>
@@ -92,9 +94,11 @@
 		<File RelativePath="..\..\imodlib_5_1\src\imod_idf_par.f90"/>
 		<File RelativePath="..\..\imodlib_5_1\src\imod_utl.f90"/>
 		<File RelativePath="..\..\imodlib_5_1\src\utl.f90"/></Filter>
-		<Filter Name="Geom library">
-		<File RelativePath="..\..\geomlib\src\geometry.f90"/></Filter>
+		<Filter Name="Ehdr library">
+		<File RelativePath="..\..\ehdr_lib\src\ehdr_lib.f90"/></Filter>
 		<Filter Name="Utility library">
 		<File RelativePath="..\..\utilslib_svn\src\utils_mod.f90"/></Filter>
-		<File RelativePath="..\src\sgsim.for"/></Filter></Files>
+		<File RelativePath="..\src\sgsim.for">
+			<FileConfiguration Name="Debug|x64">
+				<Tool Name="VFFortranCompilerTool" IntegerKIND="integerKIND4"/></FileConfiguration></File></Filter></Files>
 	<Globals/></VisualStudioProject>

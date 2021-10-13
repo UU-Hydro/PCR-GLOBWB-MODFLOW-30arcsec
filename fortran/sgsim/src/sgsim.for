@@ -39,6 +39,10 @@ c
       integer*2,allocatable :: ixnode(:),iynode(:),iznode(:),
      +          ixsbtosr(:),iysbtosr(:),izsbtosr(:)
 
+      real :: target_mean, scale_mu, scale_var !JV
+      
+      save
+      
       end module
 c
 c
@@ -306,6 +310,9 @@ c
             write(*,*) ' a1 a2 a3: ',aa(i),aa1,aa2
       end do
       write(*,*)
+      
+      read(lin,*,err=98) target_mean, scale_var !JV
+      
       close(lin)
 c
 c Find the needed parameters:
@@ -661,7 +668,8 @@ c
       ss = 0.0
       inquire(file=datafl,exist=testfl)
       if(.not.testfl) then
-            write(*,*) 'WARNING data file ',datafl,' does not exist!'
+            write(*,*) 'WARNING data file ',trim(datafl),
+     +       ' does not exist!'
             write(*,*) '   - Hope your intention was to create an ',
      +                       'unconditional simulation'
             write(*,*) '   - Resetting ndmin, ndmax, and itrans  to 0 '
@@ -690,7 +698,7 @@ c
             end if
             inquire(file=tmpfl,exist=testfl)
             if(.not.testfl) then
-                  write(*,*) 'ERROR: ',tmpfl,' does not exist'
+                  write(*,*) 'ERROR: ',trim(tmpfl),' does not exist'
                   write(*,*) '       this file is needed! '
                   stop
             endif
@@ -1109,14 +1117,15 @@ c Concepts taken from F. Alabert and E. Isaaks
 c
 c-----------------------------------------------------------------------
       use       geostat
-      use utilsmod, only: writeflt, mxslen, ta !JV
+      use utilsmod, only: mxslen, ta, logmsg !JV
+      use ehdrModule, only: writeflt
       include  'sgsim.inc'
       real      var(10)
       real*8    p,acorni,cp,oldcp,w
       logical   testind
       
-      integer :: icol, irow !JV
-      real :: minv, maxv, meanv !JV
+      integer :: icol, irow, nlbnd, nrbnd !JV
+      real :: lbnd, rbnd, minv, maxv, meanv, varv !JV
       character(len=mxslen) :: f !JV
       real, dimension(:,:), allocatable :: simvalArr !JV
 c
@@ -1272,8 +1281,15 @@ c
 c MAIN LOOP OVER ALL THE NODES:
 c
             do in=1,nxyz
-                  if((int(in/irepo)*irepo).eq.in) write(*,103) in !JV
- 103              format('   currently on node ',i9) !JV
+              !write(*,*) '-->',100*in/nxyz
+              if ((in.eq.1).or.(mod(in,nxyz/5).eq.0).or.
+     +          (in.eq.nxyz)) then !JV
+                call logmsg('Processing for node '//ta((/in/),
+     +          '(i11.11)')//'/'//ta((/nxyz/),'(i11.11)')//'...')
+              end if
+              
+!                  if((int(in/irepo)*irepo).eq.in) write(*,103) in !JV
+! 103              format('   currently on node ',i9) !JV
 c
 c Figure out the location of this point and make sure it has
 c not been assigned a value already:
@@ -1383,6 +1399,7 @@ c
             end do !JV
             !
             ind = 0 !JV
+            scale_mean = log10(target_mean)-0.5*log(10.)*scale_var
             do irow = 1, ny !JV
             do icol = 1, nx !JV
             ind = ind + 1 !JV
@@ -1400,7 +1417,10 @@ c
                         if(simval.gt.zmax) simval = zmax
                   end if
                   !write(lout,'(g14.8)') simval !JV
-                  simvalArr(icol,ny-irow+1) = simval !JV
+                  simvalArr(icol,ny-irow+1) = simval
+!                  
+                  simvalArr(icol,ny-irow+1) = scale_mean + 
+     +              sqrt(scale_var)*simval !JV
             end do
             end do
             !
@@ -1408,6 +1428,7 @@ c
             ss =(ss / max(real(ne),1.0)) - av * av
             write(ldbg,111) isim,ne,av,ss
             write(*,   111) isim,ne,av,ss
+            
  111        format(/,' Realization ',i3,': number   = ',i8,/,
      +               '                  mean     = ',f12.4,
      +               ' (close to 0.0?)',/,
@@ -1416,19 +1437,88 @@ c
 c
 c END MAIN LOOP OVER SIMULATIONS:
 c
-            minv = huge(minv); maxv = -huge(maxv); meanv = 0.
+            !
+            minv = huge(minv); maxv = -huge(maxv)
+            meanv = 0.
             do irow = 1, ny
               do icol = 1, nx
                 minv = min(minv,simvalArr(icol,irow))
                 maxv = max(maxv,simvalArr(icol,irow))
                 meanv = meanv + simvalArr(icol,irow)
-                !simvalArr(icol,irow) = 10**simvalArr(icol,irow)
               end do
             end do
+            meanv = meanv/(nx*ny); varv = 0.
+            do irow = 1, ny
+              do icol = 1, nx
+                varv = varv + (simvalArr(icol,irow) - meanv)**2
+              end do
+            end do
+            varv = varv / (nx*ny)
             write(*,'(a)') 'min  (10log): '//ta((/minv/))
             write(*,'(a)') 'max  (10log): '//ta((/maxv/))
-            write(*,'(a)') 'mean (10log): '//ta((/meanv/(nx*ny)/))
+            write(*,'(a)') 'mean (10log): '//ta((/meanv/))
+            write(*,'(a)') 'var  (10log): '//ta((/varv/))
+            !
+            lbnd = 10**(scale_mean-2*sqrt(scale_var))
+            rbnd = 10**(scale_mean+2*sqrt(scale_var))
+            call logmsg('mu_10: '//ta((/scale_mean/)))
+            call logmsg('95% bounds: '//ta((/lbnd,rbnd/)))
+            !
+            minv = huge(minv); maxv = -huge(maxv); meanv = 0.
+            nlbnd = 0; nrbnd = 0
+            do irow = 1, ny
+              do icol = 1, nx
+                simval = 10**simvalArr(icol,irow)
+                if (simval < lbnd) then
+                  nlbnd = nlbnd + 1
+                  simval = lbnd
+                end if
+                if (simval > rbnd) then
+                  nrbnd = nrbnd + 1
+                  simval = rbnd
+                end if
+                !
+                simvalArr(icol,irow) = simval
+                !
+                minv = min(minv,simval)
+                maxv = max(maxv,simval)
+                meanv = meanv + simval
+              end do
+            end do
+            meanv = meanv/(nx*ny); varv = 0.
+            do irow = 1, ny
+              do icol = 1, nx
+                varv = varv + (simvalArr(icol,irow) - meanv)**2
+              end do
+            end do
+            varv = varv / (nx*ny)
+            call logmsg('min  : '//ta((/minv/))//
+     +        ' (trunc: '//ta((/100.*nlbnd/(nx*ny)/),'(f5.2)')//'%)')
+            call logmsg('max  : '//ta((/maxv/))//
+     +        ' (trunc: '//ta((/100.*nlbnd/(nx*ny)/),'(f5.2)')//'%)')
+            call logmsg('mean : '//ta((/meanv/)))
+            call logmsg('var  : '//ta((/varv/)))
+            !
+            ! check min/max
+            minv = huge(minv); maxv = -huge(maxv)
+            do irow = 1, ny
+              do icol = 1, nx
+                minv = min(minv,simvalArr(icol,irow) )
+                maxv = max(maxv,simvalArr(icol,irow) )
+              end do
+            end do
+            call logmsg('kh Min/max: '//ta((/minv,maxv/)))
+            !
             f = 'kh_'//ta((/isim/))
+            call writeflt(f, simvalArr, nx, ny, xmn, ymn, xsiz, 0.)
+            !
+            do irow = 1, ny
+              do icol = 1, nx
+                simval = simvalArr(icol,irow)
+                simvalArr(icol,irow) = log10(simval)
+              end do
+            end do
+            f = 'log10_kh_'//ta((/isim/))
             call writeflt(f, simvalArr, nx, ny, xmn, ymn, xsiz, 0.)
       end do
 c
@@ -1535,7 +1625,9 @@ c anisotropic Euclidean distance to break ties:
 c
                   tmp(nlooku)   = - (covtab(ic,jc,kc)-TINY*real(hsqd))
                   order(nlooku) = real((kc-1)*MAXCXY+(jc-1)*MAXCTX+ic)
-            endif
+            else
+              write(*,*) '@@@ nlooku not increased'
+            end if
       end do
       end do
       end do
