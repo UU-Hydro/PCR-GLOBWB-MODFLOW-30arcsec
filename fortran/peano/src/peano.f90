@@ -122,7 +122,7 @@ contains
     return
   end subroutine split_channel
   
-subroutine rotate_i4(x_in, x_out)
+  subroutine rotate_i4(x_in, x_out)
 ! ******************************************************************************
     ! -- arguments
     integer(i4b), dimension(:,:), intent(inout) :: x_in
@@ -192,9 +192,9 @@ subroutine rotate_i4(x_in, x_out)
     end do
     !
     return
-end subroutine rotate_i4
+  end subroutine rotate_i4
   
-subroutine rotate_r8(x_in, x_out)
+  subroutine rotate_r8(x_in, x_out)
 ! ******************************************************************************
     ! -- arguments
     real(r8b), dimension(:,:), intent(in) :: x_in
@@ -241,13 +241,14 @@ program peano
   integer(i4b), dimension(:,:), allocatable :: ldd, lddd, ldddfull, i4wk2d, lst
   integer(i4b) :: na, exp, nc, nr, ir, ic, jr, jc, kr, kc, ninlet, iinlet
   integer(i4b) :: ic0, ic1, ir1, i, inbr
-  integer(i4b) :: lddval
+  integer(i4b) :: lddval, ic_outlet, ir_outlet, ic_inlet, ir_inlet
   integer(i4b) :: ncd, nrd, nout, src_ldd, tgt_ldd, n0, n1, it, nstem, iact
   real(r4b) :: expEnergy
   !real(r8b), dimension(:), allocatable :: stemleng, stemarea, stemdz
   real(r8b), dimension(:,:), allocatable :: area, areafull, deltaZ, z, zfull
-  real(r8b) :: cs, slope0, leng, diagleng, sumdz, dslope0
+  real(r8b) :: cs, cs2, cs_min, cs_min2, slope0, leng, diagleng, sumdz, dslope0
   real(r8b) :: zMin, zMax, areaTot,  areaMax, tgtDz, r8v
+  real(r8b) :: dic, dir, dist, max_dist, area_scale, cell_area, sfmin, sf, darea
   ! ------------------------------------------------------------------------------
   na = nargs()-1
   if (na < 6) call errmsg('Invalid program arguments.')
@@ -401,8 +402,8 @@ program peano
   ! set the outlet
   lddd(1,nrd) = jp
   !
-  !f = trim(fp)//'_ldd'
-  !call writeflt(f, lddd, size(lddd,1), size(lddd,2), xll, yll, cs, 0)
+  f = trim(fp)//'_ldd'
+  call writeflt(f, lddd, size(lddd,1), size(lddd,2), xll, yll, cs, 0)
   !
   allocate(ldddfull(2*ncd,2*nrd))
   do ir = 1, 2*nrd
@@ -430,6 +431,9 @@ program peano
   ! AREA
   !======================================================
   !
+  ic_inlet = ncd; ir_inlet = 1
+  ic_outlet = 1;  ir_outlet = nrd
+  !
   ! process only the upper triangular
   allocate(area(ncd,nrd))
   do ir = 1, nrd
@@ -439,6 +443,16 @@ program peano
   end do
   !
   ! label the inlet cells
+  cs2 = cs*cs
+  !
+  ! area scaling
+  cs_min = 0.001*cs
+  cs_min2 = cs_min*cs_min
+  sfmin = cs_min2 / cs2
+  max_dist = sqrt(real(ncd,r8b)**2)
+  !max_dist = sqrt(real(ncd,r8b)**2 + real(nrd,r8b)**2)
+  !
+  !
   ninlet = 0
   do ir = 1, nrd
     do ic = 1, ncd-ir+1
@@ -452,7 +466,18 @@ program peano
         if (lddval == jperm(inbr)) linflow = .true.
       end do
       if (.not.linflow) then
-        area(ic,ir) = cs**2
+        if (.false.)then
+          dic = real(ic-ic_outlet,r8b); dir = real(ir-ir_outlet,r8b)
+          dist = sqrt(dic**2 + dir**2); dist = min(dist, max_dist)
+          sf = (dist*(sfmin - DONE)/max_dist) + DONE
+        else
+          dic = real(ic-ic_inlet,r8b); dir = real(ir-ir_inlet,r8b)
+          dist = sqrt(dic**2 + dir**2); dist = min(dist, max_dist)
+          sf = (dist*(DONE-sfmin)/max_dist) + sfmin
+        end if
+!        cell_area = cs2*sf
+        cell_area = cs2
+        area(ic,ir) = cell_area
         ninlet = ninlet + 1
       end if
     end do
@@ -471,7 +496,7 @@ program peano
   allocate(lst(2,ninlet)); n0 = 0
   do ir = 1, nrd
     do ic = 1, ncd-ir+1
-      if (area(ic,ir) == cs**2) then
+      if (area(ic,ir) > DZERO) then
         n0 = n0 + 1
         lst(1,n0) = ic; lst(2,n0) = ir
       end if
@@ -517,7 +542,18 @@ program peano
       if (.not.linflow) cycle
       !
       ! add the area
-      area(jc,jr) = cs**2
+      if (.false.)then
+        dic = real(jc-ic_outlet,r8b); dir = real(jr-ir_outlet,r8b)
+        dist = sqrt(dic**2 + dir**2); dist = min(dist, max_dist)
+        sf = (dist*(sfmin - DONE)/max_dist) + DONE
+      else
+        dic = real(jc-ic_inlet,r8b); dir = real(jr-ir_inlet,r8b)
+        dist = sqrt(dic**2 + dir**2); dist = min(dist, max_dist)
+        sf = (dist*(DONE-sfmin)/max_dist) + sfmin
+      end if
+      !cell_area = cs2*sf
+      cell_area = cs2
+      area(jc,jr) = cell_area
       do inbr = 1, 9
         if (inbr == 5) cycle
         kc = jc + st(1,inbr); kr = jr + st(2,inbr)
@@ -531,7 +567,7 @@ program peano
          area(jc,jr) = area(jc,jr) + area(kc,kr)
         end if
       end do
-      if ((ic == 1).and.(ir == nrd)) then ! outlet reached
+      if ((ic == ic_outlet).and.(ir == ir_outlet)) then ! outlet reached
         ! do nothing
       else
         if (i1wk2d(jc,jr) == 0) then
@@ -573,15 +609,30 @@ program peano
     end do
   end do
   ! correct the diagonal
+  darea = DZERO
   do ir = 1, nrd
     ic = nrd-ir+1
+    if (.false.) then
+      dic = real(ic-ic_outlet,r8b); dir = real(ir-ir_outlet,r8b)
+      dist = sqrt(dic**2 + dir**2); dist = min(dist, max_dist)
+      sf = (dist*(sfmin - DONE)/max_dist) + DONE
+    else
+      dic = real(ic-ic_inlet,r8b); dir = real(ir-ir_inlet,r8b)
+      dist = sqrt(dic**2 + dir**2); dist = min(dist, max_dist)
+      sf = (dist*(DONE-sfmin)/max_dist) + sfmin
+    end if
+    cell_area = cs2*sf
+    darea = darea + cell_area
     area(ic,ir) = area(ic,ir) - ir*cs*cs
+!    area(ic,ir) = area(ic,ir) - darea
   end do
   !
+  !areaTot = nrd*ncd*cs**2
+  areaTot = area(ic_outlet,ir_outlet)
   ! check
-  if (real(ncd*nrd*cs**2,r8b) /= area(1,nrd)) then
-    call errmsg('Program error')
-  end if
+  !if (real(areaTot,r8b) /= area(ic_outlet,ir_outlet)) then
+  !  call errmsg('Program error')
+  !end if
   !
   allocate(areafull(2*ncd,2*nrd))
   do ir = 1, nrd
@@ -620,8 +671,7 @@ program peano
   ! DZ
   !======================================================
   !
-  diagleng = sqrt(cs**2 + cs**2)
-  areaTot = nrd*ncd*cs**2
+  diagleng = sqrt(cs2 + cs2)
   !
   ! determine the main stem
   call logmsg('Computing main stem length and slope0...')
