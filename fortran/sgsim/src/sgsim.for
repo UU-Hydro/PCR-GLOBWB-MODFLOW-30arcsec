@@ -1568,6 +1568,7 @@ c
 c
 c-----------------------------------------------------------------------
       use       geostat
+      use utilsmod, only: logmsg !JV
       parameter(TINY=1.0e-10)
       include  'sgsim.inc'
       real*8    hsqd,sqdist
@@ -1626,7 +1627,7 @@ c
                   tmp(nlooku)   = - (covtab(ic,jc,kc)-TINY*real(hsqd))
                   order(nlooku) = real((kc-1)*MAXCXY+(jc-1)*MAXCTX+ic)
             else
-              write(*,*) '@@@ nlooku not increased'
+              !call logmsg('Warning: nlooku not increased')
             end if
       end do
       end do
