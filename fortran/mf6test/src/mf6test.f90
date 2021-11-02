@@ -37,7 +37,7 @@ program mf6test
   integer(i4b) :: il, jl, ir, ic, jr, jc, bnexp, bcsexp, bs, step
   integer(i4b) :: ic0, ic1, ic2, ir0, ir1, ir2, nexg
   real(r4b) :: r4xll, r4yll, r4cs, r4nodata
-  real(r8b) :: r8xll, r8yll
+  real(r8b) :: r8xll, r8yll, gdim
   !
   real(r4b) :: drn_width, drn_cond
   real(r4b) :: kmin, kmax, kmean, k2sigma, kmin_rnd, kmax_rnd
@@ -72,10 +72,19 @@ program mf6test
   gnc = p_rd*2**(n_rd-1); gnr = gnc; lnr = gnr/p_rd; lnc = lnr
   gcs = 2**csexp_rd; gnlay = nl
   lnodes = lnr*lnc*gnlay
+  gdim = gnc*gcs
+  !
+  call logmsg('----------------------------------------------')
+  call logmsg('Submodels: '//ta((/p_rd/))//' x '//ta((/p_rd/)))
+  call logmsg('Global dimensions:')
+  call logmsg('('//ta((/gnc/))//','//ta((/gnr/))// &
+    ') = ('//ta((/int(gdim)/))//' m,'//ta((/int(gdim)/))//' m)')
+  call logmsg('Cell size grid level 0: '//ta((/int(gcs)/))//' m')
+  call logmsg('----------------------------------------------')
   !
   ! base grid
-  bnexp = raw%geti('base_n_exp')
-  bcsexp = raw%geti('base_cs_exp')
+  !bnexp = raw%geti('base_n_exp')
+  !bcsexp = raw%geti('base_cs_exp')
   !
   ! grid refinements
   allocate(rlev(gnlay))
@@ -241,7 +250,7 @@ program mf6test
     stop
   end select
   !
-  call raw%init_file()
+  call raw%init_file(gdim)
   !
   ! create output directories
   call create_dir(out_dir, .true.)
@@ -274,7 +283,7 @@ program mf6test
   allocate(mod%reg(1)); allocate(mod%reg(1)%bb)
   !
   ! set the DISU
-  call mod%set_disu()
+  !call mod%set_disu()
   !
   ! write the exchanges
   write(f,'(a,i2.2,a)') 's', sol%isol, '.exchanges.asc'

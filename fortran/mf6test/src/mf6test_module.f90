@@ -112,6 +112,8 @@ module mf6test_module
   real(r8b),             dimension(:),     pointer :: r8wrk    => null()
   real(r8b),             dimension(:),     pointer :: r8wrk2   => null()
   real(r8b),             dimension(:),     pointer :: r8wrk3   => null()
+  real(r8b),             dimension(:,:),   pointer :: r8wrk2d  => null()
+  real(r8b),             dimension(:,:),   pointer :: r8wrk2d2 => null()
   
   type tDisu
     integer(i4b),               pointer :: nodes => null()
@@ -121,6 +123,8 @@ module mf6test_module
     integer(i4b), dimension(:), pointer :: ihc   => null() !length nja
     real(r8b),    dimension(:), pointer :: cl12  => null() !length nja
     real(r8b),    dimension(:), pointer :: hwva  => null() !length nja
+    real(r8b),    dimension(:), pointer :: top   => null()
+    real(r8b),    dimension(:), pointer :: bot   => null()
   end type tDisu
   !
   type tRegmap
@@ -174,6 +178,7 @@ module mf6test_module
   contains
     procedure :: get_model_name => mf6_mod_get_model_name
     procedure :: set_disu       => mf6_mod_set_disu
+    procedure :: get_val        => mf6_mod_get_val_r8
     procedure :: get_array      => mf6_mod_get_array_r8
     generic   :: write_array    => mf6_mod_write_array_i4, &
                                    mf6_mod_write_array_r8
@@ -306,9 +311,11 @@ module mf6test_module
             if (nw > 5) then
               s = change_case(words(6), 'u')
               if (trim(s) == '*') then
+                call logmsg('**** Multiplication factor found **** ')
                 read(words(7),*) dat%r8mult
               end if
               if (trim(s) == '+') then
+                call logmsg('**** Addition factor found **** ')
                 read(words(7),*) dat%r8add
               end if
             end if
@@ -339,7 +346,7 @@ module mf6test_module
     return
   end subroutine mf6_raw_init
 
-  subroutine mf6_raw_init_file(this)
+  subroutine mf6_raw_init_file(this, gdim)
 ! ******************************************************************************
 ! ******************************************************************************
 !
@@ -348,7 +355,9 @@ module mf6test_module
 !
     ! -- dummy
     class(tRawDat) :: this
+    real(r8b), intent(in) :: gdim
     ! -- local
+    type(tEhdrHdr), pointer :: hdr => null()
     type(tData), pointer :: dat1, dat2
     integer(I4B) :: i, j
     logical :: lfound
@@ -372,6 +381,15 @@ module mf6test_module
         end do
         if (.not.lfound) then
           call dat1%ehdr%ehdr_get_val_init(dat1%s)
+          hdr => dat1%ehdr%hdr
+          !
+          ! check if the data is square
+          if (hdr%ncol /= hdr%nrow) then
+            call errmsg('Error: invalid EHDR data (ncol /= nrow).')
+          end if
+          if (hdr%ncol*hdr%csr8 /= gdim) then
+            call errmsg('Error: invalid EHDR data (mismatch in dimension).')
+          end if
         end if
       end if
     end do
@@ -700,17 +718,24 @@ module mf6test_module
     ! -- dummy
     class(tMf6_mod) :: this
     ! -- local
+    type tCellDat
+      integer(i4b) :: ic = 0
+      integer(i4b) :: ir = 0
+      integer(i4b) :: nrl = 0
+    end type tCellDat
+    type(tCellDat), dimension(:), allocatable :: celldat
+    !
     character(len=mxslen) :: f
     real(r8b), parameter :: thkmin = 0.1d0
     type(tDisu), pointer :: disu => null()
     
     integer(i4b), dimension(:,:,:), allocatable :: nod3d
-    integer(i4b), dimension(:,:), allocatable :: ginrl 
     integer(i4b) :: iact, il, ir, ic, jl, jr, jc, kl, kr, kc
     integer(i4b) :: i, j, n, m, nja, nr, nc, nrl, mrl
-    integer(i4b) :: gir, gic, nnbr, nlnbr, maxnrl, np, iside
-    integer(i4b) :: jr0, jr1, jc0, jc1
-    real(r8b) :: topval, botval
+    integer(i4b) :: gir, gic, gjr, gjc, nnbr, nlnbr, maxnrl, np, mp, kp, iside
+    integer(i4b) :: jr0, jr1, jc0, jc1, ic0, ir0
+    integer(i4b), dimension(gnlay) :: top_i_raw, bot_i_raw, dz_i_raw
+    real(r8b) :: topval, botval, dzval, r8val, r8sum
     !
     integer(i4b), parameter :: maxnbr = 10
     integer(i4b), dimension(1+maxnbr) :: ihc
@@ -719,6 +744,8 @@ module mf6test_module
     !
     integer(i4b) :: ihc_val
     real(r8b) :: hwva_val, cl12_val
+    !
+    logical :: ldz
 ! ------------------------------------------------------------------------------
     !
     allocate(this%disu)
@@ -739,14 +766,36 @@ module mf6test_module
       disu%nodes = disu%nodes + nr*nc
     end do
     !
-    allocate(ginrl(3,disu%nodes), i1wrk2d(2,disu%nodes))
-    do i = 1, disu%nodes
-      ginrl(:,i) = 0
+    ldz = .false.
+    do il = 1, gnlay
+      ldz = raw%exists('dz', il, 0)
+      if (.not.ldz) exit
     end do
     !
+    if (.not.ldz) then
+      do il = 1, gnlay
+        top_i_raw(il) = raw%mf6_raw_get_index('top', il, 0)
+        bot_i_raw(il) = raw%mf6_raw_get_index('bot', il, 0)
+      end do
+    else
+      do il = 1, gnlay
+        top_i_raw(il) = raw%mf6_raw_get_index('top', 1, 0)
+        dz_i_raw(il)  = raw%mf6_raw_get_index('dz', il, 0)
+      end do
+    end if
+    !
+    allocate(celldat(disu%nodes), i1wrk2d(2,disu%nodes))
     if (allocated(nod3d)) deallocate(nod3d)
     allocate(nod3d(this%ncol,this%nrow,gnlay))
-    
+    do il = 1, gnlay
+      do ir = 1, this%nrow
+        do ic = 1, this%ncol
+          nod3d(ic,ir,il) = 0
+        end do
+      end do
+    end do
+    !
+    allocate(disu%top(disu%nodes),disu%bot(disu%nodes))
     allocate(this%layer_nodes(gnlay))
     this%layer_nodes = 0
     disu%nodes = 0; this%layer_nodes = 0
@@ -758,10 +807,11 @@ module mf6test_module
           this%layer_nodes(il) = this%layer_nodes(il) + 1
           disu%nodes = disu%nodes + 1
           jc = (ic-1)*nrl + 1; jr = (ir-1)*nrl + 1
-          ginrl(1,disu%nodes) = jc
-          ginrl(2,disu%nodes) = jr
-          
-          ginrl(3,disu%nodes) = nrl
+          celldat(disu%nodes)%ic  = jc
+          celldat(disu%nodes)%ir  = jr
+          celldat(disu%nodes)%nrl = nrl
+          disu%top(disu%nodes) = r8nodata
+          disu%bot(disu%nodes) = r8nodata
           do i = 1, nrl
             do j = 1, nrl
               jc = (ic-1)*nrl + j; jr = (ir-1)*nrl + i
@@ -775,6 +825,128 @@ module mf6test_module
         call writeflt(f, nod3d(:,:,il), this%ncol, this%nrow, DZERO, DZERO, gcs, 0)
       end if
     end do
+    !
+    ! fill the top and bot values
+    if (ldz) then
+      ic0 = this%bb%ic0; ir0 = this%bb%ir0
+      ! top first
+      call logmsg('Determining top for layer 1...')
+      il = 1
+      do ir = 1, this%nrow
+        do ic = 1, this%ncol
+          np = nod3d(ic,ir,il)
+          if (np == 0) cycle
+          if (disu%top(np) == r8nodata) then
+            gic = celldat(np)%ic; gir = celldat(np)%ir; nrl = celldat(np)%nrl
+            topval = this%get_val(top_i_raw(il), il, gic+ic0-1, gir+ir0-1, nrl)
+            if (topval == r8nodata) then
+              call errmsg('Error: nodata top value.')
+            end if
+            disu%top(np) = topval
+          end if
+        end do
+      end do
+      !
+      do il = 2, gnlay
+        call logmsg('Determining top and bot for layer '//ta((/il/))//'...')
+        do ir = 1, this%nrow
+          do ic = 1, this%nrow
+            np = nod3d(ic,ir,il)
+            !if (np == 28673) then
+            !  write(*,*) 'Break'
+            !end if
+            if (np == 0) cycle
+            topval = disu%top(np); botval = disu%bot(np)
+            if ((topval /= r8nodata).and.(botval /= r8nodata)) cycle
+            !
+            gic = celldat(np)%ic; gir = celldat(np)%ir; nrl = celldat(np)%nrl
+            ! first check upper neighbor
+            if (il > 1) then
+              mp = nod3d(ic,ir,il-1) ! top node
+              mrl = celldat(mp)%nrl !top
+              !
+              ! determine the scaled bot
+              n = 0; botval = DZERO
+              do jr = gir, gir+nrl-1
+                do jc = gic, gic+nrl-1 ! loop over the top node cells
+                  kp = nod3d(jc,jr,il-1)
+                  topval = disu%top(kp)
+                  dzval = this%get_val(dz_i_raw(il-1), il-1, jc+ic0-1, jr+ir0-1, 1)! mrl)
+                  if ((topval /= r8nodata).and.(dzval /= r8nodata)) then
+                    n = n + 1
+                    botval = botval + (topval-dzval)
+                  end if
+                end do
+              end do
+              botval = botval/n
+              !
+              ! correct is neccary
+              dzval = huge(dzval)
+              do jr = gir, gir+nrl-1
+                do jc = gic, gic+nrl-1 ! loop over the top node cells
+                  kp = nod3d(jc,jr,il-1)
+                  topval = disu%top(kp)
+                  if (topval == r8nodata) then
+                    call errmsg('Program error: Top is no data.')
+                  end if
+                  dzval = min(dzval,topval-botval)
+                end do
+              end do
+              if (dzval < DZERO) then
+                botval = botval - abs(dzval) - thkmin
+              end if
+              do jr = gir, gir+nrl-1
+                do jc = gic, gic+nrl-1 ! loop over the top node cells
+                  kp = nod3d(jc,jr,il-1)
+                  if (disu%bot(kp) == r8nodata) disu%bot(kp) = botval
+                end do
+              end do
+              if (disu%top(np) == r8nodata) disu%top(np) = botval
+              if (il == gnlay) then
+                dzval = this%get_val(dz_i_raw(il), il, gic+ic0-1, gir+ir0-1, 1) ! nrl)
+                if (disu%bot(np) == r8nodata) disu%bot(np) = disu%top(np) - dzval
+              end if
+            end if
+          end do
+        end do
+      end do
+      !
+    else
+      call errmsg('Not yet supported.')
+    end if
+    !
+    ! check consistency
+    do n = 1, disu%nodes
+      topval = disu%top(n); botval = disu%bot(n)
+      if ((topval == r8nodata).or.(botval == r8nodata)) then
+        call errmsg('Program error: inconsistent top/bot.')
+      end if
+      dzval = topval - botval
+      if (dzval < DZERO) then
+        call errmsg('Program error: negative layer thickness.')
+      end if
+    end do
+    !
+    ! debug
+    if (.false.) then
+      allocate(r8wrk2d(this%nrow,this%ncol),r8wrk2d2(this%nrow,this%ncol))
+      do il = 1, gnlay
+        do ir = 1, this%nrow
+          do ic = 1, this%nrow
+            r8wrk2d(ic,ir) = r8nodata
+            np = nod3d(ic,ir,il)
+            if (np == 0) cycle
+            r8wrk2d(ic,ir)  = disu%top(np)
+            r8wrk2d2(ic,ir) = disu%bot(np)
+          end do
+        end do
+        f = 'top_'//ta((/il/))
+        call writeflt(f, r8wrk2d, this%ncol, this%nrow, DZERO, DZERO, gcs, r8nodata)
+        f = 'bot_'//ta((/il/))
+        call writeflt(f, r8wrk2d2, this%ncol, this%nrow, DZERO, DZERO, gcs, r8nodata)
+      end do
+      stop
+    end if
     !
     ! iac
     allocate(disu%iac(disu%nodes))
@@ -790,8 +962,6 @@ module mf6test_module
       end do
       !
       do il = 1, gnlay
-        topval = raw%getr8('top',il)
-        botval = raw%getr8('bot',il)
         nrl = 2**rlev(il)
         do ir = 1, this%nrow
           do ic = 1, this%ncol
@@ -801,7 +971,8 @@ module mf6test_module
             if (i1wrk2d(1,np) == 1) cycle ! node is already processed
             i1wrk2d(1,np) = 1
             !
-            gic = ginrl(1,np); gir = ginrl(2,np); nrl = ginrl(3,np)
+            gic = celldat(np)%ic; gir = celldat(np)%ir; nrl = celldat(np)%nrl
+            topval = disu%top(np); botval = disu%bot(np)
             !
             ! set for the center node
             st(1)   = np
@@ -1524,25 +1695,10 @@ module mf6test_module
     write(iu,'(a)')
     write(iu,'(   a)') 'BEGIN GRIDDATA'
     !
-    allocate(r8wrk(disu%nodes),r8wrk2(disu%nodes))
-    n = 0
-    do il = 1, gnlay
-      topval = raw%getr8('top',il)
-      botval = raw%getr8('bot',il)
-      nrl = 2**rlev(il)
-      do ir = 1, this%nrow/nrl
-        do ic = 1, this%ncol/nrl
-          n = n + 1
-          r8wrk(n) = topval
-          r8wrk2(n) = botval
-        end do
-      end do
-    end do
-    
     write(iu,'(2x,a)') 'TOP'
-    f = trim(pb)//'.disu.top'; call this%write_array(iu, 4, f, r8wrk, lbin, lbinpos)
+    f = trim(pb)//'.disu.top'; call this%write_array(iu, 4, f, disu%top, lbin, lbinpos)
     write(iu,'(2x,a)') 'BOT'
-    f = trim(pb)//'.disu.bot'; call this%write_array(iu, 4, f, r8wrk2, lbin, lbinpos)
+    f = trim(pb)//'.disu.bot'; call this%write_array(iu, 4, f, disu%bot, lbin, lbinpos)
     call clear_wrk()
     write(iu,'(2x,a)') 'AREA'
     write(iu,'(4x,a)') 'CONSTANT '//ta((/gcs*gcs/))
@@ -1568,6 +1724,8 @@ module mf6test_module
     deallocate(disu%ihc);  disu%ihc  => null()
     deallocate(disu%cl12); disu%cl12 => null()
     deallocate(disu%hwva); disu%hwva => null()
+    deallocate(disu%top);  disu%top  => null()
+    deallocate(disu%bot);  disu%bot   => null()
     !
     return
   end subroutine mf6_mod_write_disu
@@ -2346,6 +2504,14 @@ module mf6test_module
       deallocate(r8wrk3)
       r8wrk3 => null()
     end if
+    if (associated(r8wrk2d)) then
+      deallocate(r8wrk2d)
+      r8wrk2d => null()
+    end if
+    if (associated(r8wrk2d2)) then
+      deallocate(r8wrk2d2)
+      r8wrk2d2 => null()
+    end if
     !
     return
   end subroutine clear_wrk
@@ -2624,7 +2790,7 @@ module mf6test_module
           else
             write(iu,'(a)') 'echo Serial run complete. Press any key to continue.'
           end if
-          write(iu,'(a)') '::pause>nul'
+          write(iu,'(a)') 'pause>nul'
           close(iu)
         end if
       end do
@@ -2893,6 +3059,52 @@ module mf6test_module
     return
   end subroutine mf6_sol_write_ims
 
+  function mf6_mod_get_val_r8(this, i_raw, ilay_dat, gic0, gir0, gnrl) &
+    result(r8val)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+    ! -- dummy
+    class(tMf6_mod) :: this
+    integer(i4b), intent(in) :: i_raw
+    integer(i4b), intent(in) :: ilay_dat
+    integer(i4b), intent(in) :: gic0
+    integer(i4b), intent(in) :: gir0
+    integer(i4b), intent(in) :: gnrl
+    real(r8b) :: r8val
+    ! -- local
+    type(tEhdr), pointer :: ehdr
+    type(tData), pointer :: dat => null()
+    integer(i4b) :: bs, ir0, ir1, ic0, ic1, ir, ic
+    logical :: lmv
+! ------------------------------------------------------------------------------
+    dat => raw%raw(i_raw)%dat
+    !
+    select case(dat%file_type)
+    case(i_ehdr)
+      ehdr => dat%ehdr
+      if (dat%readall) then
+        call ehdr%ehdr_read_full_grid(ehdr%fp)
+      end if
+      bs = int(gnrl*gcs/ehdr%hdr%csr8)
+      ir = (gir0 - 1)/bs + 1 ! ir0 = (irow-1)*bs + 1
+      ic = (gic0 - 1)/bs + 1 ! ic0 = (icol-1)*bs + 1
+      r8val = ehdr%ehdr_get_val_r8(ic, ir, gnrl*gcs, lmv)
+    case(i_undefined)
+      read(dat%s,*) r8val
+    end select
+    !
+    if (lmv) then
+      r8val= r8nodata
+    else 
+      r8val = r8val * dat%r8mult + dat%r8add
+    end if
+    !
+    return
+  end function mf6_mod_get_val_r8
+    
   subroutine mf6_mod_get_array_r8(this, key, ilay_dat, iper_dat, ilay_tgt, &
     arrflg, arr, ib_in, toponly_in)
 ! ******************************************************************************
