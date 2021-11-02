@@ -289,7 +289,15 @@ program mf6ggm
       end do
     end do
     call m%set_opts()
-    if (m%nparts > 1) call m%recur()
+    if (m%nparts > 1) then
+      if (m%nparts == m%nvtxs) then
+        do j = 1, m%nvtxs
+          m%part(j) = j-1
+        end do
+      else
+        call m%recur()
+      end if
+    end if
     !
     ! count and allocate
     do j = 1, solncat
