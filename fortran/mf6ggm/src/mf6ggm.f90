@@ -98,7 +98,7 @@ program mf6ggm
   integer(i2b) :: itile, i2v
   integer(i4b) :: iu, ju, nsol, nsol_mm, nsol_sm, isol, i, j, k, kk, k0, k1, n, nn, nb, n_reg, n_reg_last, nja_reg
   integer(i4b) :: solncat, solmxlid, mxlid, nja_cat, m_reg, iact, ncell, i4v, i4mv
-  integer(i4b) :: lid, gid, lid1, gid1, lid2, nja, p, pp, p0, w, wtot, nmod, ipart, ireg
+  integer(i4b) :: lid, gid, lid1, gid1, lid2, nja, p, pp, ppr, p0, w, wtot, nmod, ipart, ireg
   integer(i4b) :: il0, il1, ir0, ir1, ic0, ic1, nlay0, nlay1, ios
   integer(i4b) :: mxncol, mxnrow, nc, nr, ic, ir, il, jc, jr, kc, kr, ixch, jxch, idum
   integer(i4b) :: gir0, gir1, gic0, gic1, pnod, ptil, pnlay, nodsign, modid, nintf, modid0, modid1
@@ -106,6 +106,7 @@ program mf6ggm
   integer(i4b), dimension(:), allocatable :: ia, ja
   integer(i4b), dimension(:), allocatable :: mapping
   integer(i4b), dimension(:,:), allocatable :: solmodid
+  integer(i8b) :: pp8
   real(r8b) :: xmin, ymin
   real(r8b), dimension(:), allocatable :: ncell_reg
 ! ------------------------------------------------------------------------------
@@ -722,10 +723,13 @@ program mf6ggm
                 allocate(nodintf%nb_ireg(nodintf%n))
                 allocate(nodintf%nb_gicir(2,nodintf%n))
                 allocate(nodintf%nb_nlay(nodintf%n))
-                read(miu(iucat),pos=p+3*n*i4b) pp
-                pp = 1 + (pp-1)*6*i4b
+                read(miu(iucat),pos=p+3*n*i4b) ppr
+                !pp = 1 + (ppr-1)*6*i4b
+                pp8 = 1 + (int(ppr,i8b)-1)*6*i4b
                 do k = 1, nodintf%n
-                  read(miu(iuintf),pos=pp) ic0, ir0, nlay0, &
+                  !read(miu(iuintf),pos=pp) ic0, ir0, nlay0, &
+                  !                         ic1, ir1, nlay1
+                  read(miu(iuintf),pos=pp8) ic0, ir0, nlay0, &
                                            ic1, ir1, nlay1
                   !
                   ! first check
