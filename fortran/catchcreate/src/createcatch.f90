@@ -381,9 +381,6 @@
       do iact = 1, 2
         nstem = 1
         ic = icir_pit(1); ir = icir_pit(2)
-        !if ((ic == 12720).and.(ir==815))then
-        !  write(*,*) 'Break'
-        !end if
         !
         ! add the pit
         if (iact == 2) then
@@ -416,9 +413,6 @@
           jc = ic + st(1,inbr); jr = ir + st(2,inbr)
           !
           if (iact == 2) then
-            !if ((ic == 9506).and.(ir==5194)) then
-            !  write(*,*) 'Break'
-            !end if
             icir_stem(1,nstem) = ic; icir_stem(2,nstem) = ir
             r8wk(inbr) = DZERO
             jnbr = maxloc(r8wk, dim=1,kind=i4b)
@@ -546,7 +540,7 @@
     
     recursive subroutine refine_catch(cat, icat, jcat, pbb, catptr, acc, &
       icir_pit, ldd, lddmv, &
-      idepth, maxdepth, maxtrib, minarea, areag)
+      idepth, maxdepth, maxtrib, minarea, minareasb, areag)
   ! ******************************************************************************
   ! ******************************************************************************
   !
@@ -567,6 +561,7 @@
       integer(i4b),                 intent(in)    :: maxdepth
       integer(i4b),                 intent(in)    :: maxtrib
       real(r8b),                    intent(in)    :: minarea
+      real(r8b),                    intent(in)    :: minareasb
       real(r8b), dimension(:),      intent(in)    :: areag
       !
       ! -- local
@@ -582,7 +577,7 @@
       integer(i4b), parameter :: mxoutlet = 1000
       integer(i4b), dimension(mxoutlet) :: basin_flag
       integer(i4b), dimension(2, mxoutlet) :: icir_outlet
-      real(r8b) :: area
+      real(r8b) :: area, areasub
   !    integer(i4b), dimension(:), allocatable :: areachk
   ! ------------------------------------------------------------------------------
       idepth = idepth + 1
@@ -657,15 +652,19 @@
       call calc_catch(cat, jcat0, catptr, catptrbb, ldd, lddmv, cbb, jcat)
       !
       do i = 1, size(cbb)
-        area = cat_size(cat, jcat0+i, cbb(i), areag)
-        if ((basin_flag(i) == 1).and.(area < minarea)) then
-          cycle ! basins
+        areasub = cat_size(cat, jcat0+i, cbb(i), areag)
+        if ((basin_flag(i) == 1).and.(areasub < minarea)) then ! basins
+          cycle
         end if
+        if ((basin_flag(i) == 0).and.(areasub < minareasb)) then ! sub-basins
+          cycle
+        end if
+        !
         jdepth = idepth
         jcjr_pit = icir_outlet(:,i)
         call refine_catch(cat, jcat0+i, jcat, pbb, &
           catptr, acc, jcjr_pit, ldd, lddmv, &
-          jdepth, maxdepth, maxtrib, minarea, areag)
+          jdepth, maxdepth, maxtrib, minarea, minareasb, areag)
       end do
       !
       if (allocated(cbb)) deallocate(cbb)
@@ -679,8 +678,11 @@
     ! modules
     use catchMod
     use pcrModule
-    use utilsmod, only: writeasc, writeidf, tPol, readgen, filtergen_i1, tBB, DZERO, quicksort_d, ta, errmsg
+    use utilsmod, only: writeasc, writeidf, tPol, readgen, filtergen_i1, &
+      tBB, DZERO, quicksort_d, ta, errmsg, tUnp, calc_unique, logmsg
     use imod_idf, only: idfobj, idfread, imod_utl_printtext, idfdeallocatex
+    use ehdrModule, only: writeflt
+    use metis_module, only: tMetis
     
     implicit none
     
@@ -688,18 +690,20 @@
     type(tPol), dimension(:), allocatable :: p
     type(tBB) :: catptrbb
     type(tBB), dimension(:), allocatable :: bb, bb_sub
+    type(tUnp), dimension(:), allocatable :: regbb
+    type(tMetis), pointer :: met => null()
     logical :: ok, flg
     character(len=1024) :: f_ldd, f_gen, f_area, s, fmt
     integer(i1b) :: lddmv
     integer(i1b), dimension(:,:), allocatable :: ldd, catptr
-    integer(i4b) :: maxtrib
-    integer(i4b) :: ir, ic, jr, jc, kr, kc, ic0, ic1, ir0, ir1
-    integer(i4b) :: catid, mxcatid, n, m, inbr, icat, jcat, kcat, icat0, icat1
-    integer(i4b) :: idepth, maxdepth
+    integer(i4b) :: maxtrib, ir, ic, jr, jc, kr, kc, ic0, ic1, ir0, ir1
+    integer(i4b) :: catid, mxcatid, n, m, inbr, icat, jcat, kcat, lcat, icat0, icat1, ncat
+    integer(i4b) :: idepth, maxdepth, nreg, ireg, idum, nparts, nc, nr, ipart, ncoast_old, ncoast_new
     integer(i4b), dimension(2) :: icir_pit
-    integer(i4b), dimension(:,:), allocatable :: cat !, wrk
+    integer(i4b), dimension(:), allocatable :: coastcatflg
+    integer(i4b), dimension(:,:), allocatable :: cat, coastcat, regun !, wrk
     integer(i4b), dimension(:,:), allocatable :: icir_stem
-    real(r8b) :: area, minarea
+    real(r8b) :: area, minarea, minareasb, area_tot
     real(r8b), dimension(:), allocatable :: areag
     real(r8b), dimension(:), allocatable :: cat_area
     real(r8b), dimension(:,:), allocatable :: acc
@@ -716,7 +720,12 @@
     call getarg(1,f_ldd)
     call getarg(2,f_gen)
     call getarg(3,f_area)
-   
+    call getarg(4,s); read(s,*) minarea
+    call getarg(5,s); read(s,*) minareasb
+    call getarg(6,s); read(s,*) maxdepth
+    !
+    call logmsg('***** Using minimal area '//ta((/minarea/))//' and maxdepth '//ta((/maxdepth/))//' *****')
+    !
     ! read the gen file for clipping
     p = readgen(f_gen)
     !
@@ -753,6 +762,8 @@
     !flg = .true.; ir0 = 9000; ir1 = 17000; ic0 = 11500; ic1 = 17500; kcat = 30715 ! Amazone
     !flg = .true.; ir0 = 6000; ir1 = 15000; ic0 = 19500; ic1 = 28000; kcat = 114403 ! Africa
     !flg = .true.; ir0 = 4380; ir1 = 5300; ic0 = 21800; ic1 = 23100; kcat = 2790 ! Rhine-Meuse
+    !flg = .false.; ir0 = 4380; ir1 = 5300; ic0 = 21800; ic1 = 23100
+    !flg = .false.; ir0 =  12100; ir1 = 14000; ic0 = 26700; ic1 = 27700 ! Madagascar
     !
     gir0 = ir0; gir1 = ir1; gic0 = ic0; gic1 = ic1
     lnrow = gir1 - gir0 + 1; lncol = gic1 - gic0 + 1
@@ -786,9 +797,10 @@
     end do
     !
     write(*,*) 'Computing catchments...'
-    allocate(cat(lncol,lnrow),catptr(lncol,lnrow))
+    allocate(cat(lncol,lnrow),catptr(lncol,lnrow), coastcat(lncol,lnrow))
     do ir = 1, lnrow
       do ic = 1, lncol
+        coastcat(ic,ir) = 0
         if (ldd(ic,ir) /= lddmv) then
           catptr(ic,ir) = 1
           catptrbb%ir0 = min(catptrbb%ir0, ir); catptrbb%ir1 = max(catptrbb%ir1, ir)
@@ -801,7 +813,7 @@
     catptrbb%ncol = catptrbb%ic1 - catptrbb%ic0 + 1; catptrbb%nrow = catptrbb%ir1 - catptrbb%ir0 + 1
     
     call calc_catch(cat, 0, catptr, catptrbb, ldd, lddmv, bb)
-    call writeidf('cat_init.idf', cat, size(cat,1), size(cat,2), lxmin, lymin, gcs, DZERO)
+    call writeflt('cat_lev'//ta((/maxdepth/))//'_init', cat, size(cat,1), size(cat,2), lxmin, lymin, gcs, 0)
     mxcatid = size(bb)
     !
     write(*,*) 'Refining catchments...'
@@ -816,12 +828,11 @@
     ! first, find the catchment boundary
     maxtrib = 4
     catid = mxcatid + 1
-    minarea = 100.d0 * sqkm !m2
-!    minarea = 1.d0 * sqkm !m2
-!    minarea = 0.d0 !m2
-    maxdepth = 12
-    !
-    jcat = mxcatid
+    minarea = minarea * sqkm !m2
+    minareasb = minareasb * sqkm !m2
+!    minarea = 100.d0 * sqkm !m2
+!    minarea = 250.d0 * sqkm !m2
+!    maxdepth = 12
     !
     if (.not.flg) then
       icat0 = 1; icat1 = mxcatid
@@ -838,11 +849,134 @@
       end do 
     end if
     !
+    if (.true.) then
+    
+    ! treat the coastal catchments
+    allocate(coastcatflg(icat1))
+    !
+    ncoast_old = 0; ncat = 0
+    do icat = icat0, icat1
+      area = cat_size(cat, icat, bb(icat), areag)
+      if (area < minarea) then
+        ncoast_old = ncoast_old + 1
+        do ir = bb(icat)%ir0, bb(icat)%ir1
+          do ic = bb(icat)%ic0, bb(icat)%ic1
+            if (cat(ic,ir) == icat) then
+              coastcat(ic,ir) = 1
+            end if
+          end do
+        end do
+      else
+        ncat = ncat + 1
+        coastcatflg(icat) = 0
+      end if
+    end do
+    !
+    call calc_unique(coastcat, 5, regun, regbb, nreg, idum, 0., 0., 0.)
+    ncoast_new = 0
+    do ireg = 1, nreg ! loop over unique regions
+      do icat = icat0, icat1
+        coastcatflg(icat) = 0
+      end do
+      do ir = regbb(ireg)%ir0, regbb(ireg)%ir1
+        do ic = regbb(ireg)%ic0, regbb(ireg)%ic1
+         if (regun(ic,ir) == ireg) then
+           icat = cat(ic,ir)
+           coastcatflg(icat) = 1
+         end if
+        end do
+      end do
+      !
+      area_tot = DZERO
+      do icat = icat0, icat1
+        if (coastcatflg(icat) == 1) then
+          area = cat_size(cat, icat, bb(icat), areag)
+          area_tot = area_tot + area
+        end if
+      end do
+      !
+      if (area_tot < minarea) then
+        mxcatid = mxcatid + 1
+        ncoast_new = ncoast_new + 1
+        do ir = regbb(ireg)%ir0, regbb(ireg)%ir1
+          do ic = regbb(ireg)%ic0, regbb(ireg)%ic1
+            if (regun(ic,ir) == ireg) then
+              cat(ic,ir) = mxcatid
+            end if
+          end do
+        end do
+        !
+      else ! METIS
+        !
+        if (allocated(i4wk2d)) deallocate(i4wk2d)
+        nc = regbb(ireg)%ncol; nr = regbb(ireg)%nrow
+        allocate(i4wk2d(nc,nr))
+        do ir = regbb(ireg)%ir0, regbb(ireg)%ir1
+          do ic = regbb(ireg)%ic0, regbb(ireg)%ic1
+            jr = ir - regbb(ireg)%ir0 + 1
+            jc = ic - regbb(ireg)%ic0 + 1
+            if (regun(ic,ir) == ireg) then
+              i4wk2d(jc,jr) = 1
+            else
+              i4wk2d(jc,jr) = 0
+            end if
+          end do
+        end do
+        !
+        nparts = max(2,nint(area_tot/minarea))
+        allocate(met)
+        call met%init(i4wk2d, nparts)
+        call met%set_opts()
+        call met%recur()
+        !
+        mxcatid = mxcatid + 1
+        ncoast_new = ncoast_new + nparts
+        !
+        n = 0
+        do ir = regbb(ireg)%ir0, regbb(ireg)%ir1
+          do ic = regbb(ireg)%ic0, regbb(ireg)%ic1
+            jr = ir - regbb(ireg)%ir0 + 1
+            jc = ic - regbb(ireg)%ic0 + 1
+            if (regun(ic,ir) == ireg) then
+              n = n + 1
+              ipart = met%part(n)
+              if (cat(ic,ir) == 0) then
+                call errmsg('Program error')
+              end if
+              if ((ic.eq.453).and.(ir.eq.40)) then
+                write(*,*) 'break'
+              end if
+              cat(ic,ir) = mxcatid + ipart
+            end if
+          end do
+        end do
+        !
+        call met%clean()
+        deallocate(met)
+      end if
+    end do
+    !
+    if (allocated(coastcat)) deallocate(coastcat)
+    if (allocated(coastcatflg)) deallocate(coastcatflg)
+    if (allocated(regun)) deallocate(regun)
+    if (allocated(i4wk2d)) deallocate(i4wk2d)
+    
+    call logmsg('# Coastal catchments: '//ta((/ncoast_old/))//' --> '//ta((/ncoast_new/)))
+    call writeflt('cat_lev'//ta((/maxdepth/))//'_init_coast_adj', cat, size(cat,1), size(cat,2), lxmin, lymin, gcs, 0)
+    !
+    end if 
+    !
+    jcat = mxcatid
+    !
+    ! non-coastal catchments
+    lcat = 0
     do icat = icat0, icat1
       area = cat_size(cat, icat, bb(icat), areag)
       if (area < minarea) cycle
+      lcat = lcat + 1
+      !
       write(s,*) area
-      write(*,'(a,i2.2,a,i7.7,a,i7.7,a)') 'Processing ', maxdepth,' pfafstetter levels for catchment ', icat, '/', mxcatid, ' area '//trim(s)//'...'
+      write(*,'(a,i2.2,a,i7.7,a,i7.7,a)') 'Processing ', maxdepth,' pfafstetter levels for catchment ', lcat, '/', ncat, ' area '//trim(s)//'...'
       call calc_acc(acc, cat, icat, bb(icat), ldd, lddmv, icir_pit, areag)
       if (.false.) then
         call writeidf('acc.idf', acc, size(acc,1), size(acc,2), lxmin, lymin, gcs, DZERO)
@@ -851,7 +985,7 @@
       areachk = 1
       call refine_catch(cat, icat, jcat, bb(icat), &
         catptr, acc, icir_pit, ldd, lddmv, &
-        idepth, maxdepth, maxtrib, minarea, areag)!, areachk)
+        idepth, maxdepth, maxtrib, minarea, minareasb, areag)!, areachk)
     end do
     !
     do ir = 1, lnrow
@@ -864,11 +998,10 @@
     write(*,'(a)') '# catchments, min. area (km2), max. area (km2): ' // &
       ta((/size(bb)/)) // ', ' // ta((/minval(cat_area)/sqkm/)) // ', ' // &
       ta((/maxval(cat_area)/sqkm/))
-    
-    !mxcatid = size(bb)
     !
     call writeidf('cat_lev'//ta((/maxdepth/))//'.idf', cat, size(cat,1), size(cat,2), lxmin, lymin, gcs, DZERO)
-    call writeasc('cat_lev'//ta((/maxdepth/))//'.asc', cat, size(cat,1), size(cat,2), lxmin, lymin, gcs, DZERO)
+    !call writeasc('cat_lev'//ta((/maxdepth/))//'.asc', cat, size(cat,1), size(cat,2), lxmin, lymin, gcs, DZERO)
+    call writeflt('cat_lev'//ta((/maxdepth/)), cat, size(cat,1), size(cat,2), lxmin, lymin, gcs, 0)
     !
   end program
 

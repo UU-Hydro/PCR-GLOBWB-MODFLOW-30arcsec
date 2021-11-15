@@ -3872,6 +3872,8 @@ module mf6_module
     integer(i4b) :: iu, ixch, iexg
     type(tExchange), pointer :: xch => null()
 ! ------------------------------------------------------------------------------
+    if (this%nxch == 0) return
+    
     d = '..\..\models\run_input\exchanges\'
     call create_dir(d)
     

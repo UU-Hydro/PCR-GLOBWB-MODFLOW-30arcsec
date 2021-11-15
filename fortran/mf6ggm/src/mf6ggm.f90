@@ -57,6 +57,7 @@ program mf6ggm
     integer(i4b) :: ncat = 0
     integer(i4b) :: nmod = 1
     integer(i4b) :: np   = 1
+    character(len=mxslen) :: fpart2cat = ''
     type(tMod), dimension(:), pointer :: mod => null()
   end type tSol
   integer(i4b), parameter :: iureg  = 1
@@ -92,14 +93,14 @@ program mf6ggm
   real(r8b),    dimension(:),     allocatable :: r8wk1d
   !
   character(len=mxslen) :: str, f, d, out_dir, map_pref, mod_inp
-  logical :: lwmod, lwsol, lok, lmv
+  logical :: lwmod, lwsol, lok, lmv, llastsol
   integer(i1b) :: nlay
   integer(i2b) :: itile, i2v
-  integer(i4b) :: iu, ju, nsol, nsol_mm, nsol_sm, i, j, k, kk, k0, k1, n, nn, nb, n_reg, nja_reg
+  integer(i4b) :: iu, ju, nsol, nsol_mm, nsol_sm, isol, i, j, k, kk, k0, k1, n, nn, nb, n_reg, n_reg_last, nja_reg
   integer(i4b) :: solncat, solmxlid, mxlid, nja_cat, m_reg, iact, ncell, i4v, i4mv
-  integer(i4b) :: lid, gid, lid1, gid1, lid2, nja, p, pp, p0, w, wtot, nmod, ipart, isol, ireg
+  integer(i4b) :: lid, gid, lid1, gid1, lid2, nja, p, pp, p0, w, wtot, nmod, ipart, ireg
   integer(i4b) :: il0, il1, ir0, ir1, ic0, ic1, nlay0, nlay1, ios
-  integer(i4b) :: mxncol, mxnrow, nc, nr, ic, ir, il, jc, jr, kc, kr, ixch, jxch
+  integer(i4b) :: mxncol, mxnrow, nc, nr, ic, ir, il, jc, jr, kc, kr, ixch, jxch, idum
   integer(i4b) :: gir0, gir1, gic0, gic1, pnod, ptil, pnlay, nodsign, modid, nintf, modid0, modid1
   integer(i4b), dimension(:), allocatable :: ia_reg, ja_reg, ia_cat, catlid, catgid
   integer(i4b), dimension(:), allocatable :: ia, ja
@@ -158,9 +159,18 @@ program mf6ggm
   call create_dir(out_dir, .true.)
   read(iu,'(a)') map_pref
   read(iu,*) nsol_mm, nsol_sm
+  llastsol = .false.
+  if (nsol_mm < 0) then
+    llastsol = .true.
+  end if
+  nsol_mm = abs(nsol_mm)
   nsol_sm = max(nsol_sm, 0)
   nsol = nsol_mm + nsol_sm
   allocate(sol(nsol), solmet(nsol_mm+1))
+  do i = 1, nsol
+    sol(i)%fpart2cat = ''
+  end do
+  !
   do i = 1, nsol_mm
     sol(i)%lmm = .true.
     read(iu,'(a)') str
@@ -170,7 +180,18 @@ program mf6ggm
     end if
     if (ios /= 0) then
       read(str,*,iostat=ios) sol(i)%iact, sol(i)%nmod
-      sol(i)%np = sol(i)%nmod
+      if (ios /= 0) then
+        read(str,*,iostat=ios) sol(i)%iact, sol(i)%fpart2cat
+        call open_file(sol(i)%fpart2cat, ju, 'r', .true.)
+        read(ju) sol(i)%nmod
+        close(ju)
+        sol(i)%np = sol(i)%nmod
+      else
+        sol(i)%np = sol(i)%nmod
+      end if
+      if (ios /= 0) then
+        call errmsg('Could not read '//trim(f))
+      end if
     end if
     sol(i)%iact = max(sol(i)%iact, 0)
   end do
@@ -220,17 +241,35 @@ program mf6ggm
   read(miu(iucat))(ia_cat(i),i=1,mxlid+1); p0 = (mxlid+1)*i4b
   !
   ! multi-model solution: METIS partitioning of catchments
-  do i = 1, nsol_mm
-    s => sol(i)
+  do isol = 1, nsol_mm
+    s => sol(isol)
     if (s%iact == 0) cycle
     !
-    solncat = ia_reg(i+1) - ia_reg(i); s%ncat = solncat
+    n_reg_last = isol
+    if (llastsol) then
+      if (isol == nsol_mm) then
+!       debug
+!        n_reg_last = isol + 1
+        n_reg_last = n_reg
+      end if
+    end if
+    !
+    solncat = 0; nn = 0
+    do i = isol, n_reg_last
+      solncat = solncat + ia_reg(i+1) - ia_reg(i)
+      nn = nn + ncell_reg(i)
+    end do
+    call logmsg('Solution '//ta((/isol/))//': '//ta((/nn/))//' cells, '//ta((/solncat/))//' catchments')
+    !
+    s%ncat = solncat
     if (allocated(catlid)) deallocate(catlid)
     allocate(catlid(solncat))
     k = 0
-    do j = ia_reg(i), ia_reg(i+1)-1
-      k = k + 1
-      catlid(k) = ja_reg(j)
+    do i = isol, n_reg_last
+      do j = ia_reg(i), ia_reg(i+1)-1
+        k = k + 1
+        catlid(k) = ja_reg(j)
+      end do
     end do
     solmxlid = maxval(catlid)
     !
@@ -242,8 +281,8 @@ program mf6ggm
       mapping(lid) = j
     end do
     !
-    m => solmet(i)
-    allocate(m%nparts); m%nparts = sol(i)%nmod
+    m => solmet(isol)
+    allocate(m%nparts); m%nparts = sol(isol)%nmod
     allocate(m%nvtxs); m%nvtxs = solncat
     allocate(m%vwgt(m%nvtxs), m%vsize(m%nvtxs)); m%vsize = 1
     allocate(m%part(m%nvtxs)); m%part = 0
@@ -295,7 +334,23 @@ program mf6ggm
           m%part(j) = j-1
         end do
       else
-        call m%recur()
+        if (len_trim(s%fpart2cat) > 0) then
+          call open_file(s%fpart2cat, ju, 'r', .true.)
+          read(ju) idum
+          if (m%nparts /= idum) call errmsg('Program error')
+          do ipart = 1, m%nparts
+            read(ju) nn
+            do i = 1, nn
+              read(ju) j ! global id
+              lid = mapping(j)
+              m%part(lid) = ipart-1
+            end do
+          end do
+          close(ju)
+          call m%calc_imbal()
+        else
+          call m%recur()
+        end if
       end if
     end if
     !
@@ -1284,6 +1339,22 @@ program mf6ggm
       deallocate(r4wk3d)
     end do
     stop
+  end if
+  !
+  ! check if the model is multi-model
+  if (llastsol) then
+    isol = nsol
+    s => sol(isol)
+    s%lmm = .false.
+    if (s%iact /= 0) then
+      do i = 1, s%nmod ! loop over models
+        md => s%mod(i); mmd => smod(md%lmodid)
+        if (mmd%nxch > 0) then
+          s%lmm = .true.
+          exit
+        end if
+      end do
+    end if
   end if
   !
   ! write the exchange files for all models  

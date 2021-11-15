@@ -48,7 +48,12 @@ module utilsmod
     module procedure :: fillgap_r4
   end interface fillgap
   private :: fillgap_r4
-    
+
+  interface fill_with_nearest
+    module procedure :: fill_with_nearest_r4
+  end interface fill_with_nearest
+  private :: fill_with_nearest_r4
+  
   interface readidf_block
     module procedure :: readidf_block_i4
     module procedure :: readidf_block_r4
@@ -1543,7 +1548,7 @@ module utilsmod
       call logmsg('Writing binary file '//trim(f)//'...')
       open(unit=iu, file=f, form='unformatted', access='stream', action='write', status='replace')
     else
-      call errmsg('Subroutine openfile called with invalid option')
+      call errmsg('Subroutine open_file called with invalid option')
     end if
     !
     return
@@ -3620,7 +3625,7 @@ end subroutine addboundary_r
     integer, parameter :: nnmax = 100
     integer :: nst, ic, ir, jc, jr, ncol, nrow, n1, n2, i, j, k, iact, n, m
     integer :: ics, irs, ict, irt, is, it, jt, ic0, ic1, ir0, ir1, itmin, imin
-    integer :: ictmin, irtmin, nc, nr
+    integer :: ictmin, irtmin, nc, nr, nlst
     integer, dimension(:,:), allocatable :: lst1, lst2, wrk
     double precision, dimension(:), allocatable :: ds
     integer, dimension(:), allocatable :: dsi
@@ -3643,7 +3648,9 @@ end subroutine addboundary_r
       deallocate(pu)
     end if
     allocate(pu(ncol,nrow))
-    allocate(lst1(2,ncol*nrow), lst2(2,ncol*nrow), wrk(ncol,nrow))
+    
+    nlst = max(nst,ncol*nrow)
+    allocate(lst1(2,nlst), lst2(2,nlst), wrk(ncol,nrow))
 
     do ir = 1, nrow
       do ic = 1, ncol
@@ -4732,6 +4739,7 @@ end subroutine addboundary_r
     integer(i4b), dimension(2,nsten) :: sicir
     logical, dimension(nsten) :: lsten
     !
+    logical :: tgt_flag
     integer(i1b), dimension(:,:), allocatable :: i1wrk
     integer(i4b) :: nc, nr, ic, ir, n, m, ic0, ic1, ir0, ir1, nbr, i, j, maxcnt
     integer(i4b) :: ntgt, iter, nnodata, jc, jr
@@ -4750,7 +4758,7 @@ end subroutine addboundary_r
     bbir0 = 1; bbir1 = nr; bbic0 = 1; bbic1 = nc
     !
     iter = 0; n = 1
-    do while(n > 0)
+    do while(.true.)
       iter = iter + 1
       !
       do ir = 1, nr
@@ -4917,7 +4925,7 @@ end subroutine addboundary_r
           end if
         end do
       end do
-      !call logmsg('Iteration '//ta((/iter/))//'; # added: '//ta((/n/))//'; # remaining: '//ta((/ntgt,nnodata/)))
+      call logmsg('Iteration '//ta((/iter/))//'; # added: '//ta((/n/))//'; # remaining: '//ta((/ntgt,nnodata/)))
       ntgt = ntgt + nnodata
       !
       !if (iter == 1) exit
@@ -4925,6 +4933,7 @@ end subroutine addboundary_r
         call errmsg('fillgap_r4: maximum iterations of '//ta((/iter/))//' reached.')
         exit
       end if
+      if (n == 0) exit
     end do
     call logmsg('Total iterations: '//ta((/iter/))//'; # not filled: '//ta((/ntgt/)))
     !
@@ -4932,4 +4941,136 @@ end subroutine addboundary_r
     return
   end subroutine fillgap_r4
   
+  subroutine fill_with_nearest_r4(x, nodata, xtgt)
+! ******************************************************************************
+    ! -- arguments
+    real(r4b), dimension(:,:), intent(inout) :: x
+    real(r4b), intent(in) :: nodata
+    real(r4b), intent(in) :: xtgt
+    ! -- locals
+    logical :: lfound
+    integer(i4b), dimension(:), allocatable :: cnt
+    integer(i4b), dimension(:,:), allocatable :: icir
+    integer(i4b), dimension(1) :: mloc
+    integer(i4b) :: n, m, nc, nr, mc, mr, ic, ir, jc, jr, kc, kr, ic0, ic1, ir0, ir1, &
+      jc0, jc1, jr0, jr1,  ntgt, iact, i, j, k, nb, id0, id1, id
+    real(r4b) :: r4v, r4vmin, r4vmax
+    real(r4b), dimension(:), allocatable :: r4vi, r4vb
+! ------------------------------------------------------------------------------
+    !
+    nc = size(x,1); nr = size(x,2)
+    allocate(r4vb(2*nc + 2*nr))
+    !
+    ! store the location to intepolate
+    do iact = 1, 2
+      ntgt = 0
+      do ir = 1, nr
+        do ic = 1, nc
+          r4v = x(ic,ir)
+          if (r4v /= nodata) then
+            if (r4v == xtgt) then
+              ntgt = ntgt + 1
+              if (iact == 2) then
+                icir(1,ntgt) = ic
+                icir(2,ntgt) = ir
+              end if
+            end if
+          end if
+        end do
+      end do
+      if (iact == 1) then
+        if (ntgt > 0) then
+          allocate(icir(2,ntgt), r4vi(ntgt))
+          do i = 1, ntgt
+            r4vi(i) = nodata
+          end do
+        end if
+      end if
+    end do
+    !
+    if (ntgt == 0) then
+      return
+    else
+      call logmsg('# interpolation cells: '//ta((/ntgt/)))
+    end if
+    !
+    do i = 1, ntgt
+      jc = icir(1,i); jr = icir(2,i)
+      !
+      lfound = .false.; n = 0
+      do while(.not.lfound)
+        n = n + 1
+        ir0 = jr - n; ir1 = jr + n; ic0 = jc - n; ic1 = jc + n
+        ir0 = max(1,ir0); ir1 = min(nr,ir1); ic0 = max(1,ic0); ic1 = min(nc,ic1); 
+        nb = 0; r4vmin = huge(r4vmin); r4vmax = -huge(r4vmax)
+        !
+        do j = 1, 4
+          select case(j)
+          case(1) !N
+            jr0 = ir0; jr1 = ir0; jc0 = ic0; jc1 = ic1
+          case(2) !S
+            jr0 = ir1; jr1 = ir1; jc0 = ic0; jc1 = ic1
+          case(3) !W
+            jr0 = ir0 + 1; jr1 = ir1 - 1; jc0 = ic0; jc1 = ic0
+          case(4) !E
+            jr0 = ir0 + 1; jr1 = ir1 - 1; jc0 = ic1; jc1 = ic1
+           end select
+          !
+          mr = ir1 - ir0 + 1; mc = ic1 - ic0 + 1
+          if (.not.lfound) then
+            do ir = jr0, jr0
+              do ic = jc0, jc1
+                r4v = x(ic,ir)
+                if ((r4v /= nodata).and.(r4v /= xtgt)) then
+                  lfound = .true.
+                  nb = nb + 1
+                  r4vb(nb) = r4v
+                  r4vmin = min(r4vmin, r4v); r4vmax = max(r4vmax, r4v)
+                end if
+              end do
+            end do
+          end if
+        end do
+        !
+        if (lfound) then
+          if (nb == 1) then
+            r4vi(i) = r4vb(1)
+          else
+            if (r4vmin == r4vmax) then
+              r4vi(i) = r4vb(1)
+            else
+              id0 = int(r4vmin,i4b); id1 = int(r4vmax,i4b)
+              m = id1 - id0 + 1
+              allocate(cnt(m))
+              do k = 1, m
+                cnt(k) = 0
+              end do
+              do k = 1, nb
+                id = int(r4vb(k),i4b) - id0 + 1
+                cnt(id) = cnt(id) + 1
+              end do
+              mloc = maxloc(cnt); id = mloc(1) + id0 - 1
+              r4vi(i) = real(id,r4b)
+              deallocate(cnt)
+            end if
+          end if
+        end if
+      end do
+    end do
+    !
+    do i = 1, ntgt
+      jc = icir(1,i); jr = icir(2,i)
+      r4v = r4vi(i)
+      if (r4v == nodata) then
+        call errmsg('Invalid interpolated value')
+      end if
+      x(jc,jr) = r4v
+    end do
+    !
+    if (allocated(icir)) deallocate(icir)
+    if (allocated(r4vi)) deallocate(r4vi)
+    !
+    return
+  end subroutine fill_with_nearest_r4
+    
 end module utilsmod
