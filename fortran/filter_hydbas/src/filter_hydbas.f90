@@ -1,7 +1,8 @@
 program filter_hydbas
   ! modules
   use utilsmod, only: mxslen, i1b, i4b, r4b, r8b, logmsg, ta, errmsg, &
-    fillgap, fill_with_nearest, writeidf, tBb, tUnp, calc_unique
+    fillgap, fill_with_nearest, writeidf, tBb, tUnp, calc_unique, &
+    open_file
   use ehdrModule, only: tEhdr, writeflt
 
   implicit none
@@ -11,7 +12,7 @@ program filter_hydbas
   type(tBb), dimension(:), pointer :: bba => null()
   type(tUnp), dimension(:), allocatable :: regbb
   !
-  character(len=mxslen) :: fcat, fhb, fo
+  character(len=mxslen) :: fcat, fhb, fo, f
   logical :: ldebug, lok
   integer(i1b), dimension(:,:), allocatable :: i1wk2d
   integer(i4b) :: gic0, gic1, gir0, gir1
@@ -203,4 +204,37 @@ program filter_hydbas
   !
   call writeflt(fo, i4wk2d, nc, nr, xll, yll, cs, 0)
   call writeidf(trim(fo)//'.idf', i4wk2d, nc, nr, xll, yll, cs, 0.d0)
+  !
+  ! write the bounding boxes
+  n = id2
+  deallocate(bba)
+  allocate(bba(n))
+  do ir = 1, nr
+    do ic = 1, nc
+      id = i4wk2d(ic,ir)
+      if (id /= 0) then
+        bb => bba(id)
+        bb%ic0 = min(bb%ic0,ic); bb%ic1 = max(bb%ic1,ic)
+        bb%ir0 = min(bb%ir0,ir); bb%ir1 = max(bb%ir1,ir)
+      end if
+    end do
+  end do
+  do id = 1, n
+    bb => bba(id)
+    bb%ncol = bb%ic1 - bb%ic0 + 1
+    bb%nrow = bb%ir1 - bb%ir0 + 1
+  end do
+  !
+  f = trim(fo)//'.csv'
+  call open_file(f, iu, 'w')
+  write(iu,'(a)') 'OBJECTID,gic0,gic1,gir0,gir1'
+  do i = 1, n
+    bb => bba(i)
+    write(iu,'(a)') ta((/i/))//','//ta((/bb%ic0/))//',' &
+                                  //ta((/bb%ic1/))//',' &
+                                  //ta((/bb%ir0/))//',' &
+                                  //ta((/bb%ir1/))
+  end do
+  close(iu)
+  !
 end program
