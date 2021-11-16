@@ -17,22 +17,21 @@ module metis_module
   real(r8b), parameter :: DZERO = 0.D0
   
   type tMetis
-#ifdef LINUX    
     ! locals (METIS arguments, see manual p. 26)
-    integer(kind=i4b),               pointer :: nvtxs  => null() ! number of vertices in the graph
-    integer(kind=i4b),               pointer :: ncon   => null() ! number of balancing constraints
-    integer(kind=i4b), dimension(:), pointer :: xadj   => null() ! adjacency structure of the graph
-    integer(kind=i4b), dimension(:), pointer :: adjncy => null() ! adjacency structure of the graph
-    integer(kind=i4b), dimension(:), pointer :: vwgt   => null() ! the weights of the vertices (dim: nvtxs)
-    integer(kind=i4b), dimension(:), pointer :: vsize  => null() ! size of vertices for computing the total communication volume (dim: nvtxs)
-    integer(kind=i4b), dimension(:), pointer :: adjwgt => null() ! weights of the edges
-    integer(kind=i4b),               pointer :: nparts => null() ! the number of partitions in the graph
-    real(kind=r4b)   , dimension(:), pointer :: tpwgts => null() ! desired weight for each partition and constraint (dim: nparts*ncon)
-    real(kind=r4b)   , dimension(:), pointer :: ubvec  => null() ! allowed load imbalance for each constraint (dim: ncon)
-    integer(kind=i4b), dimension(:), pointer :: opts   => null() ! option array (options in METIS manual, length METIS_NOPTIONS)
-    integer(kind=i4b),               pointer :: objval => null() ! edge-cut ot total communication volume
-    integer(kind=i4b), dimension(:), pointer :: part   => null() ! partition vector of the graph (dim: nvtxs)
-#else    
+    !integer(kind=i4b),               pointer :: nvtxs  => null() ! number of vertices in the graph
+    !integer(kind=i4b),               pointer :: ncon   => null() ! number of balancing constraints
+    !integer(kind=i4b), dimension(:), pointer :: xadj   => null() ! adjacency structure of the graph
+    !integer(kind=i4b), dimension(:), pointer :: adjncy => null() ! adjacency structure of the graph
+    !integer(kind=i4b), dimension(:), pointer :: vwgt   => null() ! the weights of the vertices (dim: nvtxs)
+    !integer(kind=i4b), dimension(:), pointer :: vsize  => null() ! size of vertices for computing the total communication volume (dim: nvtxs)
+    !integer(kind=i4b), dimension(:), pointer :: adjwgt => null() ! weights of the edges
+    !integer(kind=i4b),               pointer :: nparts => null() ! the number of partitions in the graph
+    !real(kind=r4b)   , dimension(:), pointer :: tpwgts => null() ! desired weight for each partition and constraint (dim: nparts*ncon)
+    !real(kind=r4b)   , dimension(:), pointer :: ubvec  => null() ! allowed load imbalance for each constraint (dim: ncon)
+    !integer(kind=i4b), dimension(:), pointer :: opts   => null() ! option array (options in METIS manual, length METIS_NOPTIONS)
+    !integer(kind=i4b),               pointer :: objval => null() ! edge-cut ot total communication volume
+    !integer(kind=i4b), dimension(:), pointer :: part   => null() ! partition vector of the graph (dim: nvtxs)
+    
     integer(kind=i8b),               pointer :: nvtxs  => null() ! number of vertices in the graph
     integer(kind=i8b),               pointer :: ncon   => null() ! number of balancing constraints
     integer(kind=i8b), dimension(:), pointer :: xadj   => null() ! adjacency structure of the graph
@@ -46,7 +45,6 @@ module metis_module
     integer(kind=i8b), dimension(:), pointer :: opts   => null() ! option array (options in METIS manual, length METIS_NOPTIONS)
     integer(kind=i8b),               pointer :: objval => null() ! edge-cut ot total communication volume
     integer(kind=i8b), dimension(:), pointer :: part   => null() ! partition vector of the graph (dim: nvtxs)
-#endif
     !
     real(r8b), pointer :: totload => null()
     real(r8b), pointer :: imbal   => null()
