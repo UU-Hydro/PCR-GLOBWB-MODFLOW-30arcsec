@@ -65,6 +65,8 @@
 		<File RelativePath="..\..\metis-5.1.0\src\metis_module.f90">
 			<FileConfiguration Name="Debug|x64">
 				<Tool Name="VFFortranCompilerTool" WarnDeclarations="true" WarnUnusedVariables="true"/></FileConfiguration></File></Filter>
+		<Filter Name="Ehdr library">
+		<File RelativePath="..\..\ehdr_lib\src\ehdr_lib.f90"/></Filter>
 		<Filter Name="PCRaster library">
 		<File RelativePath="..\..\pcrlib\src\pcrlib.f90">
 			<FileConfiguration Name="Debug|x64">

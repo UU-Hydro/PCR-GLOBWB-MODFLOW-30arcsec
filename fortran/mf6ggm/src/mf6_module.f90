@@ -9,6 +9,7 @@ module mf6_module
     writebin, get_jd, jd_next_month, get_month_days, getwords, getminmax, &
     replacetoken, IZERO, RZERO, DZERO, DONE, tBB, calc_unique, tI4grid, count_i1a, &
     get_jd, get_ymd_from_jd, jd_next_month, get_abs_path, get_month_days_s, get_slash
+  use ehdrModule, only: writeflt
   use imod_idf
   use pcrModule, only: tMap
   
@@ -1871,7 +1872,7 @@ module mf6_module
     return
   end subroutine mf6_mod_get_array_r8
 !
-  subroutine mf6_mod_write_post_map(this)
+  subroutine mf6_mod_write_post_map(this, iwrite)
 ! ******************************************************************************
 ! ******************************************************************************
 !
@@ -1880,12 +1881,14 @@ module mf6_module
 !
     ! -- dummy
     class(tMf6_mod) :: this
+    integer(i4b), intent(in) :: iwrite
     ! -- local
     character(len=mxslen) :: d
     type(tReg), pointer :: reg => null()
     type(tBb), pointer :: bb => null()
     character(len=mxslen) :: f
-    integer(i4b) :: ireg, nodes, n, iu, il, ir, ic, nlay, gic, gir, gil, i, j 
+    integer(i4b) :: ireg, nodes, n, iu, il, ir, ic, kr, kc, nlay, gic, gir, gil, i, j
+    real(r8b) :: xmin, ymin
 ! ------------------------------------------------------------------------------
     !
     nodes = 0
@@ -1944,6 +1947,37 @@ module mf6_module
     write(iu) nodes ! number of nodes
     write(iu)((i4wrk2d(j,i),j=1,3),i=1,nodes)
     close(iu)
+    !
+    if (iwrite == 1) then
+      call clear_wrk()
+      allocate(i4wrk2d(this%bb%ncol, this%bb%nrow))
+      do il = 1, gnlay
+        do ir = 1, this%bb%nrow
+          do ic = 1, this%bb%ncol
+            i4wrk2d(ic,ir) = 0
+          end do
+        end do
+        do ireg = 1, this%nreg
+          reg => this%reg(ireg)
+          bb => reg%bb
+          do ir = 1, bb%nrow
+            do ic = 1, bb%ncol
+              n = reg%nodmap(ic,ir,il)
+              gic = ic + bb%ic0 - 1; gir = ir + bb%ir0 - 1
+              kc = gic - this%bb%ic0 + 1
+              kr = gir - this%bb%ir0 + 1
+              i4wrk2d(kc,kr) = n
+            end do
+          end do
+        end do
+        f = trim(d)//trim(this%modelname)//'.nodmap.l'//ta((/il/),'(i2.2)')
+        call swap_slash(f)
+        xmin = gxmin + (this%bb%ic0-1)*gcs
+        ymin = gymin + (gnrow-this%bb%ir1)*gcs
+        call writeflt(f, i4wrk2d, this%bb%ncol, this%bb%nrow, &
+          dble(xmin), dble(ymin), dble(gcs), 0)
+      end do
+    end if
     !
     return
   end subroutine mf6_mod_write_post_map

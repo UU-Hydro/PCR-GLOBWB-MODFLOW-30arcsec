@@ -3,7 +3,8 @@ program mf6ggm
   use pcrModule, only: tMap
   use utilsmod, only: i1b, i2b, i4b, i8b, r4b, r8b, mxslen, open_file, chkexist, errmsg, &
     logmsg, quicksort_d, label_node, tBB, DZERO, writeidf, create_dir, swap_slash, &
-    change_work_dir, get_work_dir, ta, fileexist, writeasc
+    change_work_dir, get_work_dir, ta, fileexist
+  use ehdrModule, only: writeflt 
   use metis_module, only: tMetis, tolimbal
   use mf6_module, only:  tMf6_sol, tMf6_mod, tReg, raw, tDistMap, tExchange, ntile, tilebb, &
     gncol, gnrow, gnlay, gxmin, gymin, gcs, cam2 !debug
@@ -741,7 +742,8 @@ program mf6ggm
                   nodintf%my_gicir(1,k) = ic0;   nodintf%my_gicir(2,k) = ir0
                   nodintf%nb_gicir(1,k) = ic1;   nodintf%nb_gicir(2,k) = ir1
                   nodintf%my_nlay(k)    = nlay0; nodintf%nb_nlay(k)    = nlay1
-                  pp = pp + 6*i4b
+                  !pp = pp + 6*i4b
+                  pp8 = pp8 + 6*i4b
                 end do
               end if
             end do
@@ -1204,7 +1206,7 @@ program mf6ggm
       ! write the model TODO
       if ((lwmod).and.(modid0 <= md%gmodid).and.(md%gmodid <= modid1)) then
         call mmd%write()
-        call mmd%write_post_map()
+        call mmd%write_post_map(s%iwrite_modid)
       end if
       !
       ! clean up regions
@@ -1216,17 +1218,16 @@ program mf6ggm
       call logmsg('**************************************************************')
       call logmsg('***** Writing model IDs... *****')
       call logmsg('**************************************************************')
-      f = '..\post_mappings\s'//ta((/isol/),'(i2.2)')//'.asc'
+      f = '..\post_mappings\s'//ta((/isol/),'(i2.2)')//'.modmap'
       call swap_slash(f)
       xmin = gxmin + (sbb%ic0-1)*gcs
       ymin = gymin + (gnrow-sbb%ir1)*gcs
-      call writeasc(f, solmodid, sbb%ncol, sbb%nrow, &
-        dble(xmin), dble(ymin), dble(gcs), DZERO)
+      call writeflt(f, solmodid, sbb%ncol, sbb%nrow, &
+        dble(xmin), dble(ymin), dble(gcs), 0)
       deallocate(solmodid)
       sbb => null()
     end if
   end do ! BEGIN loop over all solutions
-  !
   !
   if (.not.lwsol) then
     ! close the mapping-files
