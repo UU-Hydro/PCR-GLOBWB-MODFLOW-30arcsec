@@ -182,18 +182,14 @@ program mf6ggm
     end if
     if (ios /= 0) then
       read(str,*,iostat=ios) sol(i)%iact, sol(i)%nmod
-      if (ios /= 0) then
-        read(str,*,iostat=ios) sol(i)%iact, sol(i)%fpart2cat
+      if (sol(i)%nmod < 0) then
+        read(iu,*) sol(i)%fpart2cat
         call open_file(sol(i)%fpart2cat, ju, 'r', .true.)
         read(ju) sol(i)%nmod
         close(ju)
-        sol(i)%np = sol(i)%nmod
-      else
-        sol(i)%np = sol(i)%nmod
+        call logmsg('*** data read for '//ta((/sol(i)%nmod/))//' submodels ***')
       end if
-      if (ios /= 0) then
-        call errmsg('Could not read '//trim(f))
-      end if
+      sol(i)%np = sol(i)%nmod
     end if
     sol(i)%iact = max(sol(i)%iact, 0)
   end do
