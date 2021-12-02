@@ -15,6 +15,8 @@ program filtertsstat
     character(len=mxslen) :: raw = ''
     real(r8b)             :: rho = DZERO
     real(r8b)             :: qre = DZERO
+    real(r8b)             :: measslp = DZERO
+    real(r8b)             :: modslp = DZERO
     integer(i4b)          :: iperf = 0
   end type tStat
   
@@ -23,22 +25,24 @@ program filtertsstat
   integer(i4b), parameter :: i_mean = 2
   real(r8b), parameter :: rho_thres  = 0.5D0
   real(r8b), parameter :: aqre_thres = 0.5D0
+  real(r8b), parameter :: trend_thres = 0.05D0
+  
 !  real(r8b), parameter :: aqre_thres = 50.0D0
   type(tBB), pointer :: bb => null()
   type(tStat), pointer :: sd => null()
   type(tStat), dimension(:), pointer :: sdat => null()
   character(len=mxslen) :: f_in, f_out, f_out_pref, hdr, s
   character(len=mxslen), dimension(:), allocatable :: args, sa
-  logical :: qre_crit, rho_crit, write_perf
+  logical :: qre_crit, rho_crit, write_perf, trend_perf
   integer(i4b) :: filt_method
   integer(i4b) :: nsf, nsr, ns, na, iu, i, gnc, gnr, ic, ir, nc, nr, n, nmax, np2cand, np3cand
-  integer(i4b) :: ylat_ic, xlon_ic, rho_ic, qre_ic, iact, ios, np
-  integer(i4b), dimension(4) :: nperf
+  integer(i4b) :: ylat_ic, xlon_ic, rho_ic, qre_ic, measslp_ic, modslp_ic, iact, ios, np, nclass
+  integer(i4b), dimension(:), allocatable :: nperf
   integer(i4b), dimension(:,:), allocatable :: si2d, perf2d
-  real(r4b), dimension(4) :: pperf
-  real(r8b) :: gxmin, gxmax, gymin, gymax, gcs, x, y, rho, qre
+  real(r4b), dimension(:), allocatable :: pperf
+  real(r8b) :: gxmin, gxmax, gymin, gymax, gcs, x, y, rho, qre, slp
   real(r8b) :: rhotot, aqretot
-  real(r8b), dimension(:,:), allocatable :: rho2d, qre2d
+  real(r8b), dimension(:,:), allocatable :: rho2d, qre2d, modslp2d, measslp2d
 ! ------------------------------------------------------------------------------
   !
   ! read the command line arguments
@@ -55,13 +59,22 @@ program filtertsstat
   
   gcs = (gxmax-gxmin)/gnc
   f_in = args(8) 
-  read(args(9:12),*) ylat_ic, xlon_ic, rho_ic, qre_ic
-  f_out = args(13)
+  read(args(9:14),*) ylat_ic, xlon_ic, rho_ic, qre_ic, measslp_ic, modslp_ic
+  if ((measslp_ic <= 0).or.(modslp_ic <= 0)) then
+    trend_perf = .false.
+    nclass = 4
+  else
+    trend_perf = .true.
+    nclass = 7
+  end if
+  allocate(nperf(nclass), pperf(nclass))
+  !
+  f_out = args(15)
   !
   write_perf = .false.
-  if (na > 13) then
+  if (na > 15) then
     write_perf = .true.
-    f_out_pref = args(14)
+    f_out_pref = args(16)
   end if
   !
   ! read the summary file
@@ -97,17 +110,43 @@ program filtertsstat
           read(sa(rho_ic),*) sd%rho; read(sa(qre_ic),*) sd%qre
           rhotot = rhotot + sd%rho
           aqretot = aqretot + abs(sd%qre)
-          if ((abs(sd%qre) <= aqre_thres).and.((sd%rho) >= rho_thres)) then
-            sd%iperf = 1
+          sd%iperf = 0
+          if (trend_perf) then
+            read(sa(measslp_ic),*) sd%measslp; read(sa(modslp_ic),*) sd%modslp
+            if (abs(sd%modslp) <= trend_thres) then ! model has NO trend
+              if (abs(sd%measslp) > trend_thres) then ! measurement has trend
+                sd%iperf = 5
+              end if
+            end if
+            if (abs(sd%modslp) > trend_thres) then ! model has trend
+              if (abs(sd%measslp) <= trend_thres) then ! measurement has NO trend
+                sd%iperf = 6
+              end if
+            end if
+            if (abs(sd%modslp) > trend_thres) then ! model has trend
+              if (abs(sd%measslp) > trend_thres) then ! measurement has trend
+                if ((sd%modslp < DZERO).and.(sd%measslp > DZERO)) then ! opposite trend
+                  sd%iperf = 7
+                end if
+                if ((sd%modslp > DZERO).and.(sd%measslp < DZERO)) then ! opposite trend
+                  sd%iperf = 7
+                end if
+              end if
+            end if
           end if
-          if ((abs(sd%qre)  > aqre_thres).and.((sd%rho) >= rho_thres)) then
-            sd%iperf = 2
-          end if
-          if ((abs(sd%qre) <= aqre_thres).and.((sd%rho)  < rho_thres)) then
-            sd%iperf = 3
-          end if
-          if ((abs(sd%qre)  > aqre_thres).and.((sd%rho)  < rho_thres)) then
-            sd%iperf = 4
+          if (sd%iperf == 0) then
+            if ((abs(sd%qre) <= aqre_thres).and.((sd%rho) >= rho_thres)) then
+              sd%iperf = 1
+            end if
+            if ((abs(sd%qre)  > aqre_thres).and.((sd%rho) >= rho_thres)) then
+              sd%iperf = 2
+            end if
+            if ((abs(sd%qre) <= aqre_thres).and.((sd%rho)  < rho_thres)) then
+              sd%iperf = 3
+            end if
+            if ((abs(sd%qre)  > aqre_thres).and.((sd%rho)  < rho_thres)) then
+              sd%iperf = 4
+            end if
           end if
           if (sd%iperf == 0) then
             call errmsg('Error classifying.')
@@ -130,7 +169,7 @@ program filtertsstat
   bb%nrow = bb%ir1 - bb%ir0 + 1; nr = bb%nrow
   !
   ! get the maximum rho and minumum qre
-  allocate(si2d(nc,nr), rho2d(nc,nr), qre2d(nc,nr))
+  allocate(si2d(nc,nr), rho2d(nc,nr), qre2d(nc,nr), modslp2d(nc,nr), measslp2d(nc,nr))
   if (write_perf) then
     allocate(perf2d(nc,nr))
     do ir = 1, nr
@@ -197,6 +236,16 @@ program filtertsstat
       rho2d(ic,ir) = rho2d(ic,ir) + rho 
       qre2d(ic,ir) = qre2d(ic,ir) + qre
     end do
+    if (trend_perf) then
+      do i = 1, ns
+        sd => sdat(i)
+        if (.not.sd%act) cycle
+        ic = sd%ic - bb%ic0 + 1; ir = sd%ir - bb%ir0 + 1 
+        modslp2d(ic,ir) = sd%modslp
+        slp = sd%measslp
+        measslp2d(ic,ir) = measslp2d(ic,ir) + slp
+      end do
+    end if
     deallocate(sdat)
     !
     ! count
@@ -208,6 +257,9 @@ program filtertsstat
           ns = ns + 1
           rho2d(ic,ir) = rho2d(ic,ir)/n
           qre2d(ic,ir) = qre2d(ic,ir)/n
+          if (trend_perf) then
+            measslp2d(ic,ir) = measslp2d(ic,ir)/n
+          end if
         end if
       end do
     end do
@@ -232,19 +284,46 @@ program filtertsstat
           sd%y = gymax - sd%ir*gcs + gcs/2.d0
           sd%rho = rho2d(ic,ir)
           sd%qre = qre2d(ic,ir)
-          if ((abs(sd%qre) <= aqre_thres).and.(sd%rho >= rho_thres)) then
-            sd%iperf = 1
+          sd%measslp = measslp2d(ic,ir)
+          sd%modslp = modslp2d(ic,ir)
+          sd%iperf = 0
+          if (trend_perf) then
+            if (abs(sd%modslp) <= trend_thres) then ! model has NO trend
+              if (abs(sd%measslp) > trend_thres) then ! measurement has trend
+                sd%iperf = 5
+              end if
+            end if
+            if (abs(sd%modslp) > trend_thres) then ! model has trend
+              if (abs(sd%measslp) <= trend_thres) then ! measurement has NO trend
+                sd%iperf = 6
+              end if
+            end if
+            if (abs(sd%modslp) > trend_thres) then ! model has trend
+              if (abs(sd%measslp) > trend_thres) then ! measurement has trend
+                if ((sd%modslp < DZERO).and.(sd%measslp > DZERO)) then ! opposite trend
+                  sd%iperf = 7
+                end if
+                if ((sd%modslp > DZERO).and.(sd%measslp < DZERO)) then ! opposite trend
+                  sd%iperf = 7
+                end if
+              end if
+            end if
           end if
-          if ((abs(sd%qre)  > aqre_thres).and.(sd%rho >= rho_thres)) then
-            sd%iperf = 2
-          end if
-          if ((abs(sd%qre) <= aqre_thres).and.(sd%rho  < rho_thres)) then
-            sd%iperf = 3
-          end if
-          qre_crit = (abs(sd%qre) > aqre_thres)
-          rho_crit = (sd%rho  < rho_thres)
-          if (qre_crit .and. rho_crit) then
-            sd%iperf = 4
+          if (sd%iperf == 0) then
+            if ((abs(sd%qre) <= aqre_thres).and.(sd%rho >= rho_thres)) then
+              sd%iperf = 1
+            end if
+            if ((abs(sd%qre)  > aqre_thres).and.(sd%rho >= rho_thres)) then
+              sd%iperf = 2
+            end if
+            if ((abs(sd%qre) <= aqre_thres).and.(sd%rho  < rho_thres)) then
+              sd%iperf = 3
+            end if
+            qre_crit = (abs(sd%qre) > aqre_thres)
+            rho_crit = (sd%rho  < rho_thres)
+            if (qre_crit .and. rho_crit) then
+              sd%iperf = 4
+            end if
           end if
           nperf(sd%iperf) = nperf(sd%iperf) + 1
           write(sa(1),*) (sd%ir - 1)*gnc + sd%ic
@@ -295,11 +374,15 @@ program filtertsstat
   !
   np = sum(nperf)
   write(s,'(f10.2)') 100.*np/ns
-  do i = 1, 4
+  do i = 1, size(nperf)
     pperf(i) = 100.*nperf(i)/np
   end do
   call logmsg('Total # classified: '//ta((/np/))//'/'//ta((/ns/))//' ('//trim(adjustl(s))//' %)')
-  call logmsg('class            I         II        III         IV ')
+  if (trend_perf) then
+    call logmsg('class            I         II        III         IV          V         VI        VII')
+  else
+    call logmsg('class            I         II        III         IV')
+  end if
   call logmsg('%     : '//ta(pperf,'(f10.1)'))
   call logmsg('Count : '//ta(nperf,'(i10)'))
   if (filt_method == i_mean) then
