@@ -60,6 +60,8 @@
 				<Tool Name="VFFortranCompilerTool" PreprocessorDefinitions="IFORT" WarnInterfaces="false"/></FileConfiguration>
 			<FileConfiguration Name="Debug|x64">
 				<Tool Name="VFFortranCompilerTool" PreprocessorDefinitions="IFORT" WarnInterfaces="false"/></FileConfiguration></File></Filter>
+		<Filter Name="Ehdr library">
+		<File RelativePath="..\..\ehdr_lib\src\ehdr_lib.f90"/></Filter>
 		<Filter Name="Utility library">
 		<File RelativePath="..\..\utilslib_svn\src\utils_mod.f90"/></Filter>
 		<File RelativePath="..\src\filteridf.f90"/></Filter></Files>

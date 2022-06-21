@@ -63,6 +63,7 @@ module metis_module
     procedure :: calc_imbal      => metis_calc_imbal
     procedure :: check_empty     => metis_check_empty
     procedure :: set_ids         => metis_set_ids
+    procedure :: graph_stat      => metis_graph_stat
   end type tMetis
   
   public :: tMetis
@@ -617,6 +618,80 @@ contains
     deallocate(load)
 
   end subroutine metis_calc_imbal
+  
+  subroutine metis_graph_stat(this)
+! ******************************************************************************
+! ******************************************************************************
+!
+!    SPECIFICATIONS:
+! ------------------------------------------------------------------------------
+!
+    ! -- dummy
+    class(tMetis) :: this
+    ! -- local
+    integer(i4b) :: i, nja, mindeg, maxdeg, minvwgt, maxvwgt, minewgt, maxewgt
+    real(r8b) :: avgdeg, stddeg, avgvwgt, stdvwgt, avgewgt, stdewgt, sparsity
+    real(r8b), dimension(:), allocatable :: r8wk
+    character(len=mxslen) :: s, s2
+! ------------------------------------------------------------------------------
+    !
+    write(*,*) '================================'
+    write(*,*) 'Graph Statistics:'
+    !
+    ! edges
+    allocate(r8wk(this%nvtxs))
+    do i = 1, this%nvtxs
+      r8wk(i) = real(this%xadj(i+1)-this%xadj(i),r8b)
+    end do
+    mindeg = int(minval(r8wk),i4b)
+    maxdeg = int(maxval(r8wk),i4b)
+    avgdeg = sum(r8wk)/size(r8wk)
+    stddeg = sqrt(sum(r8wk**2)/size(r8wk) - avgdeg**2)
+    sparsity = sum(r8wk)/(this%nvtxs*(this%nvtxs-1))
+    !
+    ! vertex weights
+    minvwgt = int(minval(this%vwgt),i4b)
+    maxvwgt = int(maxval(this%vwgt),i4b)
+    avgvwgt = real(sum(this%vwgt),r8b)/size(this%vwgt)
+    stdvwgt = sqrt(real(sum(this%vwgt**2),r8b)/size(this%vwgt) - avgvwgt**2)
+    !
+    ! edge weights
+    minewgt = int(minval(this%adjwgt),i4b)
+    maxewgt = int(maxval(this%adjwgt),i4b)
+    avgewgt = real(sum(this%adjwgt),r8b)/size(this%adjwgt)
+    stdewgt = sqrt(real(sum(this%adjwgt**2),r8b)/size(this%adjwgt) - avgewgt**2)
+    !
+    write(s,*) this%nvtxs
+    write(*,*) '# vertices: '//trim(adjustl(s))
+    write(s,*) int(sum(r8wk),i4b)
+    write(*,*) '# edges:    '//trim(adjustl(s))
+    !
+    write(s,*) real(sparsity,r4b)
+    write(*,*) '# sparsity: '//trim(adjustl(s))
+    !
+    write(s,*) mindeg
+    write(*,*) 'degree min: '//trim(adjustl(s))
+    write(s,*) maxdeg
+    write(*,*) 'degree max: '//trim(adjustl(s))
+    write(s,*) real(avgdeg,r4b)
+    write(*,*) 'degree avg: '//trim(adjustl(s))
+    write(s,*) real(stddeg,r4b)
+    write(*,*) 'degree std: '//trim(adjustl(s))
+    !
+    write(s,*) minvwgt; write(s2,*) minewgt
+    write(*,*) 'weight min: '//trim(adjustl(s))//'/'//trim(adjustl(s2))
+    write(s,*) maxvwgt; write(s2,*) maxewgt
+    write(*,*) 'weight max: '//trim(adjustl(s))//'/'//trim(adjustl(s2))
+    write(s,*) real(avgvwgt,r4b); write(s2,*) real(avgewgt,r4b)
+    write(*,*) 'weight avg: '//trim(adjustl(s))//'/'//trim(adjustl(s2))
+    write(s,*) real(stdvwgt,r4b); write(s2,*) real(stdewgt,r4b)
+    write(*,*) 'weight std: '//trim(adjustl(s))//'/'//trim(adjustl(s2))
+    write(*,*) '================================'
+    !
+    deallocate(r8wk)
+    return
+    !
+  end subroutine metis_graph_stat
   
   subroutine metis_set_ids(this, ids, id_offset_in)
 ! ******************************************************************************

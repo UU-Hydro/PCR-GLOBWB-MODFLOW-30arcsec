@@ -2295,12 +2295,21 @@ module utilsmod
     real(r4b), intent(in) :: xll, yll, cs
     ! -- locals
     character(len=mxslen) :: f
-    integer(i4b) :: iu, icol, irow
+    integer(i4b) :: iu, icol, irow, n
 ! ------------------------------------------------------------------------------
     f = trim(fp)//'.hdr'
     call open_file(f, iu, 'w')
     call writeflt_header_r4(iu, ncol, nrow, xll, yll, cs, ta((/nodata/)), 8, 'signedint')
     close(iu)
+    !
+    ! count
+    n = 0
+    do irow = 1,nrow
+      do icol = 1, ncol
+        if (x(icol,irow) /= nodata) n = n + 1
+      end do
+    end do
+    call logmsg('# data cells: '//ta((/n/)))
     !
     f = trim(fp)//'.flt'
     call open_file(f, iu, 'w', .true.)
@@ -2321,12 +2330,21 @@ module utilsmod
     real(r4b), intent(in) :: xll, yll, cs
     ! -- locals
     character(len=mxslen) :: f
-    integer(i4b) :: iu, icol, irow
+    integer(i4b) :: iu, icol, irow, n
 ! ------------------------------------------------------------------------------
     f = trim(fp)//'.hdr'
     call open_file(f, iu, 'w')
     call writeflt_header_r4(iu, ncol, nrow, xll, yll, cs, ta((/nodata/)), 32, 'signedint')
     close(iu)
+    !
+    ! count
+    n = 0
+    do irow = 1,nrow
+      do icol = 1, ncol
+        if (x(icol,irow) /= nodata) n = n + 1
+      end do
+    end do
+    call logmsg('# data cells: '//ta((/n/)))
     !
     f = trim(fp)//'.flt'
     call open_file(f, iu, 'w', .true.)
@@ -2347,12 +2365,21 @@ module utilsmod
     real(r4b), intent(in) :: xll, yll, cs
     ! -- locals
     character(len=mxslen) :: f
-    integer(i4b) :: iu, icol, irow
+    integer(i4b) :: iu, icol, irow, n
 ! ------------------------------------------------------------------------------
     f = trim(fp)//'.hdr'
     call open_file(f, iu, 'w')
     call writeflt_header_r4(iu, ncol, nrow, xll, yll, cs, ta((/nodata/)), 32, 'float')
     close(iu)
+    !
+    ! count
+    n = 0
+    do irow = 1,nrow
+      do icol = 1, ncol
+        if (x(icol,irow) /= nodata) n = n + 1
+      end do
+    end do
+    call logmsg('# data cells: '//ta((/n/)))
     !
     f = trim(fp)//'.flt'
     call open_file(f, iu, 'w', .true.)
@@ -2373,12 +2400,21 @@ module utilsmod
     real(r8b), intent(in) :: xll, yll, cs
     ! -- locals
     character(len=mxslen) :: f
-    integer(i4b) :: iu, icol, irow
+    integer(i4b) :: iu, icol, irow, n
 ! ------------------------------------------------------------------------------
     f = trim(fp)//'.hdr'
     call open_file(f, iu, 'w')
     call writeflt_header_r8(iu, ncol, nrow, xll, yll, cs, ta((/nodata/)), 8, 'signedint')
     close(iu)
+    !
+    ! count
+    n = 0
+    do irow = 1,nrow
+      do icol = 1, ncol
+        if (x(icol,irow) /= nodata) n = n + 1
+      end do
+    end do
+    call logmsg('# data cells: '//ta((/n/)))
     !
     f = trim(fp)//'.flt'
     call open_file(f, iu, 'w', .true.)
@@ -2399,12 +2435,21 @@ module utilsmod
     real(r8b), intent(in) :: xll, yll, cs
     ! -- locals
     character(len=mxslen) :: f
-    integer(i4b) :: iu, icol, irow
+    integer(i4b) :: iu, icol, irow, n
 ! ------------------------------------------------------------------------------
     f = trim(fp)//'.hdr'
     call open_file(f, iu, 'w')
     call writeflt_header_r8(iu, ncol, nrow, xll, yll, cs, ta((/nodata/)), 32, 'signedint')
     close(iu)
+    !
+    ! count
+    n = 0
+    do irow = 1,nrow
+      do icol = 1, ncol
+        if (x(icol,irow) /= nodata) n = n + 1
+      end do
+    end do
+    call logmsg('# data cells: '//ta((/n/)))
     !
     f = trim(fp)//'.flt'
     call open_file(f, iu, 'w', .true.)
@@ -2425,12 +2470,21 @@ module utilsmod
     real(r8b), intent(in) :: xll, yll, cs
     ! -- locals
     character(len=mxslen) :: f
-    integer(i4b) :: iu, icol, irow
+    integer(i4b) :: iu, icol, irow, n
 ! ------------------------------------------------------------------------------
     f = trim(fp)//'.hdr'
     call open_file(f, iu, 'w')
     call writeflt_header_r8(iu, ncol, nrow, xll, yll, cs, ta((/nodata/)), 32, 'float')
     close(iu)
+    !
+    ! count
+    n = 0
+    do irow = 1,nrow
+      do icol = 1, ncol
+        if (x(icol,irow) /= nodata) n = n + 1
+      end do
+    end do
+    call logmsg('# data cells: '//ta((/n/)))
     !
     f = trim(fp)//'.flt'
     call open_file(f, iu, 'w', .true.)
@@ -2451,7 +2505,7 @@ module utilsmod
     real(r8b), intent(in) :: xll, yll, cs
     ! -- locals
     character(len=mxslen) :: f
-    integer(i4b) :: iu, icol, irow
+    integer(i4b) :: iu, icol, irow, n
     real(r4b), dimension(:,:), allocatable :: r4x
     real(r4b) :: r4nodata
 ! ------------------------------------------------------------------------------
@@ -2473,6 +2527,16 @@ module utilsmod
         end if
       end do
     end do
+    !
+    ! count
+    n = 0
+    do irow = 1,nrow
+      do icol = 1, ncol
+        if (r4x(icol,irow) /= r4nodata) n = n + 1
+      end do
+    end do
+    call logmsg('# data cells: '//ta((/n/)))
+    !
     write(iu)((r4x(icol,irow),icol=1,ncol),irow=1,nrow)
     close(iu)
     deallocate(r4x)

@@ -1,21 +1,21 @@
 program mergemap2idf
   ! modules
   use pcrModule
-  use utilsmod, only: writeasc, writeidf, DZERO
+  use utilsmod, only: writeasc, writeidf, writeflt, DZERO, ta
   
   implicit none
   
   type(tMap), pointer :: map
  
-  logical :: ok, lex, lwritetile
+  logical :: ok, lex, lwritetile, lusermv
   character(len=1024) :: s, f, fo, fp
-  integer(i4b) :: iact, ic, ir, nc, nr, np, lun, ios, ip, ir0, ir1, ic0, ic1, dir0, dir1, dic0, dic1, na
+  integer(i4b) :: i, iact, ic, ir, nc, nr, np, lun, ios, ip, ir0, ir1, ic0, ic1, dir0, dir1, dic0, dic1, na
   integer(i4b), dimension(:,:), allocatable :: iwrk, itile
   real(r4b), dimension(:,:), allocatable :: gx, lx
   integer(i4b), dimension(:), allocatable :: icmin, icmax, irmin, irmax
   integer(i4b), dimension(:), allocatable :: dicmin, dicmax, dirmin, dirmax
   real(r4b) :: lmv, lmin, lmax, gval, lval
-  real(r4b) :: gxll, gyll, gcs, gmv
+  real(r4b) :: gxll, gyll, gcs, gmv, gusermv
   character(len=1024) :: s1, s2
   
   ! read input
@@ -39,7 +39,14 @@ program mergemap2idf
   allocate(gx(nc,nr), iwrk(nc,nr))
   !
   na = nargs()
+  lusermv = .false.
   if (na == 7) then
+    lusermv = .true.
+    call getarg(6,s); read(s,*) gusermv
+    write(*,*) 'Using missing value: '//ta((/gusermv/))
+  end if
+  !
+  if (na == 8) then
     lwritetile = .true.
     allocate(itile(nc,nr))
     do ir = 1, nr
@@ -137,10 +144,26 @@ program mergemap2idf
     end do
   end do !iact
   !
-  if (index(fo,'.idf',back=.true.) > 0) then
-    call writeidf(fo, gx, nc, nr, dble(gxll), dble(gyll), dble(gcs), dble(gmv))
-  elseif (index(fo,'.asc',back=.true.) > 0) then
-    call writeasc(fo, gx, nc, nr, dble(gxll), dble(gyll), dble(gcs), dble(gmv))
+  if (lusermv) then
+    write(*,*) 'Replacing missing value...'
+    do ir = 1, nr
+      do ic = 1, nc
+        if (gx(ic,ir) == gmv) then
+          gx(ic,ir) = gusermv
+        end if
+      end do
+    end do
+    gmv = gusermv
+  end if
+  
+  i = index(fo,'.idf',back=.true.)
+  if (i > 0) call writeidf(fo, gx, nc, nr, dble(gxll), dble(gyll), dble(gcs), dble(gmv))
+  i = index(fo,'.asc',back=.true.)
+  if (i > 0) call writeasc(fo, gx, nc, nr, dble(gxll), dble(gyll), dble(gcs), dble(gmv))
+  i = index(fo,'.flt',back=.true.)
+  if (i > 0) then
+    fo = fo(1:i-1)
+    call writeflt(fo, gx, nc, nr, dble(gxll), dble(gyll), dble(gcs), gmv)
   end if
   !
   if (lwritetile) then

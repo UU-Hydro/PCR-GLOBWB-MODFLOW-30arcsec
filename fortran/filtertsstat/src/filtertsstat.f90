@@ -1,7 +1,7 @@
 program filtertsstat
   ! -- modules
   use utilsmod, only: i4b, r4b, r8b, get_args, mxslen, open_file, &
-    errmsg, logmsg, ta, parse_line, DZERO, tBB, insert_tab, writeasc, writeflt
+    errmsg, logmsg, ta, parse_line, RZERO, DZERO, tBB, insert_tab, writeasc, writeflt
   !
   implicit none
   !
@@ -21,6 +21,56 @@ program filtertsstat
   end type tStat
   
   ! -- locals
+  integer(i4b), parameter :: jc1    =  1
+  integer(i4b), parameter :: jc2    =  2
+  integer(i4b), parameter :: jc3    =  3
+  integer(i4b), parameter :: jc4    =  4
+  integer(i4b), parameter :: jc1a   =  5
+  integer(i4b), parameter :: jc1b   =  6
+  integer(i4b), parameter :: jc1c   =  7
+  integer(i4b), parameter :: jc1d   =  8
+  integer(i4b), parameter :: jc1e   =  9
+  integer(i4b), parameter :: jc1f   = 10
+  integer(i4b), parameter :: jc1g   = 11
+  integer(i4b), parameter :: jc1h   = 12
+  integer(i4b), parameter :: jc1i   = 13
+  integer(i4b), parameter :: jc2a   = 14
+  integer(i4b), parameter :: jc2b   = 15
+  integer(i4b), parameter :: jc2c   = 16
+  integer(i4b), parameter :: jc2d   = 17
+  integer(i4b), parameter :: jc2e   = 18
+  integer(i4b), parameter :: jc2f   = 19
+  integer(i4b), parameter :: jc2g   = 20
+  integer(i4b), parameter :: jc2h   = 21
+  integer(i4b), parameter :: jc2i   = 22
+  integer(i4b), parameter :: jc3a   = 23
+  integer(i4b), parameter :: jc3b   = 24
+  integer(i4b), parameter :: jc3c   = 25
+  integer(i4b), parameter :: jc3d   = 26
+  integer(i4b), parameter :: jc3e   = 27
+  integer(i4b), parameter :: jc3f   = 28
+  integer(i4b), parameter :: jc3g   = 29
+  integer(i4b), parameter :: jc3h   = 30
+  integer(i4b), parameter :: jc3i   = 31
+  integer(i4b), parameter :: jc4a   = 32
+  integer(i4b), parameter :: jc4b   = 33
+  integer(i4b), parameter :: jc4c   = 34
+  integer(i4b), parameter :: jc4d   = 35
+  integer(i4b), parameter :: jc4e   = 36
+  integer(i4b), parameter :: jc4f   = 37
+  integer(i4b), parameter :: jc4g   = 38
+  integer(i4b), parameter :: jc4h   = 39
+  integer(i4b), parameter :: jc4i   = 40
+  integer(i4b), parameter :: nclass = jc4i
+  !
+  character(len=4), dimension(nclass) :: class_str
+  !               1234   1234   1234   1234   1234   1234   1234   1234   1234   1234 
+  data class_str /'I  ', 'II  ','III ', 'IV ', &
+                  'Ia  ','Ib  ','Ic  ','Id  ','Ie  ','If  ','Ig  ','Ih  ','Ii  ', &
+                  'IIa ','IIb ','IIc ','IId ','IIe ','IIf ','IIg ','IIh ','IIi ', &
+                  'IIIa','IIIb','IIIc','IIId','IIIe','IIIf','IIIg','IIIh','IIIi', &
+                  'IVa ','IVb ','IVc ','IVd ','IVe ','IVf ','IVg ','IVh ','IVi '/
+  
   integer(i4b), parameter :: i_best = 1
   integer(i4b), parameter :: i_mean = 2
   real(r8b), parameter :: rho_thres  = 0.5D0
@@ -33,10 +83,12 @@ program filtertsstat
   type(tStat), dimension(:), pointer :: sdat => null()
   character(len=mxslen) :: f_in, f_out, f_out_pref, hdr, s
   character(len=mxslen), dimension(:), allocatable :: args, sa
+  logical :: l_amp, l_tim
+  integer(i4b) :: mod_tr_dir, meas_tr_dir
   logical :: qre_crit, rho_crit, write_perf, trend_perf
   integer(i4b) :: filt_method
-  integer(i4b) :: nsf, nsr, ns, na, iu, i, gnc, gnr, ic, ir, nc, nr, n, nmax, np2cand, np3cand
-  integer(i4b) :: ylat_ic, xlon_ic, rho_ic, qre_ic, measslp_ic, modslp_ic, iact, ios, np, nclass
+  integer(i4b) :: nsf, nsr, ns, na, iu, i, i0, i1, gnc, gnr, ic, ir, nc, nr, n, nmax, np2cand, np3cand
+  integer(i4b) :: ylat_ic, xlon_ic, rho_ic, qre_ic, measslp_ic, modslp_ic, iact, ios, np
   integer(i4b), dimension(:), allocatable :: nperf
   integer(i4b), dimension(:,:), allocatable :: si2d, perf2d
   real(r4b), dimension(:), allocatable :: pperf
@@ -62,12 +114,14 @@ program filtertsstat
   read(args(9:14),*) ylat_ic, xlon_ic, rho_ic, qre_ic, measslp_ic, modslp_ic
   if ((measslp_ic <= 0).or.(modslp_ic <= 0)) then
     trend_perf = .false.
-    nclass = 4
   else
     trend_perf = .true.
-    nclass = 7
   end if
   allocate(nperf(nclass), pperf(nclass))
+  do i = 1, nclass
+    nperf(i) = 0
+    pperf(i) = RZERO
+  end do
   !
   f_out = args(15)
   !
@@ -111,41 +165,97 @@ program filtertsstat
           rhotot = rhotot + sd%rho
           aqretot = aqretot + abs(sd%qre)
           sd%iperf = 0
+          !
+          if (abs(sd%qre) < aqre_thres) then ! amplitude
+            l_amp = .true.
+          else
+            l_amp = .false.
+          end if
+          if (sd%rho > rho_thres) then ! timing
+            l_tim = .true.
+          else
+            l_tim = .false.
+          end if
+          !
           if (trend_perf) then
             read(sa(measslp_ic),*) sd%measslp; read(sa(modslp_ic),*) sd%modslp
-            if (abs(sd%modslp) <= trend_thres) then ! model has NO trend
-              if (abs(sd%measslp) > trend_thres) then ! measurement has trend
-                sd%iperf = 5
+            !
+            meas_tr_dir = 0
+            if (abs(sd%measslp) > trend_thres) then ! measurement has trend
+              if (sd%measslp < RZERO) then
+                meas_tr_dir = -1
+              else
+                meas_tr_dir = 1
               end if
             end if
+            mod_tr_dir = 0
             if (abs(sd%modslp) > trend_thres) then ! model has trend
-              if (abs(sd%measslp) <= trend_thres) then ! measurement has NO trend
-                sd%iperf = 6
+              if (sd%modslp < RZERO) then
+                mod_tr_dir = -1
+              else
+                mod_tr_dir = 1
               end if
             end if
-            if (abs(sd%modslp) > trend_thres) then ! model has trend
-              if (abs(sd%measslp) > trend_thres) then ! measurement has trend
-                if ((sd%modslp < DZERO).and.(sd%measslp > DZERO)) then ! opposite trend
-                  sd%iperf = 7
-                end if
-                if ((sd%modslp > DZERO).and.(sd%measslp < DZERO)) then ! opposite trend
-                  sd%iperf = 7
-                end if
-              end if
+            !
+            if (l_amp .and.l_tim) then
+              if ((mod_tr_dir ==  0).and.(meas_tr_dir ==  0)) sd%iperf = jc1a
+              if ((mod_tr_dir ==  1).and.(meas_tr_dir ==  1)) sd%iperf = jc1b
+              if ((mod_tr_dir == -1).and.(meas_tr_dir == -1)) sd%iperf = jc1c
+              if ((mod_tr_dir ==  0).and.(meas_tr_dir ==  1)) sd%iperf = jc1d
+              if ((mod_tr_dir ==  0).and.(meas_tr_dir == -1)) sd%iperf = jc1e
+              if ((mod_tr_dir ==  1).and.(meas_tr_dir ==  0)) sd%iperf = jc1f
+              if ((mod_tr_dir ==  1).and.(meas_tr_dir == -1)) sd%iperf = jc1g
+              if ((mod_tr_dir == -1).and.(meas_tr_dir ==  0)) sd%iperf = jc1h
+              if ((mod_tr_dir == -1).and.(meas_tr_dir ==  1)) sd%iperf = jc1i
             end if
+            if ((.not.l_amp).and.l_tim) then
+              if ((mod_tr_dir ==  0).and.(meas_tr_dir ==  0)) sd%iperf = jc2a
+              if ((mod_tr_dir ==  1).and.(meas_tr_dir ==  1)) sd%iperf = jc2b
+              if ((mod_tr_dir == -1).and.(meas_tr_dir == -1)) sd%iperf = jc2c
+              if ((mod_tr_dir ==  0).and.(meas_tr_dir ==  1)) sd%iperf = jc2d
+              if ((mod_tr_dir ==  0).and.(meas_tr_dir == -1)) sd%iperf = jc2e
+              if ((mod_tr_dir ==  1).and.(meas_tr_dir ==  0)) sd%iperf = jc2f
+              if ((mod_tr_dir ==  1).and.(meas_tr_dir == -1)) sd%iperf = jc2g
+              if ((mod_tr_dir == -1).and.(meas_tr_dir ==  0)) sd%iperf = jc2h
+              if ((mod_tr_dir == -1).and.(meas_tr_dir ==  1)) sd%iperf = jc2i
+            end if
+            if (l_amp.and.(.not.l_tim)) then
+              if ((mod_tr_dir ==  0).and.(meas_tr_dir ==  0)) sd%iperf = jc3a
+              if ((mod_tr_dir ==  1).and.(meas_tr_dir ==  1)) sd%iperf = jc3b
+              if ((mod_tr_dir == -1).and.(meas_tr_dir == -1)) sd%iperf = jc3c
+              if ((mod_tr_dir ==  0).and.(meas_tr_dir ==  1)) sd%iperf = jc3d
+              if ((mod_tr_dir ==  0).and.(meas_tr_dir == -1)) sd%iperf = jc3e
+              if ((mod_tr_dir ==  1).and.(meas_tr_dir ==  0)) sd%iperf = jc3f
+              if ((mod_tr_dir ==  1).and.(meas_tr_dir == -1)) sd%iperf = jc3g
+              if ((mod_tr_dir == -1).and.(meas_tr_dir ==  0)) sd%iperf = jc3h
+              if ((mod_tr_dir == -1).and.(meas_tr_dir ==  1)) sd%iperf = jc3i
+            end if
+            if ((.not.l_amp).and.(.not.l_tim)) then
+              if ((mod_tr_dir ==  0).and.(meas_tr_dir ==  0)) sd%iperf = jc4a
+              if ((mod_tr_dir ==  1).and.(meas_tr_dir ==  1)) sd%iperf = jc4b
+              if ((mod_tr_dir == -1).and.(meas_tr_dir == -1)) sd%iperf = jc4c
+              if ((mod_tr_dir ==  0).and.(meas_tr_dir ==  1)) sd%iperf = jc4d
+              if ((mod_tr_dir ==  0).and.(meas_tr_dir == -1)) sd%iperf = jc4e
+              if ((mod_tr_dir ==  1).and.(meas_tr_dir ==  0)) sd%iperf = jc4f
+              if ((mod_tr_dir ==  1).and.(meas_tr_dir == -1)) sd%iperf = jc4g
+              if ((mod_tr_dir == -1).and.(meas_tr_dir ==  0)) sd%iperf = jc4h
+              if ((mod_tr_dir == -1).and.(meas_tr_dir ==  1)) sd%iperf = jc4i
+            end if
+            !
+            if (sd%iperf == 0) call errmsg('Error classifying.')
           end if
           if (sd%iperf == 0) then
-            if ((abs(sd%qre) <= aqre_thres).and.((sd%rho) >= rho_thres)) then
-              sd%iperf = 1
+            if (l_amp.and.l_tim) then
+              sd%iperf = jc1
             end if
-            if ((abs(sd%qre)  > aqre_thres).and.((sd%rho) >= rho_thres)) then
-              sd%iperf = 2
+            if ((.not.l_amp).and.l_tim) then
+              sd%iperf = jc2
             end if
-            if ((abs(sd%qre) <= aqre_thres).and.((sd%rho)  < rho_thres)) then
-              sd%iperf = 3
+            if (l_amp.and.(.not.l_tim)) then
+              sd%iperf = jc3
             end if
-            if ((abs(sd%qre)  > aqre_thres).and.((sd%rho)  < rho_thres)) then
-              sd%iperf = 4
+            if ((.not.l_amp).and.(.not.l_tim)) then
+              sd%iperf = jc4
             end if
           end if
           if (sd%iperf == 0) then
@@ -287,42 +397,95 @@ program filtertsstat
           sd%measslp = measslp2d(ic,ir)
           sd%modslp = modslp2d(ic,ir)
           sd%iperf = 0
+          
+          if (abs(sd%qre) < aqre_thres) then ! amplitude
+            l_amp = .true.
+          else
+            l_amp = .false.
+          end if
+          if (sd%rho > rho_thres) then ! timing
+            l_tim = .true.
+          else
+            l_tim = .false.
+          end if
+          
           if (trend_perf) then
-            if (abs(sd%modslp) <= trend_thres) then ! model has NO trend
-              if (abs(sd%measslp) > trend_thres) then ! measurement has trend
-                sd%iperf = 5
+            meas_tr_dir = 0
+            if (abs(sd%measslp) > trend_thres) then ! measurement has trend
+              if (sd%measslp < RZERO) then
+                meas_tr_dir = -1
+              else
+                meas_tr_dir = 1
               end if
             end if
+            mod_tr_dir = 0
             if (abs(sd%modslp) > trend_thres) then ! model has trend
-              if (abs(sd%measslp) <= trend_thres) then ! measurement has NO trend
-                sd%iperf = 6
+              if (sd%modslp < RZERO) then
+                mod_tr_dir = -1
+              else
+                mod_tr_dir = 1
               end if
             end if
-            if (abs(sd%modslp) > trend_thres) then ! model has trend
-              if (abs(sd%measslp) > trend_thres) then ! measurement has trend
-                if ((sd%modslp < DZERO).and.(sd%measslp > DZERO)) then ! opposite trend
-                  sd%iperf = 7
-                end if
-                if ((sd%modslp > DZERO).and.(sd%measslp < DZERO)) then ! opposite trend
-                  sd%iperf = 7
-                end if
-              end if
+            !
+            if (l_amp .and.l_tim) then
+              if ((mod_tr_dir ==  0).and.(meas_tr_dir ==  0)) sd%iperf = jc1a
+              if ((mod_tr_dir ==  1).and.(meas_tr_dir ==  1)) sd%iperf = jc1b
+              if ((mod_tr_dir == -1).and.(meas_tr_dir == -1)) sd%iperf = jc1c
+              if ((mod_tr_dir ==  0).and.(meas_tr_dir ==  1)) sd%iperf = jc1d
+              if ((mod_tr_dir ==  0).and.(meas_tr_dir == -1)) sd%iperf = jc1e
+              if ((mod_tr_dir ==  1).and.(meas_tr_dir ==  0)) sd%iperf = jc1f
+              if ((mod_tr_dir ==  1).and.(meas_tr_dir == -1)) sd%iperf = jc1g
+              if ((mod_tr_dir == -1).and.(meas_tr_dir ==  0)) sd%iperf = jc1h
+              if ((mod_tr_dir == -1).and.(meas_tr_dir ==  1)) sd%iperf = jc1i
             end if
+            if ((.not.l_amp).and.l_tim) then
+              if ((mod_tr_dir ==  0).and.(meas_tr_dir ==  0)) sd%iperf = jc2a
+              if ((mod_tr_dir ==  1).and.(meas_tr_dir ==  1)) sd%iperf = jc2b
+              if ((mod_tr_dir == -1).and.(meas_tr_dir == -1)) sd%iperf = jc2c
+              if ((mod_tr_dir ==  0).and.(meas_tr_dir ==  1)) sd%iperf = jc2d
+              if ((mod_tr_dir ==  0).and.(meas_tr_dir == -1)) sd%iperf = jc2e
+              if ((mod_tr_dir ==  1).and.(meas_tr_dir ==  0)) sd%iperf = jc2f
+              if ((mod_tr_dir ==  1).and.(meas_tr_dir == -1)) sd%iperf = jc2g
+              if ((mod_tr_dir == -1).and.(meas_tr_dir ==  0)) sd%iperf = jc2h
+              if ((mod_tr_dir == -1).and.(meas_tr_dir ==  1)) sd%iperf = jc2i
+            end if
+            if (l_amp.and.(.not.l_tim)) then
+              if ((mod_tr_dir ==  0).and.(meas_tr_dir ==  0)) sd%iperf = jc3a
+              if ((mod_tr_dir ==  1).and.(meas_tr_dir ==  1)) sd%iperf = jc3b
+              if ((mod_tr_dir == -1).and.(meas_tr_dir == -1)) sd%iperf = jc3c
+              if ((mod_tr_dir ==  0).and.(meas_tr_dir ==  1)) sd%iperf = jc3d
+              if ((mod_tr_dir ==  0).and.(meas_tr_dir == -1)) sd%iperf = jc3e
+              if ((mod_tr_dir ==  1).and.(meas_tr_dir ==  0)) sd%iperf = jc3f
+              if ((mod_tr_dir ==  1).and.(meas_tr_dir == -1)) sd%iperf = jc3g
+              if ((mod_tr_dir == -1).and.(meas_tr_dir ==  0)) sd%iperf = jc3h
+              if ((mod_tr_dir == -1).and.(meas_tr_dir ==  1)) sd%iperf = jc3i
+            end if
+            if ((.not.l_amp).and.(.not.l_tim)) then
+              if ((mod_tr_dir ==  0).and.(meas_tr_dir ==  0)) sd%iperf = jc4a
+              if ((mod_tr_dir ==  1).and.(meas_tr_dir ==  1)) sd%iperf = jc4b
+              if ((mod_tr_dir == -1).and.(meas_tr_dir == -1)) sd%iperf = jc4c
+              if ((mod_tr_dir ==  0).and.(meas_tr_dir ==  1)) sd%iperf = jc4d
+              if ((mod_tr_dir ==  0).and.(meas_tr_dir == -1)) sd%iperf = jc4e
+              if ((mod_tr_dir ==  1).and.(meas_tr_dir ==  0)) sd%iperf = jc4f
+              if ((mod_tr_dir ==  1).and.(meas_tr_dir == -1)) sd%iperf = jc4g
+              if ((mod_tr_dir == -1).and.(meas_tr_dir ==  0)) sd%iperf = jc4h
+              if ((mod_tr_dir == -1).and.(meas_tr_dir ==  1)) sd%iperf = jc4i
+            end if
+            !
+            if (sd%iperf == 0) call errmsg('Error classifying.')
           end if
           if (sd%iperf == 0) then
-            if ((abs(sd%qre) <= aqre_thres).and.(sd%rho >= rho_thres)) then
-              sd%iperf = 1
+            if (l_amp.and.l_tim) then
+              sd%iperf = jc1
             end if
-            if ((abs(sd%qre)  > aqre_thres).and.(sd%rho >= rho_thres)) then
-              sd%iperf = 2
+            if ((.not.l_amp).and.l_tim) then
+              sd%iperf = jc2
             end if
-            if ((abs(sd%qre) <= aqre_thres).and.(sd%rho  < rho_thres)) then
-              sd%iperf = 3
+            if (l_amp.and.(.not.l_tim)) then
+              sd%iperf = jc3
             end if
-            qre_crit = (abs(sd%qre) > aqre_thres)
-            rho_crit = (sd%rho  < rho_thres)
-            if (qre_crit .and. rho_crit) then
-              sd%iperf = 4
+            if ((.not.l_amp).and.(.not.l_tim)) then
+              sd%iperf = jc4
             end if
           end if
           nperf(sd%iperf) = nperf(sd%iperf) + 1
@@ -379,12 +542,13 @@ program filtertsstat
   end do
   call logmsg('Total # classified: '//ta((/np/))//'/'//ta((/ns/))//' ('//trim(adjustl(s))//' %)')
   if (trend_perf) then
-    call logmsg('class            I         II        III         IV          V         VI        VII')
+    i0 = 5; i1 = nclass
   else
-    call logmsg('class            I         II        III         IV')
+    i0 = 1; i1 = 4
   end if
-  call logmsg('%     : '//ta(pperf,'(f10.1)'))
-  call logmsg('Count : '//ta(nperf,'(i10)'))
+  do i = i0, i1
+    call logmsg(class_str(i)//': '//ta((/pperf(i)/),'(f10.1)')//'% '//ta((/nperf(i)/),'(i10)'))
+  end do
   if (filt_method == i_mean) then
     call logmsg('Max count per cell : '//ta((/nmax/),'(i10)'))
   end if

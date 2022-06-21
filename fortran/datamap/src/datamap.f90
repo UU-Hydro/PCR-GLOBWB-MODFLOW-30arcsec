@@ -316,7 +316,7 @@ program datamap
   end if
   !
   if (i_clip > 0) then
-    call readidf_block(idf, gir0, gir1, gic0, gic1, xid)
+    call readidf_block(idf, gir0, gir1, gic0, gic1, xid, 0)
     nc = size(xid,1); nr = size(xid,2)
   else
     gir0 = 1; gir1 = idf%nrow; gic0 = 1; gic1 = idf%ncol
@@ -832,6 +832,7 @@ program datamap
   deallocate(i4wk1d1, i4wk1d2)
   !
   write(*,'(a,f10.2)') 'Total # active cells (M):', real(ncell)/1000000.
+  write(*,*) 'Total of '//ta((/nreg/))//' regions'
   n = min(nreg,50)
   write(*,*) 'Top '//ta((/n/))//' regions:'
   do i = 1, n

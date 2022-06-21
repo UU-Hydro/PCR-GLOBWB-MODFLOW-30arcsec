@@ -3,9 +3,10 @@ module mf6_post_module
   use, intrinsic :: iso_fortran_env , only: error_unit, output_unit, &
      i1b => int8, i2b => int16, i4b => int32, i8b => int64, r4b => real32, r8b => real64
   use utilsmod, only: IZERO, DZERO, DONE, tBB, errmsg, logmsg, swap_slash, open_file, chkexist, &
-    get_jd, get_ymd_from_jd, ta, writeasc, writeidf, writeflt, replacetoken, linear_regression, &
+    get_jd, get_ymd_from_jd, ta, writeasc, writeidf, replacetoken, linear_regression, &
     tTimeSeries, parse_line, insert_tab, create_dir, change_case, count_dir_files, bb_overlap
   use pcrModule, only: tmap
+  use ehdrModule, only: writeflt
   use imod_idf
   !
   implicit none
@@ -13,6 +14,8 @@ module mf6_post_module
   private
   !
   ! -- parameters
+  logical, parameter :: include_sea = .true.
+  !
   character(len=1), parameter :: comment = '#'
   real(r8b), parameter :: r8nodata = -9999.D0
   integer(i4b), parameter :: mxslen = 1024
@@ -155,6 +158,7 @@ module mf6_post_module
   !
   save
   !
+  public :: include_sea
   public :: comment
   public :: tPostMod, tPostSol, tPostSer
   public :: gnsol, gncol, gnrow, gnlay, gxmin, gymin, gcs, sdate, tilebb, top
@@ -235,7 +239,7 @@ module mf6_post_module
     integer(i4b), parameter :: i_xcol     =  5
     integer(i4b), parameter :: i_ycol     =  6
     integer(i4b), parameter :: i_smcol    =  7
-    integer(i4b), parameter :: i_isol_beg =  9
+    integer(i4b), parameter :: i_isol_beg =  8
     integer(i4b), parameter :: i_isol_end =  9
     integer(i4b), parameter :: i_in_postf = 10
     integer(i4b), parameter :: i_itype    = 11
@@ -709,6 +713,19 @@ module mf6_post_module
         !end if
       end if
     end do
+    !
+    ! set the nodes
+    if ((.not.lwrite).and.(this%gen%itype ==4)) then
+      do i = 1, this%nts
+        ts => this%ts(i)
+        if (.not.ts%act) cycle
+        if (ts%nod(1) > 0) then
+          if (ts%nod(2) > 0) then
+            ts%nod(2) = 0
+          end if
+        end if
+      end do
+    end if
     !
     return
   end subroutine mf6_post_ser_write
@@ -1523,7 +1540,7 @@ module mf6_post_module
     type(tGen), pointer :: gen => null()
     type(tBb), pointer :: bb => null()
     logical :: ldum, ladd
-    integer(i4b) :: gil, gir, gic, ir, ic, i
+    integer(i4b) :: gil, gir, gic, ir, ic, i, nadd
     integer(i4b), dimension(:,:), allocatable :: laytop
     
 ! ------------------------------------------------------------------------------
@@ -1544,14 +1561,10 @@ module mf6_post_module
       end do
     end do
     !
-    do ir = 1, bb%nrow
-      do ic = 1, bb%ncol
-        r8x(ic,ir) = r8nodata
-      end do
-    end do
-    !
+    nadd = 0
     do i = 1, this%nodes
       gil = this%giliric(1,i); gir = this%giliric(2,i); gic = this%giliric(3,i) ! global
+      if (include_sea) gil = abs(gil)
       ir = gir - bb%ir0 + 1; ic = gic - bb%ic0 + 1 ! local
       !check
       if ((ir < 1).or.(ir > bb%nrow).or.(ic < 1).or.(ic > bb%ncol)) then
@@ -1568,6 +1581,7 @@ module mf6_post_module
         if (gil /= il) ladd = .false.
       end if
       if (ladd) then
+        nadd = nadd + 1
         if (.not.ldum) then
           if (gen%ltop) then
             r8x(ic,ir) = this%top(i) - this%r8buff(i) !Water table depth > 0!
@@ -1575,11 +1589,13 @@ module mf6_post_module
             r8x(ic,ir) = this%r8buff(i)
           end if
         else
+          !write(*,*) 'ic, ir', ic, ir
           r8x(ic,ir) = DONE
         end if
       end if
     end do
     !
+    !write(*,*) '@@@ nadd =',nadd
     ! clean up
     deallocate(laytop)
     !
@@ -2251,7 +2267,7 @@ module mf6_post_module
     type(tPostMod), pointer :: m => null()
     logical :: lread, lmask, lclip, lmv
     character(len=mxslen) :: f, fbb
-    integer(i4b) :: i, il, ic, ir, jc, jr, gic, gir, iu, kper, ic0, ic1, ir0, ir1
+    integer(i4b) :: i, il, ic, ir, jc, jr, gic, gir, iu, kper, ic0, ic1, ir0, ir1, n
     integer(i4b) :: i4val
     integer(i4b), dimension(:,:), allocatable :: si4wk, wsi4wk
     real(r8b) :: t, xmin, ymin, r8val
@@ -2327,19 +2343,21 @@ module mf6_post_module
           end do
           if (this%lwritemodid) then
             do i = 1, this%nmod
+              n = 0
               m => this%mod(i)
               if (m%nodes == 0) cycle
               mbb => m%bb
-              mr8wk = m%get_data(il, ldummy=.true.)
+              mr8wk = m%get_data(il, .true.)
               do ir = 1, mbb%nrow
                 do ic = 1, mbb%ncol
-                  if (mr8wk(ic,ir) /= r8nodata) then
+                  if (mr8wk(ic,ir) > DZERO) then
                     gir = ir + mbb%ir0 - 1; gic = ic + mbb%ic0 - 1
                     jr = gir - sbb%ir0 + 1; jc = gic - sbb%ic0 + 1
                     if ((jr < 1).or.(jr > sbb%nrow).or.(jc < 1).or.(jc > sbb%ncol)) then
                       cycle !call errmsg('mf6_post_sol_write')
                     end if
                    si4wk(jc,jr) = m%modid
+                   n = n + 1
                   end if
                 end do
               end do

@@ -5,6 +5,7 @@ program filteridf
   use imod_idf
   use utilsmod, only: mxslen, i4b, r8b, writeasc, writeidf, errmsg, chkexist, &
     logmsg, ta, DZERO, readidf_block, open_file, logmsg, ta
+  use ehdrModule, only: writeflt
   !
   implicit none
   !
@@ -200,9 +201,10 @@ program filteridf
   !
   if (index(f_out,'.idf',back=.true.) > 0) then
     call writeidf(trim(f_out), idf1%x, idf1%ncol, idf1%nrow, idf1%xmin, idf1%ymin, idf1%dx, idf1%nodata)
-  end if
-  if (index(f_out,'.asc',back=.true.) > 0) then
+  else if (index(f_out,'.asc',back=.true.) > 0) then
     call writeasc(trim(f_out), idf1%x, idf1%ncol, idf1%nrow, idf1%xmin, idf1%ymin, idf1%dx, idf1%nodata)
+  else
+    call writeflt(trim(f_out), idf1%x, idf1%ncol, idf1%nrow, idf1%xmin, idf1%ymin, idf1%dx, idf1%nodata)
   end if
   !
 end program

@@ -348,6 +348,8 @@ program mf6ggm
           call m%calc_imbal()
         else
           call m%recur()
+          call m%graph_stat()
+          !call m%kway()
         end if
       end if
     end if

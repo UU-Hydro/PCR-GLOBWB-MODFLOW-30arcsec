@@ -56,6 +56,8 @@
 		<File RelativePath="..\..\imodlib_5_1\src\imod_idf_par.f90"/>
 		<File RelativePath="..\..\imodlib_5_1\src\imod_utl.f90"/>
 		<File RelativePath="..\..\imodlib_5_1\src\utl.f90"/></Filter>
+		<Filter Name="Ehdr library">
+		<File RelativePath="..\..\ehdr_lib\src\ehdr_lib.f90"/></Filter>
 		<Filter Name="PCRaster library">
 		<File RelativePath="..\..\pcrlib\src\pcrlib.f90"/></Filter>
 		<Filter Name="Utility library">
