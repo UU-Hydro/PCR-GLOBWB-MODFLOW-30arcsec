@@ -4,7 +4,8 @@ module mf6_post_module
      i1b => int8, i2b => int16, i4b => int32, i8b => int64, r4b => real32, r8b => real64
   use utilsmod, only: IZERO, DZERO, DONE, tBB, errmsg, logmsg, swap_slash, open_file, chkexist, &
     get_jd, get_ymd_from_jd, ta, writeasc, writeidf, replacetoken, linear_regression, &
-    tTimeSeries, parse_line, insert_tab, create_dir, change_case, count_dir_files, bb_overlap
+    tTimeSeries, parse_line, insert_tab, create_dir, change_case, count_dir_files, bb_overlap, &
+    quicksort_d
   use pcrModule, only: tmap
   use ehdrModule, only: writeflt
   use imod_idf
@@ -109,6 +110,7 @@ module mf6_post_module
     procedure :: read_nod     => mf6_post_mod_read_nod
     procedure :: calc_slope   => mf6_post_mod_calc_slope
     procedure :: calc_average => mf6_post_mod_calc_average
+    procedure :: calc_iqr     => mf6_post_mod_calc_iqr
     procedure :: get_data     => mf6_post_mod_get_data
     procedure :: write        => mf6_post_mod_write
     procedure :: clean        => mf6_post_mod_clean
@@ -1400,52 +1402,51 @@ module mf6_post_module
     return
   end subroutine mf6_post_mod_read_nod
   
-  subroutine mf6_post_mod_calc_slope(this, iflg)
+  subroutine mf6_post_mod_calc_slope(this)
 ! ******************************************************************************
     ! -- arguments
     class(tPostMod) :: this
-    integer(i4b), intent(in) :: iflg
     ! --- local
-    integer(i4b) :: i, j, n
-    real(r8b), parameter :: monthyear = 12.d0
-    real(r8b) :: slope, yint, corr, nyear, aheadbeg, aheadend
-    real(r8b), dimension(:), allocatable :: r8wk
+    integer(i4b) :: i, j, jj, k, nper, nyear
+    integer(i4b), parameter :: monthyear = 12
+    real(r8b) :: slope, yint, corr
+    real(r8b), dimension(:), allocatable :: r8wk, havg
 ! ------------------------------------------------------------------------------
     !
     if (.not.associated(this%r8buff)) then
       allocate(this%r8buff(this%nodes))
     end if
     !
-    n = size(this%r8buff2d,1)
-    allocate(r8wk(n))
-    do i = 1, n
+    nper = size(this%r8buff2d,1)
+    !
+    if (mod(nper,monthyear) /= 0) then
+      call errmsg('The number of output stress periods should be a multiple of 12.')
+    end if
+    nyear = nper / monthyear
+    allocate(r8wk(nyear), havg(nyear))
+    do i = 1, nyear
       r8wk(i) = real(i,r8b)
     end do
     !
-    nyear = DONE
-    if (iflg == 1) then
-      nyear = real(n, r8b) / monthyear
-    end if
-    !
-    if (iflg == 2) then
-      do i = 1, this%nodes
-        aheadbeg = DZERO; aheadend = DZERO
-        do j = 1, 12
-          aheadbeg = aheadbeg + this%r8buff2d(j,i)
-          aheadend = aheadend + this%r8buff2d(n-j+1,i)
+    do i = 1, this%nodes
+      do j = 1, nyear
+        havg(j) = DZERO
+      end do
+      k = 0
+      do j = 1, nyear
+        do jj = 1, monthyear
+          k = k + 1
+          havg(j) = havg(j) + this%r8buff2d(k,i)
         end do
-        aheadbeg = aheadbeg / monthyear
-        aheadend = aheadend / monthyear
-        this%r8buff(i) = aheadend - aheadbeg
-        !this%r8buff(i) = this%r8buff2d(n,i) - this%r8buff2d(1,i)
       end do
-    else
-      do i = 1, this%nodes
-        call linear_regression(r8wk, this%r8buff2d(:,i), slope, yint, corr)
-        this%r8buff(i) = slope * monthyear * nyear
+      do j = 1, nyear
+        havg(j) = havg(j) / monthyear
       end do
-    end if
+      call linear_regression(r8wk, havg, slope, yint, corr)
+      this%r8buff(i) = slope
+    end do
     !
+    deallocate(r8wk, havg)
     deallocate(this%r8buff2d)
     this%r8buff2d => null()
     !
@@ -1491,6 +1492,61 @@ module mf6_post_module
     return
   end subroutine mf6_post_mod_calc_average
   
+  subroutine mf6_post_mod_calc_iqr(this)
+! ******************************************************************************
+    ! -- arguments
+    class(tPostMod) :: this
+    ! --- local
+    integer(i4b) :: i, j, d, k, k1, k2, nper, n
+    integer(i4b), dimension(:), allocatable :: i4wk
+    real(r8b) :: q1, q3, iqr
+    real(r8b), dimension(:), allocatable :: r8wk
+! ------------------------------------------------------------------------------
+    !
+    if (.not.associated(this%r8buff)) then
+      allocate(this%r8buff(this%nodes))
+    end if
+    !
+    nper = size(this%r8buff2d,1)
+    allocate(i4wk(nper), r8wk(nper))
+    !
+    do i = 1, this%nodes ! loop over nodes
+      ! fill the buffer
+      do j = 1, nper ! loop over periods
+        i4wk(j) = j
+        r8wk(j) = this%r8buff2d(j,i)
+      end do
+      call quicksort_d(r8wk, i4wk, nper)
+      !
+      if (mod(nper,2) == 0) then  !even
+        n = nper / 2
+      else ! odd
+        n = (nper - 1)/2
+      end if
+      !
+      if (mod(n,2) == 0) then ! even
+        d = n/2
+        k1 = d; k2 = k1 +1
+        q1 = (r8wk(k1) + r8wk(k2))/2.d0
+        k1 = nper - d; k2 = k1 + 1
+        q3 = (r8wk(k1) + r8wk(k2))/2.d0
+      else ! odd
+        d = (n-1)/2
+        k1 = d + 1; k2 = nper - d
+        q1 = r8wk(k1)
+        q3 = r8wk(k2)
+      end if
+      iqr = q3 - q1
+      this%r8buff(i) = iqr
+    end do
+    !
+    deallocate(i4wk, r8wk)
+    deallocate(this%r8buff2d)
+    this%r8buff2d => null()
+    !
+    return
+  end subroutine mf6_post_mod_calc_iqr
+!  
   function mf6_post_get_out_pref(name, totim, il, gen) result(f)
 ! ******************************************************************************
     ! -- arguments
@@ -2289,17 +2345,14 @@ module mf6_post_module
         if (m%iu <= 0) cycle
         lread = .true.
         call m%read()
-        if (this%gen%itype == 3) then
-          call m%calc_slope(0)
-        end if
-        if (this%gen%itype == 4) then
-          call m%calc_slope(1)
-        end if
-        if (this%gen%itype == 5) then
-          call m%calc_slope(2)
+        if ((this%gen%itype == 3).or.(this%gen%itype == 4)) then
+          call m%calc_slope()
         end if
         if ((this%gen%itype == 6).or.(this%gen%itype == 7)) then
           call m%calc_average()
+        end if
+        if (this%gen%itype == 8) then
+          call m%calc_iqr()
         end if
         mintotimmod = min(mintotimmod, m%totim_read)
         maxtotimmod = max(maxtotimmod, m%totim_read)

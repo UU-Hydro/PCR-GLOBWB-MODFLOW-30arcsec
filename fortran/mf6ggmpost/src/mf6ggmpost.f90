@@ -12,9 +12,9 @@ program mf6ggmpost
   type(tPostSer), pointer :: postser => null()
   character(len=1) :: cdum, ssol
   character(len=mxslen) :: f, s, in_dir
-  character(len=mxslen), dimension(:), allocatable :: sa
+  character(len=mxslen), dimension(:), allocatable :: sap, sa
   logical :: lex, lok
-  integer(i4b) :: iu, i, npost, na
+  integer(i4b) :: iu, i, j0, j1, j, npost, mpost, na
 ! ------------------------------------------------------------------------------
   !
   if (include_sea) then
@@ -52,13 +52,30 @@ program mf6ggmpost
       cycle
     end if
     !
-    call parse_line(s, sa)
+    call parse_line(s, sap)
+    na = size(sap)
+    if (allocated(sa)) deallocate(sa)
     !
-    select case(sa(2))
-      case('m', 's','smodid','r')
-        call postsol%init(sa)
-        call postsol%write()
-        call postsol%clean()
+    select case(sap(2))
+      case('m', 's','smodid','r', 'mr', 'sr')
+        if ((sap(2) == 'mr').or.(sap(2) == 'sr')) then
+          read(sap(3:4),*) j0, j1
+          allocate(sa(na-1))
+          sa(1) = sap(1); sa(2) = sap(2)(1:1)
+          do j = 4, na-1
+            sa(j) = sap(j+1)
+          end do
+        else
+          allocate(sa(na))
+          sa = sap
+          read(sa(3),*) j0; j1 = j0
+        end if
+        do j = j0, j1
+          sa(3) = ta((/j/))
+          call postsol%init(sa)
+          call postsol%write()
+          call postsol%clean()
+        end do
       case('t')
         call postser%init(sa)
         call postser%write(.true.)
