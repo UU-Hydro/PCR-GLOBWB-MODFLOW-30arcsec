@@ -1426,11 +1426,13 @@ module mf6_post_module
       else
         if (.not.associated(this%r8buff)) then
           allocate(this%r8buff(this%nodes))
-          do i = 1, this%nodes
-            this%r8buff(i) = DZERO
-          end do
         end if
         if (this%gen%year_avg) then
+          if (kper == kper_beg) then
+            do i = 1, this%nodes
+              this%r8buff(i) = DZERO
+            end do
+          end if
           if (.not.allocated(r8wk)) then
             allocate(r8wk(this%nodes))
           end if
@@ -2714,7 +2716,7 @@ module mf6_post_module
           xmin = gxmin + (wbb%ic0-1)*gcs
           ymin = gymin + (gnrow-wbb%ir1)*gcs
           !
-          if (this%gen%i_out /= i_out_flt) then
+          if (this%gen%i_out /= i_out_flts) then
             fbb = trim(f)//'.bb.asc'
             call logmsg('Writing '//trim(fbb)//'...')
             call open_file(fbb, iu, 'w')
