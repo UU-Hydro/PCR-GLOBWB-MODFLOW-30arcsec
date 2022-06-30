@@ -1,9 +1,10 @@
 program mf6ggmpost
   ! -- modules
-  use utilsmod, only: i4b, mxslen, open_file, logmsg, ta, parse_line
+  use utilsmod, only: i4b, mxslen, open_file, logmsg, ta, parse_line, errmsg
   use mf6_post_module, only: tPostSol, tPostSer, &
     gncol, gnrow, gnlay, gxmin, gymin, gcs, gnsol, &
-    sdate, tilebb, top, comment, mask, maskmap, include_sea
+    sdate, tilebb, top, comment, mask, maskmap, include_sea, &
+    top_type, i_tiled, i_mf6
   !
   implicit none
   !
@@ -27,7 +28,20 @@ program mf6ggmpost
   read(iu,*) sdate
   read(iu,'(a)') tilebb
   read(iu,'(a)') mask
-  read(iu,'(a)') top
+  read(iu,'(a)') s
+  call parse_line(s, sa)
+  top_type = 0
+  if (size(sa) == 2) then
+    select case(sa(1))
+      case('tiled')
+        top_type = i_tiled
+      case('mf6')
+        top_type = i_mf6
+      case default
+        call errmsg('Unrecognized top file.')
+    end select
+    top = sa(2)
+  end if
   read(iu,*) npost
   !
   ! read the mask file
@@ -90,4 +104,8 @@ program mf6ggmpost
   end do
   close(iu)
   !
+  if (associated(maskmap)) then
+    call maskmap%clean()
+    deallocate(maskmap); maskmap => null()
+  end if
 end program

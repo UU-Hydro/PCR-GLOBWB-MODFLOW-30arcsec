@@ -21,11 +21,14 @@ module mf6_post_module
   real(r8b), parameter :: r8nodata = -9999.D0
   integer(i4b), parameter :: mxslen = 1024
   !
-  integer(i4b), parameter :: i_out_idf = 1
-  integer(i4b), parameter :: i_out_asc = 2
-  integer(i4b), parameter :: i_out_ipf = 3
-  integer(i4b), parameter :: i_out_txt = 4
-  integer(i4b), parameter :: i_out_flt = 5
+  integer(i4b), parameter :: i_out_idf  = 1
+  integer(i4b), parameter :: i_out_asc  = 2
+  integer(i4b), parameter :: i_out_ipf  = 3
+  integer(i4b), parameter :: i_out_txt  = 4
+  integer(i4b), parameter :: i_out_flt  = 5
+  integer(i4b), parameter :: i_out_flts = 6
+  !
+  integer(i4b), parameter :: sf = 10
   !
   ! -- global variables
   integer(i4b) :: gnsol = IZERO
@@ -39,6 +42,10 @@ module mf6_post_module
   character(len=mxslen) :: tilebb = ''
   character(len=mxslen) :: top = ''
   character(len=mxslen) :: mask = ''
+  !
+  integer(i4b)            :: top_type
+  integer(i4b), parameter :: i_tiled  = 1
+  integer(i4b), parameter :: i_mf6    = 2
   !
   integer(i4b), parameter :: i_idf = 1
   integer(i4b), parameter :: i_map = 2
@@ -65,26 +72,29 @@ module mf6_post_module
   !
   ! types
   type tGen
-    character(len=mxslen), pointer        :: in_dir   => null()
-    character(len=mxslen), pointer        :: in_postf => null()
-    character(len=mxslen), pointer        :: out_dir  => null()
-    character(len=mxslen), pointer        :: out_pref => null()
-    logical, pointer                      :: lwritebb => null()
-    integer(i4b), pointer                 :: gic0     => null()
-    integer(i4b), pointer                 :: gic1     => null()
-    integer(i4b), pointer                 :: gir0     => null()
-    integer(i4b), pointer                 :: gir1     => null()
-    integer(i4b), pointer                 :: il_min   => null()
-    integer(i4b), pointer                 :: il_max   => null()
-    character(len=6), pointer             :: date_beg => null()
-    character(len=6), pointer             :: date_end => null()
-    integer(i4b), pointer                 :: kper_beg => null()
-    integer(i4b), pointer                 :: kper_end => null()
-    integer(i4b), pointer                 :: itype    => null()
-    logical, pointer                      :: ltop     => null()
-    integer(i4b), pointer                 :: i_out    => null()
-    integer(i4b), pointer                 :: nbin     => null()
-    type(tBin), dimension(:), pointer     :: bins     => null()
+    character(len=mxslen), pointer        :: in_dir    => null()
+    character(len=mxslen), pointer        :: in_postf  => null()
+    character(len=mxslen), pointer        :: out_dir   => null()
+    character(len=mxslen), pointer        :: out_pref  => null()
+    logical, pointer                      :: lwritebb  => null()
+    integer(i4b), pointer                 :: gic0      => null()
+    integer(i4b), pointer                 :: gic1      => null()
+    integer(i4b), pointer                 :: gir0      => null()
+    integer(i4b), pointer                 :: gir1      => null()
+    integer(i4b), pointer                 :: il_min    => null()
+    integer(i4b), pointer                 :: il_max    => null()
+    character(len=6), pointer             :: date_beg  => null()
+    character(len=6), pointer             :: date_end  => null()
+    integer(i4b), pointer                 :: kper_beg  => null()
+    integer(i4b), pointer                 :: kper_end  => null()
+    integer(i4b), pointer                 :: itype     => null()
+    logical, pointer                      :: top_tiled => null()
+    logical, pointer                      :: top_mf6   => null()
+    integer(i4b), pointer                 :: i_out     => null()
+    integer(i4b), pointer                 :: nbin      => null()
+    type(tBin), dimension(:), pointer     :: bins      => null()
+    logical, pointer                      :: year_avg  => null()
+    
   end type tGen
   !
   type tPostMod
@@ -103,17 +113,18 @@ module mf6_post_module
     !
     type(tGen), pointer :: gen => null()
   contains
-    procedure :: init         => mf6_post_mod_init
-    procedure :: read_nodbin  => mf6_post_mod_read_nodbin
-    procedure :: read_top     => mf6_post_mod_read_top
-    procedure :: read         => mf6_post_mod_read
-    procedure :: read_nod     => mf6_post_mod_read_nod
-    procedure :: calc_slope   => mf6_post_mod_calc_slope
-    procedure :: calc_average => mf6_post_mod_calc_average
-    procedure :: calc_iqr     => mf6_post_mod_calc_iqr
-    procedure :: get_data     => mf6_post_mod_get_data
-    procedure :: write        => mf6_post_mod_write
-    procedure :: clean        => mf6_post_mod_clean
+    procedure :: init           => mf6_post_mod_init
+    procedure :: read_nodbin    => mf6_post_mod_read_nodbin
+    procedure :: read_top_tiled => mf6_post_mod_read_top_tiled
+    procedure :: read_top_mf6   => mf6_post_mod_read_top_mf6
+    procedure :: read           => mf6_post_mod_read
+    procedure :: read_nod       => mf6_post_mod_read_nod
+    procedure :: calc_slope     => mf6_post_mod_calc_slope
+    procedure :: calc_average   => mf6_post_mod_calc_average
+    procedure :: calc_iqr       => mf6_post_mod_calc_iqr
+    procedure :: get_data       => mf6_post_mod_get_data
+    procedure :: write          => mf6_post_mod_write
+    procedure :: clean          => mf6_post_mod_clean
   end type tPostMod
   !
   type tPostSol
@@ -165,9 +176,70 @@ module mf6_post_module
   public :: tPostMod, tPostSol, tPostSer
   public :: gnsol, gncol, gnrow, gnlay, gxmin, gymin, gcs, sdate, tilebb, top
   public :: mask, maskmap
+  public :: top_type, i_tiled, i_mf6
   
   contains
   !
+  subroutine r8_scale_avg(r8x_in, r8nodata, bb, r8x_out, xmin, ymin, cs)
+! ******************************************************************************  
+    ! -- arguments
+    real(r8b), dimension(:,:), intent(in) :: r8x_in
+    real(r8b), intent(in) :: r8nodata
+    type(tBB), intent(in) :: bb
+    real(r8b), dimension(:,:), allocatable :: r8x_out
+    real(r8b), intent(out) :: cs
+    real(r8b), intent(out) :: xmin
+    real(r8b), intent(out) :: ymin
+    ! --- local
+    integer(i4b) :: ic0, ic1, ir0, ir1, nc, nr, ir, ic, jr, jc
+    integer(i4b) :: gic, gir, gjc, gjr
+    real(i4b), dimension(:,:), allocatable :: i4wk
+    real(r8b) :: r8v
+! ------------------------------------------------------------------------------
+    ic0 = int((bb%ic0-1)/sf) + 1; ic1 = int((bb%ic1-1)/sf) + 1
+    ir0 = int((bb%ir0-1)/sf) + 1; ir1 = int((bb%ir1-1)/sf) + 1
+    nc = ic1 - ic0 + 1; nr = ir1 - ir0 + 1
+    allocate(i4wk(nc,nr), r8x_out(nc,nr))
+    do jr = 1, nr
+      do jc = 1, nc
+        i4wk(jc,jr) = 0
+        r8x_out(jc,jr) = r8nodata
+      end do
+    end do
+    !
+    do ir = 1, bb%nrow
+      do ic = 1, bb%ncol
+        gic = bb%ic0 + ic - 1; gir = bb%ir0 + ir - 1
+        gjc = int((gic-1)/sf) + 1; gjr = int((gir-1)/sf) + 1
+        jc = gjc - ic0 + 1; jr = gjr - ir0 + 1
+        if ((jc < 1).or.(jc > nc).or.(jr < 1).or.(jr > nr)) then
+          call errmsg('Program error writing scaled flt-file.')
+        end if
+        r8v = r8x_in(ic,ir)
+        if (r8v /= r8nodata) then
+          if (r8x_out(jc,jr) == r8nodata) then
+            r8x_out(jc,jr) = DZERO
+          end if
+          r8x_out(jc,jr) = r8x_out(jc,jr) + r8v
+          i4wk(jc,jr) = i4wk(jc,jr) + 1
+        end if
+      end do
+    end do
+    !
+    do jr = 1, nr
+      do jc = 1, nc
+        if (r8x_out(jc,jr) /= r8nodata) then
+          r8x_out(jc,jr) = r8x_out(jc,jr) / i4wk(jc,jr)
+        end if
+      end do
+    end do
+    !
+    cs = real(sf,r8b) * gcs; xmin = gxmin + (ic0-1)*cs
+    ymin = gymin + (gnrow/sf-ir1)*cs
+    !
+    return
+  end subroutine r8_scale_avg
+  
   subroutine init_top()
 ! ******************************************************************************  
     ! -- arguments
@@ -275,7 +347,7 @@ module mf6_post_module
     allocate(gen%gic1); gen%gic1 = gncol
     allocate(gen%gir0); gen%gir0 = 1
     allocate(gen%gir1); gen%gir1 = gnrow
-    allocate(gen%ltop); gen%ltop = .true.; call init_top()
+    allocate(gen%top_tiled); gen%top_tiled = .true.; call init_top()
     read(opt(i_isol_beg),*) isol_beg
     read(opt(i_isol_end),*) isol_end
     allocate(gen%in_postf); gen%in_postf = opt(i_in_postf)
@@ -1037,10 +1109,6 @@ module mf6_post_module
       deallocate(topmap%tilebb)
       deallocate(topmap); topmap => null()
     end if
-    if (associated(maskmap)) then
-      call maskmap%clean()
-      deallocate(maskmap); maskmap => null()
-    end if
     if (associated(statmap)) then
       call statmap%clean()
       deallocate(statmap); statmap => null()
@@ -1101,8 +1169,11 @@ module mf6_post_module
     !
     call this%read_nodbin(lbbonly)
     !
-    if (this%gen%ltop .and. .not.lbbonly) then
-      call this%read_top()
+    if (this%gen%top_tiled .and. .not.lbbonly) then
+      call this%read_top_tiled()
+    end if
+    if (this%gen%top_mf6 .and. .not.lbbonly) then
+      call this%read_top_mf6()
     end if
     !
     allocate(this%f); this%f = ''
@@ -1180,7 +1251,7 @@ module mf6_post_module
     return
   end subroutine mf6_post_mod_read_nodbin
   
-  subroutine mf6_post_mod_read_top(this)
+  subroutine mf6_post_mod_read_top_tiled(this)
 ! ******************************************************************************
     ! -- arguments
     class(tPostMod) :: this
@@ -1238,13 +1309,53 @@ module mf6_post_module
         if (lfound) exit
       end do
       if (.not.lfound) then
-        call errmsg('mf6_post_mod_read_top')
+        call errmsg('mf6_post_mod_read_top_tiled')
       end if
     end do
     !
     return
-  end subroutine mf6_post_mod_read_top
-  
+  end subroutine mf6_post_mod_read_top_tiled
+!  
+  subroutine mf6_post_mod_read_top_mf6(this)
+! ******************************************************************************
+    ! -- arguments
+    class(tPostMod) :: this
+    ! --- local
+    ! mf6 header:
+    character(len=16) :: text_in ! ulasav
+    integer(i4b) :: kstp_in, kper_in, ncol_in, nrow_in, ilay_in
+    real(r8b) :: pertim_in, totim_in
+    !
+    character(len=mxslen) :: f
+    logical :: lex
+    integer(i4b) :: iu, ios
+! ------------------------------------------------------------------------------
+    if (.not.associated(this%top)) then
+      allocate(this%top(this%nodes))
+    end if
+    !
+    f = top
+    call replacetoken(f, '?', this%modid)
+    call swap_slash(f)
+    !
+    inquire(file=f, exist=lex)
+    if (lex) then
+      call open_file(f, iu, 'r', .true.)
+    else
+      call errmsg('Top file could not be found.')
+    end if
+    !
+    ! read header
+    read(unit=iu,iostat=ios) kstp_in, kper_in, pertim_in, totim_in, &
+      text_in, ncol_in, nrow_in, ilay_in
+    !
+    ! read heads
+    read(unit=iu,iostat=ios) this%top
+    !
+    close(iu)
+    return
+  end subroutine mf6_post_mod_read_top_mf6
+    
   subroutine mf6_post_mod_read(this)
 ! ******************************************************************************
     ! -- arguments
@@ -1259,6 +1370,7 @@ module mf6_post_module
     logical :: lop, lread_all
     integer(i4b) :: ios, i, kper, kper_beg, kper_end, nper, stat
     integer(i8b) :: ipos
+    real(r8b), dimension(:), allocatable :: r8wk
 ! ------------------------------------------------------------------------------
     !
     inquire(unit=this%iu, opened=lop)
@@ -1276,6 +1388,12 @@ module mf6_post_module
       lread_all = .false.
       kper_beg = 1
       kper_end = 1
+    end if
+    !
+    if (this%gen%year_avg) then
+      kper_beg = 1
+      kper_end = 12
+      nper = kper_end - kper_beg + 1
     end if
     !
     kper = 0
@@ -1308,8 +1426,21 @@ module mf6_post_module
       else
         if (.not.associated(this%r8buff)) then
           allocate(this%r8buff(this%nodes))
+          do i = 1, this%nodes
+            this%r8buff(i) = DZERO
+          end do
         end if
-        read(unit=this%iu,iostat=ios)(this%r8buff(i),i=1,this%nodes)
+        if (this%gen%year_avg) then
+          if (.not.allocated(r8wk)) then
+            allocate(r8wk(this%nodes))
+          end if
+          read(unit=this%iu,iostat=ios)(r8wk(i),i=1,this%nodes)
+          do i = 1, this%nodes
+            this%r8buff(i) = this%r8buff(i) + r8wk(i)
+          end do
+        else
+          read(unit=this%iu,iostat=ios)(this%r8buff(i),i=1,this%nodes)
+        end if
       end if
       !
       if (ios /= 0) then
@@ -1317,6 +1448,13 @@ module mf6_post_module
       end if
       !
     end do
+    !
+    if (this%gen%year_avg) then
+      do i = 1, this%nodes
+        this%r8buff(i) = this%r8buff(i)/nper
+      end do
+      if (allocated(r8wk)) deallocate(r8wk)
+    end if
     !
     return
   end subroutine mf6_post_mod_read
@@ -1639,7 +1777,7 @@ module mf6_post_module
       if (ladd) then
         nadd = nadd + 1
         if (.not.ldum) then
-          if (gen%ltop) then
+          if ((gen%top_tiled).or.(gen%top_mf6)) then
             r8x(ic,ir) = this%top(i) - this%r8buff(i) !Water table depth > 0!
           else
             r8x(ic,ir) = this%r8buff(i)
@@ -1666,9 +1804,9 @@ module mf6_post_module
     type(tGen), pointer :: gen => null()
     type(tBb), pointer :: bb => null()
     character(len=mxslen) :: f
-    integer(i4b) :: il
-    real(r8b) :: xmin, ymin
-    real(r8b), dimension(:,:), allocatable :: r8wk
+    integer(i4b) :: il 
+    real(r8b) :: xmin, ymin, cs
+    real(r8b), dimension(:,:), allocatable :: r8wk, r8wks
 ! ------------------------------------------------------------------------------
     !
     bb => this%bb; gen => this%gen
@@ -1692,6 +1830,10 @@ module mf6_post_module
         case(i_out_flt)
           call writeflt(trim(f), r8wk, bb%ncol, bb%nrow, &
             xmin, ymin, gcs, r8nodata)
+        case(i_out_flts) ! scale factor 10; average
+          call r8_scale_avg(r8wk, r8nodata, bb, r8wks, xmin, ymin, cs)
+          call writeflt(trim(f), r8wks, size(r8wks,1), size(r8wks,2), xmin, ymin, cs, r8nodata)
+          deallocate(r8wks)
       end select
     end do
     !
@@ -1787,6 +1929,12 @@ module mf6_post_module
     allocate(gen%il_max); read(sa(7),*) gen%il_max
     allocate(gen%date_beg); read(sa(8),*) gen%date_beg
     allocate(gen%date_end)
+    allocate(gen%year_avg)
+    gen%year_avg = .false.
+    if (gen%itype < 0) then
+      gen%year_avg = .true.
+      gen%itype = -gen%itype
+    end if
     if (gen%itype == 2) then ! statistics for on1y 1 time step
       gen%date_end = gen%date_beg
     else
@@ -1809,6 +1957,8 @@ module mf6_post_module
         gen%i_out = i_out_idf
       case('flt')
         gen%i_out = i_out_flt
+      case('flts')
+        gen%i_out = i_out_flts
       case default
         call errmsg('mf6_post_sol_init')
     end select
@@ -1833,55 +1983,63 @@ module mf6_post_module
       gen%gir0 = gen%gir1 - int((ymax - ymin)/gcs);    gen%gic0 = max(1, gen%gic0); gen%gir0 = min(gnrow, gen%gir0)
     end if
     
-    allocate(gen%ltop)
+    allocate(gen%top_tiled, gen%top_mf6)
     !
-    gen%ltop = .false.
+    gen%top_tiled = .false.
+    gen%top_mf6 = .false.
     select case(gen%itype)
     case(1, 7)
-      gen%ltop = .true.
-      allocate(topmap)
-      call open_file(tilebb, iu, 'r')
-      allocate(topmap%ntile)
-      read(iu,*) topmap%ntile
-      allocate(topmap%tilebb(topmap%ntile))
-      do i = 1, topmap%ntile
-        bb => topmap%tilebb(i)
-        read(iu,*) bb%ic0, bb%ic1, bb%ir0, bb%ir1
-        bb%ncol = bb%ic1 - bb%ic0 + 1
-        bb%nrow = bb%ir1 - bb%ir0 + 1
-      end do
-      close(iu)
-      allocate(topmap%i_type)
-      if (index(top,'.map',back=.true.) > 0) then
-        topmap%i_type = i_map
-      else if (index(top,'.idf',back=.true.) > 0) then
-        topmap%i_type = i_idf
-      else
-        call errmsg("Unrecognize top file format.")
-      end if
-      if (topmap%i_type == i_map) then
-        allocate(topmap%maps(topmap%ntile))
-      else
-        allocate(topmap%idfs(topmap%ntile))
-      end if
-      do i = 1, topmap%ntile
-        f = top
-        call replacetoken(f, '?', i)
-        call swap_slash(f)
-        inquire(file=f,exist=lex)
-        if (.not.lex) then
-          call logmsg("Could not find "//trim(f))
+      if (top_type == i_tiled) then
+        gen%top_tiled = .true.
+        allocate(topmap)
+        call open_file(tilebb, iu, 'r')
+        allocate(topmap%ntile)
+        read(iu,*) topmap%ntile
+        allocate(topmap%tilebb(topmap%ntile))
+        do i = 1, topmap%ntile
+          bb => topmap%tilebb(i)
+          read(iu,*) bb%ic0, bb%ic1, bb%ir0, bb%ir1
+          bb%ncol = bb%ic1 - bb%ic0 + 1
+          bb%nrow = bb%ir1 - bb%ir0 + 1
+        end do
+        close(iu)
+        allocate(topmap%i_type)
+        if (index(top,'.map',back=.true.) > 0) then
+          topmap%i_type = i_map
+        else if (index(top,'.idf',back=.true.) > 0) then
+          topmap%i_type = i_idf
         else
-          if (topmap%i_type == i_map) then
-            lok = topmap%maps(i)%init(f, 1)
-          else
-            lok = idfread(topmap%idfs(i), f, 0)
-          end if
-          if (.not.lok) then
-            call errmsg('Initializing top.')
-          end if
+          call errmsg("Unrecognize top file format.")
         end if
-      end do
+        if (topmap%i_type == i_map) then
+          allocate(topmap%maps(topmap%ntile))
+        else
+          allocate(topmap%idfs(topmap%ntile))
+        end if
+        do i = 1, topmap%ntile
+          f = top
+          call replacetoken(f, '?', i)
+          call swap_slash(f)
+          inquire(file=f,exist=lex)
+          if (.not.lex) then
+            call logmsg("Could not find "//trim(f))
+          else
+            if (topmap%i_type == i_map) then
+              lok = topmap%maps(i)%init(f, 1)
+            else
+              lok = idfread(topmap%idfs(i), f, 0)
+            end if
+            if (.not.lok) then
+              call errmsg('Initializing top.')
+            end if
+          end if
+        end do
+      else
+        if (top_type /= i_mf6) then
+          call errmsg('Top was not enabled.')
+        end if
+        gen%top_mf6 = .true.
+      end if
     case(2)
       f = sa(9)
       call open_file(f, iu, 'r')
@@ -2326,7 +2484,7 @@ module mf6_post_module
     integer(i4b) :: i, il, ic, ir, jc, jr, gic, gir, iu, kper, ic0, ic1, ir0, ir1, n
     integer(i4b) :: i4val
     integer(i4b), dimension(:,:), allocatable :: si4wk, wsi4wk
-    real(r8b) :: t, xmin, ymin, r8val
+    real(r8b) :: t, xmin, ymin, r8val, cs
     real(r8b) :: mintotimmod, maxtotimmod
     real(r8b), dimension(:,:), allocatable :: sr8wk, wsr8wk, wsr8wk2, mr8wk
 ! ------------------------------------------------------------------------------
@@ -2556,11 +2714,13 @@ module mf6_post_module
           xmin = gxmin + (wbb%ic0-1)*gcs
           ymin = gymin + (gnrow-wbb%ir1)*gcs
           !
-          fbb = trim(f)//'.bb.asc'
-          call logmsg('Writing '//trim(fbb)//'...')
-          call open_file(fbb, iu, 'w')
-          write(iu,'(a)') ta((/wbb%ic0, wbb%ic1, wbb%ir0, wbb%ir1/))
-          close(iu)
+          if (this%gen%i_out /= i_out_flt) then
+            fbb = trim(f)//'.bb.asc'
+            call logmsg('Writing '//trim(fbb)//'...')
+            call open_file(fbb, iu, 'w')
+            write(iu,'(a)') ta((/wbb%ic0, wbb%ic1, wbb%ir0, wbb%ir1/))
+            close(iu)
+          end if
           !
           select case(this%gen%i_out)
             case(i_out_asc)
@@ -2590,6 +2750,12 @@ module mf6_post_module
               call writeflt(trim(f), wsr8wk, &
                 wbb%ncol, wbb%nrow, &
                 xmin, ymin, gcs, r8nodata)
+            case(i_out_flts)
+              if (allocated(wsr8wk2)) deallocate(wsr8wk2)
+              call r8_scale_avg(wsr8wk, r8nodata, wbb, wsr8wk2, xmin, ymin, cs)
+              call writeflt(trim(f), wsr8wk2, &
+                size(wsr8wk2,1), size(wsr8wk2,2), &
+                xmin, ymin, cs, r8nodata)
           end select
         end do
         if (this%gen%itype == 2) then
@@ -2711,11 +2877,13 @@ module mf6_post_module
     if (associated(gen%date_end)) deallocate(gen%date_end)
     if (associated(gen%kper_beg)) deallocate(gen%kper_beg)
     if (associated(gen%kper_end)) deallocate(gen%kper_end)
-    if (associated(gen%ltop))     deallocate(gen%ltop)
+    if (associated(gen%top_tiled))deallocate(gen%top_tiled)
+    if (associated(gen%top_mf6))  deallocate(gen%top_mf6)
     if (associated(gen%itype))    deallocate(gen%itype)
     if (associated(gen%i_out))    deallocate(gen%i_out)
     if (associated(gen%nbin))     deallocate(gen%nbin)
     if (associated(gen%bins))     deallocate(gen%bins)
+    if (associated(gen%year_avg)) deallocate(gen%year_avg)
     !
     gen%in_dir   => null()
     gen%in_postf => null()
@@ -2732,11 +2900,13 @@ module mf6_post_module
     gen%date_end => null()
     gen%kper_beg => null()
     gen%kper_end => null()
-    gen%ltop     => null()
+    gen%top_tiled=> null()
+    gen%top_mf6  => null()
     gen%itype    => null()
     gen%i_out    => null()
     gen%nbin     => null()
     gen%bins     => null()
+    gen%year_avg => null()
     !
     return
   end subroutine mf6_post_clean_gen
@@ -2791,10 +2961,6 @@ module mf6_post_module
     end if
     if (associated(this%maskbb)) deallocate(this%maskbb)
     !
-    if (associated(maskmap)) then
-      call maskmap%clean()
-      deallocate(maskmap); maskmap => null()
-    end if
     if (associated(statmap)) then
       call statmap%clean()
       deallocate(statmap); statmap => null()
