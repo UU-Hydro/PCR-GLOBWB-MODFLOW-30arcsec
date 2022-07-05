@@ -1705,11 +1705,11 @@ module mf6_post_module
         d = n/2
         k1 = d; k2 = k1 +1
         q1 = (r8wk(k1) + r8wk(k2))/2.d0
-        k1 = nper - d; k2 = k1 + 1
+        k1 = mper - d; k2 = k1 + 1
         q3 = (r8wk(k1) + r8wk(k2))/2.d0
       else ! odd
         d = (n-1)/2
-        k1 = d + 1; k2 = nper - d
+        k1 = d + 1; k2 = mper - d
         q1 = r8wk(k1)
         q3 = r8wk(k2)
       end if
