@@ -4,7 +4,7 @@ program mf6ggmpost
   use mf6_post_module, only: tPostSol, tPostSer, &
     gncol, gnrow, gnlay, gxmin, gymin, gcs, gnsol, &
     sdate, tilebb, top, comment, mask, maskmap, include_sea, &
-    top_type, i_tiled, i_mf6
+    top_type, top_kper, i_tiled, i_mf6
   !
   implicit none
   !
@@ -30,13 +30,14 @@ program mf6ggmpost
   read(iu,'(a)') mask
   read(iu,'(a)') s
   call parse_line(s, sa)
-  top_type = 0
-  if (size(sa) == 2) then
+  top_type = 0; top_kper = 0
+  if (size(sa) >= 2) then
     select case(sa(1))
       case('tiled')
         top_type = i_tiled
       case('mf6')
         top_type = i_mf6
+        read(sa(3),*) top_kper
       case default
         call errmsg('Unrecognized top file.')
     end select

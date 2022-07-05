@@ -43,7 +43,7 @@ module mf6_post_module
   character(len=mxslen) :: top = ''
   character(len=mxslen) :: mask = ''
   !
-  integer(i4b)            :: top_type
+  integer(i4b)            :: top_type, top_kper
   integer(i4b), parameter :: i_tiled  = 1
   integer(i4b), parameter :: i_mf6    = 2
   !
@@ -94,7 +94,7 @@ module mf6_post_module
     integer(i4b), pointer                 :: nbin      => null()
     type(tBin), dimension(:), pointer     :: bins      => null()
     logical, pointer                      :: year_avg  => null()
-    
+    integer(i4b), pointer                 :: year_beg  => null()
   end type tGen
   !
   type tPostMod
@@ -176,7 +176,7 @@ module mf6_post_module
   public :: tPostMod, tPostSol, tPostSer
   public :: gnsol, gncol, gnrow, gnlay, gxmin, gymin, gcs, sdate, tilebb, top
   public :: mask, maskmap
-  public :: top_type, i_tiled, i_mf6
+  public :: top_type, top_kper, i_tiled, i_mf6
   
   contains
   !
@@ -1326,9 +1326,12 @@ module mf6_post_module
     integer(i4b) :: kstp_in, kper_in, ncol_in, nrow_in, ilay_in
     real(r8b) :: pertim_in, totim_in
     !
+    integer(i8b), parameter :: nbhdr = i4b + i4b + r8b + r8b + 16 + i4b + i4b + i4b
+    !
     character(len=mxslen) :: f
     logical :: lex
     integer(i4b) :: iu, ios
+    integer(i8b) :: kper_block, offset, hdr_pos, dat_pos
 ! ------------------------------------------------------------------------------
     if (.not.associated(this%top)) then
       allocate(this%top(this%nodes))
@@ -1345,12 +1348,20 @@ module mf6_post_module
       call errmsg('Top file could not be found.')
     end if
     !
+    kper_block = nbhdr + r8b*this%nodes
+    offset = (top_kper - 1)*kper_block
+    hdr_pos = offset + 1 
+    dat_pos = offset + nbhdr + 1
+    !
     ! read header
-    read(unit=iu,iostat=ios) kstp_in, kper_in, pertim_in, totim_in, &
-      text_in, ncol_in, nrow_in, ilay_in
+    read(unit=iu,iostat=ios,pos=hdr_pos+i4b) kper_in
+    if (top_kper /= kper_in) then
+      call errmsg('Invalid stress period reading for top.')
+    end if
     !
     ! read heads
-    read(unit=iu,iostat=ios) this%top
+    call logmsg('Reading top for stress period '//ta((/top_kper/))//'...')
+    read(unit=iu,iostat=ios,pos=dat_pos) this%top
     !
     close(iu)
     return
@@ -1547,7 +1558,7 @@ module mf6_post_module
     ! -- arguments
     class(tPostMod) :: this
     ! --- local
-    integer(i4b) :: i, j, jj, k, nper, nyear
+    integer(i4b) :: i, j, jj, k, nper, nyear, myear, syear
     integer(i4b), parameter :: monthyear = 12
     real(r8b) :: slope, yint, corr
     real(r8b), dimension(:), allocatable :: r8wk, havg
@@ -1562,24 +1573,31 @@ module mf6_post_module
     if (mod(nper,monthyear) /= 0) then
       call errmsg('The number of output stress periods should be a multiple of 12.')
     end if
+    !
     nyear = nper / monthyear
-    allocate(r8wk(nyear), havg(nyear))
-    do i = 1, nyear
+    !
+    read(this%gen%date_beg(1:4),*) syear
+    syear = this%gen%year_beg - syear + 1
+    myear = nyear - syear + 1
+    allocate(r8wk(myear), havg(myear))
+    do i = 1, myear
       r8wk(i) = real(i,r8b)
     end do
     !
     do i = 1, this%nodes
-      do j = 1, nyear
+      do j = 1, myear
         havg(j) = DZERO
       end do
       k = 0
       do j = 1, nyear
         do jj = 1, monthyear
           k = k + 1
-          havg(j) = havg(j) + this%r8buff2d(k,i)
+          if (j >= syear) then
+            havg(j-syear+1) = havg(j-syear+1) + this%r8buff2d(k,i)
+          end if
         end do
       end do
-      do j = 1, nyear
+      do j = 1, myear
         havg(j) = havg(j) / monthyear
       end do
       call linear_regression(r8wk, havg, slope, yint, corr)
@@ -1637,7 +1655,8 @@ module mf6_post_module
     ! -- arguments
     class(tPostMod) :: this
     ! --- local
-    integer(i4b) :: i, j, d, k, k1, k2, nper, n
+    integer(i4b) :: i, j, d, k, k1, k2, nper, mper, n
+    integer(i4b) :: kper_beg, y, m, ys, mns, iper
     integer(i4b), dimension(:), allocatable :: i4wk
     real(r8b) :: q1, q3, iqr
     real(r8b), dimension(:), allocatable :: r8wk
@@ -1647,21 +1666,37 @@ module mf6_post_module
       allocate(this%r8buff(this%nodes))
     end if
     !
-    nper = size(this%r8buff2d,1)
-    allocate(i4wk(nper), r8wk(nper))
+    nper = this%gen%kper_end - this%gen%kper_beg + 1
+    read(this%gen%date_beg(1:4),*) ys; read(this%gen%date_beg(5:6),*) mns
+    y = ys; m = mns
+    do iper = 1, nper
+      if (m > 12) then
+        m = 1
+        y = y + 1
+      end if
+      if (y == this%gen%year_beg) then
+        kper_beg = iper
+        exit
+      end if
+      m = m + 1
+    end do
+    !
+    mper = nper - kper_beg + 1
+    allocate(i4wk(mper), r8wk(mper))
     !
     do i = 1, this%nodes ! loop over nodes
       ! fill the buffer
-      do j = 1, nper ! loop over periods
+      do j = 1, mper ! loop over periods
+        iper = j + kper_beg - 1
         i4wk(j) = j
-        r8wk(j) = this%r8buff2d(j,i)
+        r8wk(j) = this%r8buff2d(iper,i)
       end do
-      call quicksort_d(r8wk, i4wk, nper)
+      call quicksort_d(r8wk, i4wk, mper)
       !
-      if (mod(nper,2) == 0) then  !even
-        n = nper / 2
+      if (mod(mper,2) == 0) then  !even
+        n = mper / 2
       else ! odd
-        n = (nper - 1)/2
+        n = (mper - 1)/2
       end if
       !
       if (mod(n,2) == 0) then ! even
@@ -1942,6 +1977,11 @@ module mf6_post_module
     else
       read(sa(9),*) gen%date_end
     end if
+    allocate(gen%year_beg)
+    gen%year_beg = 1
+    if (na == 13) then
+      read(sa(13),*) gen%year_beg
+    end if
     !
     read(sdate(1:4),*) ys; read(sdate(5:6),*) mns
     read(gen%date_beg(1:4),*) y; read(gen%date_beg(5:6),*) mn
@@ -1971,10 +2011,7 @@ module mf6_post_module
     allocate(gen%gir0); gen%gir0 = 1
     allocate(gen%gir1); gen%gir1 = gnrow
     allocate(gen%lwritebb); gen%lwritebb = .false. 
-    if (na > 12) then
-      if (na /= 16) then
-        call errmsg('Invalid bounding box specification ')
-      end if
+    if (na == 16) then
       gen%lwritebb = .true.
       read(sa(13:),*) xmin, xmax, ymin, ymax
       if (xmin > xmax) call errmsg('xmin > xmax')
@@ -2886,6 +2923,7 @@ module mf6_post_module
     if (associated(gen%nbin))     deallocate(gen%nbin)
     if (associated(gen%bins))     deallocate(gen%bins)
     if (associated(gen%year_avg)) deallocate(gen%year_avg)
+    if (associated(gen%year_beg)) deallocate(gen%year_beg)
     !
     gen%in_dir   => null()
     gen%in_postf => null()
@@ -2909,6 +2947,7 @@ module mf6_post_module
     gen%nbin     => null()
     gen%bins     => null()
     gen%year_avg => null()
+    gen%year_beg => null()
     !
     return
   end subroutine mf6_post_clean_gen
