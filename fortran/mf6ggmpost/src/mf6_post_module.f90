@@ -1576,6 +1576,7 @@ module mf6_post_module
     !
     nyear = nper / monthyear
     !
+    call logmsg('Computing slope starting from '//ta((/this%gen%year_beg/))//'...')
     read(this%gen%date_beg(1:4),*) syear
     syear = this%gen%year_beg - syear + 1
     myear = nyear - syear + 1
@@ -1666,6 +1667,7 @@ module mf6_post_module
       allocate(this%r8buff(this%nodes))
     end if
     !
+    call logmsg('Computing IQR starting from '//ta((/this%gen%year_beg/))//'...')
     nper = this%gen%kper_end - this%gen%kper_beg + 1
     read(this%gen%date_beg(1:4),*) ys; read(this%gen%date_beg(5:6),*) mns
     y = ys; m = mns
@@ -1977,17 +1979,18 @@ module mf6_post_module
     else
       read(sa(9),*) gen%date_end
     end if
-    allocate(gen%year_beg)
-    gen%year_beg = 1
-    if (na == 13) then
-      read(sa(13),*) gen%year_beg
-    end if
     !
     read(sdate(1:4),*) ys; read(sdate(5:6),*) mns
     read(gen%date_beg(1:4),*) y; read(gen%date_beg(5:6),*) mn
     kper_beg = y*12 + (mn -1 ) - (ys*12 + mns - 1) + 1
     read(gen%date_end(1:4),*) y; read(gen%date_end(5:6),*) mn
     kper_end = y*12 + (mn - 1) - (ys*12 + mns - 1) + 1
+    !
+    allocate(gen%year_beg)
+    gen%year_beg = ys
+    if (na == 13) then
+      read(sa(13),*) gen%year_beg
+    end if
     !
     allocate(gen%kper_beg); gen%kper_beg = kper_beg
     allocate(gen%kper_end); gen%kper_end = kper_end
